@@ -1,0 +1,32 @@
+Composition,
+Database of Origin,Unknown
+Date Added,2021-03-20 18:08:52.003953
+Formula,
+Grain Size,
+Locality,
+Material Class,
+Maximum Reflectance,1052.0
+Minimum Reflectance,348.0
+Other Information,
+References,
+Resolution,
+Sample Description,
+Sample ID,Amph_Nanophase_Hematite_s6fn18_Morris
+Sample Name,Amph_Nanophase_Hematite_s6fn18_Morris
+Sample Type,
+Viewing Geometry,
+filter,wavelength,solar_illuminated_response,response
+L7,432.0,0.1142563783,0.1098015595
+R1,436.0,0.1159856495,0.1116507344
+L6,482.0,0.1771021572,0.1780597613
+L5,535.0,0.2845288276,0.2883833816
+L4,601.0,0.5174095134,0.5151662381
+L3,673.0,0.6864256906,0.6870007271
+L1,739.0,0.6282990507,0.669167544
+L2,753.0,0.7672728211,0.7668855411
+R2,754.0,0.7677907892,0.7674484285
+R3,803.0,0.7843309702,0.7812837408
+R4,864.0,0.7919859109,0.7888363136
+R5,904.0,0.7917128284,0.7929957404
+R6,934.0,0.7886461612,0.7879733444
+R7,1009.0,0.7918450341,0.7871478809

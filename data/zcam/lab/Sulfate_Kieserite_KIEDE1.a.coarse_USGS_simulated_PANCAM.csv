@@ -1,0 +1,32 @@
+Composition,
+Database of Origin,Unknown
+Date Added,2021-03-20 18:08:55.977291
+Formula,
+Grain Size,
+Locality,
+Material Class,
+Maximum Reflectance,2500.0
+Minimum Reflectance,350.0
+Other Information,
+References,
+Resolution,
+Sample Description,
+Sample ID,Sulfate_Kieserite_KIEDE1.a.coarse_USGS
+Sample Name,Sulfate_Kieserite_KIEDE1.a.coarse_USGS
+Sample Type,
+Viewing Geometry,
+filter,wavelength,solar_illuminated_response,response
+L7,432.0,0.5169381478,0.5156894676
+R1,436.0,0.5183073719,0.5172679766
+L6,482.0,0.5485106468,0.5485485461
+L5,535.0,0.5749003087,0.5749671461
+L4,601.0,0.6328480618,0.6328674735
+L3,673.0,0.6566965819,0.6567310016
+L1,739.0,0.6486875061,0.6580199394
+L2,753.0,0.6757857975,0.6757993128
+R2,754.0,0.6759148266,0.6759289072
+R3,803.0,0.6807422444,0.6807531467
+R4,864.0,0.6878286103,0.6878264153
+R5,904.0,0.6902552166,0.6902692284
+R6,934.0,0.6918782846,0.6918806328
+R7,1009.0,0.6839979806,0.6838688091

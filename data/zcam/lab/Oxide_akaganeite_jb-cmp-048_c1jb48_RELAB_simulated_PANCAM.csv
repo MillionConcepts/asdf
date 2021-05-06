@@ -1,0 +1,32 @@
+Composition,
+Database of Origin,Unknown
+Date Added,2021-03-20 18:08:50.844362
+Formula,
+Grain Size,
+Locality,
+Material Class,
+Maximum Reflectance,2600.0
+Minimum Reflectance,300.0
+Other Information,
+References,
+Resolution,
+Sample Description,
+Sample ID,Oxide_akaganeite_jb-cmp-048_c1jb48_RELAB
+Sample Name,Oxide_akaganeite_jb-cmp-048_c1jb48_RELAB
+Sample Type,
+Viewing Geometry,
+filter,wavelength,solar_illuminated_response,response
+L7,432.0,0.0427474735,0.0421235359
+R1,436.0,0.0432694155,0.0426934492
+L6,482.0,0.0538194326,0.0538398098
+L5,535.0,0.131431332,0.1318170832
+L4,601.0,0.3262401153,0.3263016821
+L3,673.0,0.3997762629,0.3999214509
+L1,739.0,0.3375598171,0.3522441629
+L2,753.0,0.4365772136,0.4364785784
+R2,754.0,0.4356701947,0.4355655216
+R3,803.0,0.3884049868,0.3883211525
+R4,864.0,0.3551987665,0.3551892889
+R5,904.0,0.3530424851,0.3530422047
+R6,934.0,0.3545675265,0.3545855433
+R7,1009.0,0.3817034395,0.3821722013

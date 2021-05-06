@@ -1,0 +1,32 @@
+Composition,
+Database of Origin,Unknown
+Date Added,2021-03-20 18:08:55.409917
+Formula,
+Grain Size,
+Locality,
+Material Class,
+Maximum Reflectance,2688.0
+Minimum Reflectance,301.1
+Other Information,
+References,
+Resolution,
+Sample Description,
+Sample ID,Sulfate_Schwertmannite_BZ93-1_USGS
+Sample Name,Sulfate_Schwertmannite_BZ93-1_USGS
+Sample Type,
+Viewing Geometry,
+filter,wavelength,solar_illuminated_response,response
+L7,432.0,0.0153576681,0.01498706
+R1,436.0,0.015564901,0.0152115994
+L6,482.0,0.0239602085,0.0241114585
+L5,535.0,0.05615514,0.0556851213
+L4,601.0,0.1476205553,0.1475660454
+L3,673.0,0.2383810715,0.2386579191
+L1,739.0,0.2195172213,0.2391760498
+L2,753.0,0.3046610337,0.304628027
+R2,754.0,0.3049154129,0.3049215045
+R3,803.0,0.3044123042,0.3020334561
+R4,864.0,0.2938664584,0.289244469
+R5,904.0,0.2856052595,0.285257902
+R6,934.0,0.2853989089,0.2853615583
+R7,1009.0,0.3035155131,0.3036480926

@@ -1,0 +1,32 @@
+Composition,
+Database of Origin,Unknown
+Date Added,2021-03-20 18:08:58.092996
+Formula,
+Grain Size,
+Locality,
+Material Class,
+Maximum Reflectance,2500.0
+Minimum Reflectance,350.0
+Other Information,
+References,
+Resolution,
+Sample Description,
+Sample ID,Sulfate_Jarosite_Natro9_McCollom_Ehlmann
+Sample Name,Sulfate_Jarosite_Natro9_McCollom_Ehlmann
+Sample Type,
+Viewing Geometry,
+filter,wavelength,solar_illuminated_response,response
+L7,432.0,0.0755139812,0.0752665756
+R1,436.0,0.075656648,0.0754205572
+L6,482.0,0.1005355191,0.1005965462
+L5,535.0,0.1657937434,0.1660091132
+L4,601.0,0.2505893931,0.2506245922
+L3,673.0,0.3186200123,0.3187858687
+L1,739.0,0.2392620012,0.2346346246
+L2,753.0,0.3019868635,0.3017798532
+R2,754.0,0.3000358367,0.2998181991
+R3,803.0,0.2157944318,0.2156593956
+R4,864.0,0.1626565841,0.1626721487
+R5,904.0,0.1534946343,0.1534767606
+R6,934.0,0.1539313552,0.1539453547
+R7,1009.0,0.1794669658,0.1799507713

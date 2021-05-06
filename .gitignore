@@ -127,3 +127,20 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# secrets
+/asdf/secrets/*.json
+/asdf/secrets/*.pem
+
+# images
+*.png
+*.fits
+*.IMG
+
+# development
+test_output/
+examples/
+/rapidlooks.ipynb
+/asdf_bulk.py
+/*scratch.ipynb

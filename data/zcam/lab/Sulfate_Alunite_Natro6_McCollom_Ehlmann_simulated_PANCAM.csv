@@ -1,0 +1,32 @@
+Composition,
+Database of Origin,Unknown
+Date Added,2021-03-20 18:08:56.453057
+Formula,
+Grain Size,
+Locality,
+Material Class,
+Maximum Reflectance,2500.0
+Minimum Reflectance,350.0
+Other Information,
+References,
+Resolution,
+Sample Description,
+Sample ID,Sulfate_Alunite_Natro6_McCollom_Ehlmann
+Sample Name,Sulfate_Alunite_Natro6_McCollom_Ehlmann
+Sample Type,
+Viewing Geometry,
+filter,wavelength,solar_illuminated_response,response
+L7,432.0,0.7790435473,0.778647661
+R1,436.0,0.7794319821,0.7790923914
+L6,482.0,0.7913752228,0.7913957849
+L5,535.0,0.8014141423,0.8014379828
+L4,601.0,0.8095567153,0.8095619472
+L3,673.0,0.8132910751,0.8132927551
+L1,739.0,0.8093838387,0.8106801147
+L2,753.0,0.8115234959,0.8115147526
+R2,754.0,0.8114418539,0.8114324739
+R3,803.0,0.8076477379,0.8076416175
+R4,864.0,0.8093092993,0.8093071305
+R5,904.0,0.8159830881,0.8160302058
+R6,934.0,0.8216756046,0.821693221
+R7,1009.0,0.8244626858,0.8246428256
