@@ -12,13 +12,11 @@ import pandas as pd
 from astropy.io import fits
 from marslab.compat.mertools import (
     add_merspect_colors_to_edgemaps,
-    merspect_to_marslab,
     is_sel_file,
     sel_to_roi,
 )
 from marslab.compat.xcam import (
     make_xcam_filter_dict,
-    count_rois_on_xcam_images,
 )
 from marslab.imgops import (
     draw_edgemaps_on_image,
@@ -40,13 +38,8 @@ from asdf.scrape import (
     dupe_df_block,
     melt_metadata,
 )
-from asdf.settings.metadata import COMPACT_ZCAM_MARSLAB_FIELDS, SUMMARY_COLUMNS
-from asdf.settings.rapidlooks import CREDIT_TEXT, TITLE_FONT
 
-from asdf.settings.rapidlooks import (
-    DEFAULT_RAPIDLOOKS,
-    DEFAULT_PREPROCESS_OPTIONS,
-)
+import asdf.settings as settings
 from pplot.convert import convert_for_plot
 
 
@@ -57,10 +50,12 @@ def annotate_and_save_rapidlook(
         (
             target_name + look_name,
             make_pointing_annotation(pointing),
-            CREDIT_TEXT,
+            settings.rapidlooks.CREDIT_TEXT,
         )
     )
-    figure.axes[0].set_xlabel(title, loc="center", fontproperties=TITLE_FONT)
+    figure.axes[0].set_xlabel(
+        title, loc="center", fontproperties=settings.rapidlooks.TITLE_FONT
+    )
     filename = pointing_name + " " + look_name + ".png"
     print("writing " + filename)
     figure.savefig(Path(output_path, filename), dpi=275)
@@ -71,9 +66,9 @@ def annotate_and_save_rapidlook(
 def generate_default_rapidlooks(pointing, output_path, preloaded_images=None):
     default_rapidlooks = rapidlooks_from_pointing(
         pointing,
-        DEFAULT_RAPIDLOOKS,
+        settings.rapidlooks.DEFAULT_RAPIDLOOKS,
         make_xcam_filter_dict("ZCAM"),
-        DEFAULT_PREPROCESS_OPTIONS,
+        settings.rapidlooks.DEFAULT_PREPROCESS_OPTIONS,
         preloaded_images,
     )
     pointing_name, target_name = titular_names(pointing)
@@ -105,9 +100,11 @@ def polish_metadata(dataframe, creation_time):
     extra_columns = [
         column
         for column in dataframe.columns
-        if column not in COMPACT_ZCAM_MARSLAB_FIELDS
+        if column not in settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS
     ]
-    ordered_fields = dataframe.reindex(COMPACT_ZCAM_MARSLAB_FIELDS, axis=1)
+    ordered_fields = dataframe.reindex(
+        settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS, axis=1
+    )
     return pd.concat([ordered_fields, dataframe[extra_columns]], axis=1)
 
 
@@ -129,7 +126,9 @@ def assemble_marslab_versions(marslab_data, metadata):
     # TODO: this may be redundant with index-on-gsheet-columns
     #  behavior. assess whether we ever want to write local summary
     #  metadata, otherwise cut.
-    pointing_summary = first_metadata.reindex(SUMMARY_COLUMNS).copy()
+    pointing_summary = first_metadata.reindex(
+        settings.metadata.SUMMARY_COLUMNS
+    ).copy()
     # write canonical pointing-identifying values into all frames
     for field, value in parse_pointing(first_metadata).items():
         marslab_extended[field] = value
@@ -139,7 +138,7 @@ def assemble_marslab_versions(marslab_data, metadata):
     # pointing are simply set equal to the value of the chronologically first
     # image
     for field, value in first_metadata.iteritems():
-        if field in COMPACT_ZCAM_MARSLAB_FIELDS:
+        if field in settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS:
             marslab_compact[field] = value
     creation_time = dt.datetime.utcnow().isoformat()
     pointing_summary["FILE_TIMESTAMP"] = creation_time
@@ -286,10 +285,9 @@ def add_input_roi_metadata(marslab_data, fixed_target, ci):
             fixed_target, region, ci
         )
         for field, value in user_provided_roi_metadata.items():
-            marslab_data.loc[
-                marslab_data["COLOR"] == region, field
-            ] = value
+            marslab_data.loc[marslab_data["COLOR"] == region, field] = value
     return marslab_data
+
 
 def titular_names(pointing):
     pointing_name = make_pointing_name(pointing)
@@ -319,18 +317,17 @@ def write_context_image(
     eye_edgemaps = {
         key: value for key, value in edgemaps.items() if eye in key
     }
-    # TODO: add annotations to these
     context_image = draw_edgemaps_on_image(rgb_image, eye_edgemaps, width=0.1)
     pointing_name, target_name = titular_names(pointing)
     title = "\n".join(
         (
             target_name + eye + " ROI context image",
             make_pointing_annotation(pointing),
-            CREDIT_TEXT,
+            settings.rapidlooks.CREDIT_TEXT,
         )
     )
     context_image.axes[0].set_xlabel(
-        title, loc="center", fontproperties=TITLE_FONT
+        title, loc="center", fontproperties=settings.rapidlooks.TITLE_FONT
     )
     print(
         "writing "
@@ -343,12 +340,10 @@ def write_context_image(
     return context_image
 
 
-def make_rapidlook_thumbnails(rapidlooks, which_to_write, size):
+def make_rapidlook_thumbnails(rapidlooks, size):
     print("making thumbnails (if necessary).")
     thumbnails = {}
-    for name, image in filter(
-        lambda kv: kv[0] in which_to_write, rapidlooks.items()
-    ):
+    for name, image in rapidlooks.items():
         thumbnails[name] = make_thumbnail(image, size)
     return thumbnails
 

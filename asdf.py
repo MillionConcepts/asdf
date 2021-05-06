@@ -44,14 +44,7 @@ from asdf.scrape import (
     add_effective_taus,
     add_derived_illumination_geometry,
 )
-from asdf.settings.rapidlooks import (
-    THUMBNAIL_THESE_RAPIDLOOKS,
-    THUMBNAIL_SIZE,
-)
-from asdf.settings.sources import (
-    USE_PUBLIC_WAYPOINTS,
-    FIND_EFFECTIVE_TAUS,
-)
+import asdf.settings as settings
 
 
 def asdf(
@@ -96,21 +89,25 @@ def asdf(
         outpath = Path(".")
     no_rois = (roi_path.name == "") and (merspect is None)
     roi_fits = None
+
+    # scrape headers for all desired metadata fields and derive values
+    # from them as necessary
     print("... scraping default metadata ...")
-    # note: this is a bit inefficient because we're skimming every file twice,
-    # although we're probably talking about an extra 50ms max barring some
-    # weird networked filesystem situation
     metadata = pd.DataFrame(bulk_scrape_metadata(pointing["PATH"]))
     metadata = add_derived_illumination_geometry(metadata)
-    metadata["CREATOR"] = username
-    if USE_PUBLIC_WAYPOINTS:
+
+    # dial out to other directories / servers for metadata that can't be
+    # found in or derived from the header
+    if settings.sources.USE_PUBLIC_WAYPOINTS:
         print(
             "... scraping localization information from public "
             "waypoints file ..."
         )
         metadata = add_public_waypoints_to_metadata(metadata)
-    if FIND_EFFECTIVE_TAUS:
+    if settings.sources.FIND_EFFECTIVE_TAUS:
         metadata = add_effective_taus(metadata)
+
+    # associate a target name
     if no_rois or (copy_target is True):
         print(
             "Note: Because there are no ROIs or the user has passed "
@@ -121,13 +118,16 @@ def asdf(
         metadata["NAME"] = fixed_target
     else:
         fixed_target = None
+    metadata["CREATOR"] = username
+
+    # preload images to share I/O and for convenience...this is wasteful in
+    # the case that there are images that are used by no rapidlook or ROI
     if (no_rois is False) or (not skip_rapidlooks):
-        # preload images to share I/O and for convenience...this is a little
-        # wasteful in the specific case that there are some images that are
-        # involved in no rapidlook or ROI
         preloaded_images = preload_zcam_iof_images(pointing)
     else:
         preloaded_images = None
+
+    # handle ROI file conversion, ROI counting, user input per-ROI metadata
     if roi_path.name != "":
         roi_fits = convert_roi_file(pointing_name, roi_path, outpath)
         if merspect is None:
@@ -146,13 +146,24 @@ def asdf(
     else:
         print("No ROI file has been passed: using null values for data.")
         marslab_data = null_marslab_data_section()
+
+    # glom all the data and metadata together into our three output formats;
+    # write the compact and extended versions, save the summary in memory
     summary = create_marslab_output(
         marslab_data, metadata, outpath, pointing_name
     )
+
+    # TODO: this is messy
     if "NAME" in summary.keys():
         pointing["NAME"] = summary["NAME"].iloc[0]
+
+    # set up thumbnail cache
     thumbnail_staging = {}
-    pick_thumbs = keyfilter(partial(contains, THUMBNAIL_THESE_RAPIDLOOKS))
+    pick_thumbs = keyfilter(
+        partial(contains, settings.rapidlooks.THUMBNAIL_THESE_RAPIDLOOKS)
+    )
+
+    # generate rapidlooks
     if not skip_rapidlooks:
         print("... generating rapidlooks ...")
         # suppressing irrelevant warnings from numpy about divides-by-zero
@@ -166,20 +177,24 @@ def asdf(
         # that are not; waste not memory, want not memory
         thumbnail_staging |= pick_thumbs(looks)
         absolutely_destroy(looks)
+
+    # make context images and write them out
     if roi_fits is not None:
-        # make context images; write them out; stick them in the generated
-        # images dictionary for thumbnailing in the next step
         context = make_context_images(
             roi_fits, preloaded_images, pointing, outpath
         )
         thumbnail_staging |= pick_thumbs(context)
         absolutely_destroy(context)
+
+    # handle metadata and thumbnail uploads
     if upload is True:
         thumbnails = make_rapidlook_thumbnails(
-            thumbnail_staging, THUMBNAIL_THESE_RAPIDLOOKS, THUMBNAIL_SIZE
+            thumbnail_staging, settings.rapidlooks.THUMBNAIL_SIZE
         )
         upload_metadata(summary, thumbnails, pointing_name)
     del thumbnail_staging
+
+    # pretty-plot data if we've got it; just quit if we don't
     if no_rois:
         print("... all done ...")
         return
@@ -192,5 +207,6 @@ def asdf(
     print("... all done ...")
 
 
+# tell clize to handle command line call
 if __name__ == "__main__":
     run(asdf)

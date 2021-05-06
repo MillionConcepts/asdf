@@ -3,29 +3,24 @@ functions for uploading, downloading, querying, fetching, etc.
 """
 import datetime as dt
 import json
-import ssl
 import urllib.request
+from pathlib import Path
 
+import boto3
+import botocore.config
+from botocore.exceptions import ClientError
 import gspread
+import io
 import pandas as pd
-from oauth2client.service_account import ServiceAccountCredentials
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
-from pydrive.files import ApiRequestError
 
 from asdf.asdf_utils import itemize_numpy, obfuscated_name
-from asdf.settings.sources import (
-    PUBLIC_WAYPOINTS_URL,
-    GOOGLE_CLIENT_SECRETS_FILE,
-    GOOGLE_SHEET_ID,
-    METADATA_BACKUP_FOLDER_ID,
-    OBFUSCATE_THUMBNAIL_NAMES,
-    THUMB_FOLDER_ID,
-)
+import asdf.settings as settings
 
 
 def get_public_m20_waypoints():
-    waypoint_server_response = urllib.request.urlopen(PUBLIC_WAYPOINTS_URL)
+    waypoint_server_response = urllib.request.urlopen(
+        settings.sources.PUBLIC_WAYPOINTS_URL
+    )
     return json.loads(waypoint_server_response.read())["features"]
 
 
@@ -77,34 +72,83 @@ def post_google_sheet(
     )
 
 
+def upload_s3(
+    bucket, upload_object=None, object_name=None, client=None, pass_string=True
+):
+    """Upload a file or buffer to an S3 bucket
+
+    :param upload_object: String, pathlike, or filelike object to upload
+    :param bucket: Bucket to upload to
+    :param object_name: S3 object name. If not specified then str(
+    file_or_buffer) is
+        used -- will most likely look bad if it's a buffer
+    :param client: botocore.client.S3 instance; makes a default s3 client if
+    None
+    :param pass_string -- write passed string directly to file instead of
+        interpreting as a path
+    :return: ClientError if file was not uploaded, True if it was
+    """
+    if client is None:
+        client = boto3.client("s3")
+
+    # If S3 object_name was not specified, use string rep of
+    # passed object, up to 90 characters
+    if object_name is None:
+        object_name = str(upload_object)
+
+    # 'touch' - type behavior
+    if upload_object is None:
+        upload_object = io.BytesIO()
+
+    # encode string to bytes if we're writing it to S3 object instead
+    # of interpreting it as a path
+    if isinstance(upload_object, str):
+        if pass_string:
+            upload_object = io.BytesIO(upload_object.encode("utf-8"))
+    # Upload the file
+    try:
+        if isinstance(upload_object, (Path, str)):
+            client.upload_file(str(upload_object), bucket, object_name)
+        else:
+            client.upload_fileobj(upload_object, bucket, object_name)
+    except ClientError as e:
+        return e
+    return True
+
+
+def make_asdf_s3_client():
+    aws_config = botocore.config.Config(
+        region_name=settings.sources.AWS_REGION
+    )
+    secrets = pd.read_csv(settings.sources.AWS_IAM_SECRETS_FILE).iloc[0]
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=secrets["Access key ID"],
+        aws_secret_access_key=secrets["Secret access key"],
+        config=aws_config,
+    )
+    return client
+
+
 def upload_thumbnails(thumbnails, pointing_name):
     if not thumbnails:
         return {}
     print("uploading thumbnails.")
-    gauth = GoogleAuth()
-    scope = ["https://www.googleapis.com/auth/drive"]
-    gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        GOOGLE_CLIENT_SECRETS_FILE, scope
-    )
-    drivebot = GoogleDrive(gauth)
+    client = make_asdf_s3_client()
+    bucket = settings.sources.THUMB_BUCKET
+    bucket_url = "https://" + bucket + ".s3.amazonaws.com/"
     links = {}
     for name, image_buffer in thumbnails.items():
         try:
-            if OBFUSCATE_THUMBNAIL_NAMES:
-                title = obfuscated_name()
+            if settings.sources.OBFUSCATE_THUMBNAIL_NAMES:
+                key = obfuscated_name()
             else:
-                title = name + "_thumb_" + pointing_name
-            drivethumb = drivebot.CreateFile(
-                {
-                    "title": title,
-                    "parents": [{"id": THUMB_FOLDER_ID}],
-                }
-            )
-            drivethumb.content = image_buffer
-            drivethumb.Upload()
-            links[name] = drivethumb["thumbnailLink"]
-        except (ssl.SSLError, ssl.SSLEOFError, ApiRequestError) as error:
-            print("sorry, couldn't upload thumb " + error)
+                key = name + "_thumb_" + pointing_name
+            image_buffer.seek(0)
+            upload_s3(bucket, image_buffer, key, client)
+            links[name] = bucket_url + key
+        except ClientError as error:
+            print("sorry, couldn't upload thumb " + name + " " + str(error))
     return links
 
 
@@ -114,8 +158,12 @@ def upload_metadata(pointing_summary, thumbnails, pointing_name):
         if thumbnail_links:
             for name, link in thumbnail_links.items():
                 pointing_summary[name] = '=IMAGE("' + link + '")'
-        sheetbot = gspread.service_account(GOOGLE_CLIENT_SECRETS_FILE)
-        metadata_sheet = sheetbot.open_by_key(GOOGLE_SHEET_ID).worksheets()[0]
+        sheetbot = gspread.service_account(
+            settings.sources.GOOGLE_CLIENT_SECRETS_FILE
+        )
+        metadata_sheet = sheetbot.open_by_key(
+            settings.sources.GOOGLE_SHEET_ID
+        ).worksheets()[0]
         metadata_sheet_values = metadata_sheet.get_all_values()
         # TODO: maybe just do this right in the first place
         pointing_summary["NAME"] = pointing_summary["NAME"].iloc[0]
@@ -127,13 +175,15 @@ def upload_metadata(pointing_summary, thumbnails, pointing_name):
                 .T.applymap(itemize_numpy)
                 .fillna("-")
             )
-            post_google_sheet(new_sheet, GOOGLE_SHEET_ID, sheetbot)
+            post_google_sheet(
+                new_sheet, settings.sources.GOOGLE_SHEET_ID, sheetbot
+            )
         else:
             print("saving backup sheet")
             # TODO: when gspread implements this, replace it with .copy()
             backup = sheetbot.create(
                 title="metadata backup " + dt.datetime.utcnow().isoformat(),
-                folder_id=METADATA_BACKUP_FOLDER_ID,
+                folder_id=settings.sources.METADATA_BACKUP_FOLDER_ID,
             )
             backup.worksheets()[0].update(metadata_sheet_values)
             print("posting new metadata")

@@ -11,7 +11,7 @@ import pandas as pd
 
 from asdf.asdf_utils import pass_parameters
 from asdf.scrape import find_iof_siblings
-from asdf.settings.metadata import ROI_METADATA_FIELDS
+import asdf.settings as settings
 
 
 def you_prompt() -> str:
@@ -110,7 +110,7 @@ def ask_user_about_roi(
         input. for noninteractive mode.
     """
     roi_metadata = {}
-    metadata_fields = list(ROI_METADATA_FIELDS)
+    metadata_fields = list(settings.metadata.ROI_METADATA_FIELDS)
     if fixed_target is None:
         metadata_fields.append("NAME")
     else:
@@ -118,5 +118,3 @@ def ask_user_about_roi(
     for field in metadata_fields:
         roi_metadata[field] = ci(dispatched_metadata_prompt, field, roi_title)
     return roi_metadata
-
-

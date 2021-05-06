@@ -16,13 +16,13 @@ from cytoolz.curried import keyfilter
 from marslab.compat.xcam import ZCAM_ZOOM_MOTOR_COUNT_TO_FOCAL_LENGTH
 
 from asdf.network import get_public_m20_waypoints
-from asdf.settings.metadata import IOF_METADATA_REGEX_STRINGS
-from asdf.settings.sources import EFFECTIVE_TAU_PATH
+import asdf.settings as settings
 
 METADATA_REGEX = MappingProxyType(
     {
         field: re.compile(pattern)
-        for field, pattern in IOF_METADATA_REGEX_STRINGS.items()
+        for field, pattern
+        in settings.metadata.IOF_METADATA_REGEX_STRINGS.items()
     }
 )
 
@@ -383,12 +383,17 @@ def add_effective_taus(metadata):
         return metadata
     stringified_taus = []
     for taufile in metadata["TAU_ESTIMATE_FILENAME"]:
-        if not os.path.exists(EFFECTIVE_TAU_PATH + taufile):
+        if not os.path.exists(
+            settings.sources.EFFECTIVE_TAU_PATH + taufile
+        ):
             stringified_taus.append(np.nan)
         else:
             stringified_taus.append(
                 ",".join(
-                    pd.read_csv(EFFECTIVE_TAU_PATH + taufile, header=None)
+                    pd.read_csv(
+                        settings.sources.EFFECTIVE_TAU_PATH + taufile,
+                        header=None,
+                    )
                     .values[0]
                     .astype(str)
                 )
