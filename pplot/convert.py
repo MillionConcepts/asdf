@@ -88,7 +88,7 @@ def merspect_to_marslab(spectra_fn, # a MERspect exported spectra file, unmodifi
     data = data[columns]
     return data
 
-def convert_for_plot(spectra_fn,instrument='ZCAM',color_to_feature={},method='scale_to_avg'):
+def convert_for_plot(spectra_fn,instrument='ZCAM',color_to_feature={},scale_method='scale_to_avg'):
     if spectra_fn.__class__==str:
         spectra_fn = [spectra_fn]
     data = pd.DataFrame()
@@ -102,6 +102,6 @@ def convert_for_plot(spectra_fn,instrument='ZCAM',color_to_feature={},method='sc
         except IOError:
             marslab_data = pd.read_csv(fn,index_col=None,na_values='-')
         data = data.append(marslab_data,ignore_index=True)
-    data = scale_eyes(data,method=method)
+    data = scale_eyes(data,method=scale_method)
     data.replace(np.nan, "-", inplace=True)
     return data
