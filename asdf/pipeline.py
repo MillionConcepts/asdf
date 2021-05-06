@@ -9,8 +9,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from marslab.compat.mertools import add_merspect_colors_to_edgemaps
-from marslab.compat.xcam import make_xcam_filter_dict
+from astropy.io import fits
+from marslab.compat.mertools import (
+    add_merspect_colors_to_edgemaps,
+    merspect_to_marslab,
+    is_sel_file,
+    sel_to_roi,
+)
+from marslab.compat.xcam import (
+    make_xcam_filter_dict,
+    count_rois_on_xcam_images,
+)
 from marslab.imgops import (
     draw_edgemaps_on_image,
     make_thumbnail,
@@ -23,6 +32,7 @@ from marslab.imgops import rapidlooks_from_pointing, read_from_pointing
 
 import pplot
 from asdf.asdf_utils import absolutely_destroy
+from asdf.chatter import ask_user_about_roi
 from asdf.scrape import (
     make_pointing_name,
     parse_pointing,
@@ -212,7 +222,7 @@ def handle_pretty_plot(
             solar_elevation=marslab_file["SOLAR_ELEVATION"].iloc[0],
             seq_id=marslab_file["SEQ_ID"].iloc[0],
             plot_fn=Path(outpath, pointing_name + "-pretty-plot.png"),
-            underplot=None
+            underplot=None,
         )
 
 
@@ -250,6 +260,37 @@ def make_pointing_annotation(pointing):
     )
 
 
+def convert_roi_file(
+    pointing_name,
+    roi_path,
+    outpath=None,
+):
+    # if passed ROI file is a SEL, convert to marslab FITS and save
+    if is_sel_file(roi_path):
+        roi_fits = sel_to_roi(roi_path, "ZCAM")
+    else:
+        roi_fits = fits.open(roi_path)
+    roi_fits = add_pointing_name_to_roi(pointing_name, roi_fits)
+    # TODO: should we actually add feature names to the ROI files?
+    #  so therefore wait to save until after grilling the user?
+    roi_fits.writeto(
+        Path(outpath, pointing_name + "-roi.fits"), overwrite=True
+    )
+    return roi_fits
+
+
+def add_input_roi_metadata(marslab_data, fixed_target, ci):
+    for region in marslab_data["COLOR"]:
+        ci(print, "Please enter information about the " + region + " ROI.")
+        user_provided_roi_metadata = ask_user_about_roi(
+            fixed_target, region, ci
+        )
+        for field, value in user_provided_roi_metadata.items():
+            marslab_data.loc[
+                marslab_data["COLOR"] == region, field
+            ] = value
+    return marslab_data
+
 def titular_names(pointing):
     pointing_name = make_pointing_name(pointing)
     if "NAME" in pointing.keys():
@@ -260,7 +301,11 @@ def titular_names(pointing):
 
 
 def write_context_image(
-    preloaded_images, edgemaps, eye, pointing, outpath,
+    preloaded_images,
+    edgemaps,
+    eye,
+    pointing,
+    outpath,
 ):
     if eye[0].upper() + "0" in preloaded_images.keys():
         rgb_image = rgb_from_bayer(

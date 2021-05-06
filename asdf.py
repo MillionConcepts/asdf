@@ -7,12 +7,9 @@ from operator import contains
 from pathlib import Path
 
 import pandas as pd
-from astropy.io import fits
 from clize import run
 from cytoolz.curried import keyfilter
 from marslab.compat.mertools import (
-    sel_to_roi,
-    is_sel_file,
     merspect_to_marslab,
 )
 from marslab.compat.xcam import (
@@ -27,18 +24,18 @@ from asdf.chatter import (
     you_prompt,
     get_and_offer_pointing,
     generic_metadata_prompt,
-    ask_user_about_roi,
 )
 from asdf.network import upload_metadata
 from asdf.pipeline import (
     preload_zcam_iof_images,
-    add_pointing_name_to_roi,
     null_marslab_data_section,
     create_marslab_output,
     generate_default_rapidlooks,
     handle_pretty_plot,
     make_rapidlook_thumbnails,
     make_context_images,
+    convert_roi_file,
+    add_input_roi_metadata,
 )
 from asdf.scrape import (
     bulk_scrape_metadata,
@@ -126,49 +123,26 @@ def asdf(
         fixed_target = None
     if (no_rois is False) or (not skip_rapidlooks):
         # preload images to share I/O and for convenience...this is a little
-        # wasteful in the specific case that there's some images that are
+        # wasteful in the specific case that there are some images that are
         # involved in no rapidlook or ROI
         preloaded_images = preload_zcam_iof_images(pointing)
     else:
         preloaded_images = None
-    if not no_rois:
-        # TODO: break this into a handler in asdf.pipeline
-        marslab_data = None
-        if merspect is not None:
+    if roi_path.name != "":
+        roi_fits = convert_roi_file(pointing_name, roi_path, outpath)
+        if merspect is None:
+            marslab_data = count_rois_on_xcam_images(
+                roi_fits, preloaded_images, "ZCAM"
+            )
+        else:
             # allow user to override counting behavior with a MERspect file
             # TODO, maybe: basic check to make sure file matches pointing
             marslab_data = merspect_to_marslab(merspect, write=False)
             metadata["ROI_SOURCE"] = "[merspect] " + merspect
-        if roi_path.name != "":
-            # if passed ROI file is a SEL, convert to marslab FITS and save
-            if is_sel_file(roi_path):
-                roi_fits = sel_to_roi(roi_path, "ZCAM")
-            else:
-                roi_fits = fits.open(roi_path)
-            roi_fits = add_pointing_name_to_roi(pointing_name, roi_fits)
-            # TODO: should we actually add feature names to the ROI files?
-            #  so therefore wait to save until after grilling the user?
-            roi_fits.writeto(
-                Path(outpath, pointing_name + "-roi.fits"), overwrite=True
-            )
-            metadata["ROI_SOURCE"] = roi_path.name
-            if merspect is None:
-                marslab_data = count_rois_on_xcam_images(
-                    roi_fits, preloaded_images, "ZCAM"
-                )
         assert (
             marslab_data is not None
         ), "something has gone wrong in loading ROI data."
-        for region in marslab_data["COLOR"]:
-            if not noninteractive:
-                print("Please enter information about the " + region + " ROI.")
-            user_provided_roi_metadata = ask_user_about_roi(
-                fixed_target, region, ci
-            )
-            for field, value in user_provided_roi_metadata.items():
-                marslab_data.loc[
-                    marslab_data["COLOR"] == region, field
-                ] = value
+        marslab_data = add_input_roi_metadata(marslab_data, fixed_target, ci)
     else:
         print("No ROI file has been passed: using null values for data.")
         marslab_data = null_marslab_data_section()
@@ -177,7 +151,6 @@ def asdf(
     )
     if "NAME" in summary.keys():
         pointing["NAME"] = summary["NAME"].iloc[0]
-
     thumbnail_staging = {}
     pick_thumbs = keyfilter(partial(contains, THUMBNAIL_THESE_RAPIDLOOKS))
     if not skip_rapidlooks:
@@ -193,7 +166,6 @@ def asdf(
         # that are not; waste not memory, want not memory
         thumbnail_staging |= pick_thumbs(looks)
         absolutely_destroy(looks)
-
     if roi_fits is not None:
         # make context images; write them out; stick them in the generated
         # images dictionary for thumbnailing in the next step
@@ -222,4 +194,3 @@ def asdf(
 
 if __name__ == "__main__":
     run(asdf)
-
