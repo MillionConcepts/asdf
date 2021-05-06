@@ -220,12 +220,6 @@ def asdf(
     print("... all done ...")
 
 
-# if __name__ == "__main__":
-#     run(asdf)
+if __name__ == "__main__":
+    run(asdf)
 
-asdf(
-    "/home/michael/Desktop/zcam_data/0036/iof/ZL6_0036_0670134043_053IOF_N0031392ZCAM03107_1100LUC01.IMG",
-    "examples/asdf.sel",
-    "test_output/",
-    noninteractive=True,
-)
