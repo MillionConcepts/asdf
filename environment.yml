@@ -20,10 +20,9 @@ dependencies:
   - opencv
   - fs
   - gspread
-  - pydrive
-  - oauth2client
+  - boto3
   - pip:
       - git+https://github.com/MillionConcepts/pdr.git
-#      - git+https://github.com/MillionConcepts/marslab.git
+      - git+https://github.com/MillionConcepts/marslab.git
   - astropy
   - sympy
