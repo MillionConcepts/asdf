@@ -1,3 +1,1 @@
-"""
-temporary asdf module 'vendored' into marslab during development
-"""
+__version__ == "0.1.0"
