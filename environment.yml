@@ -26,3 +26,4 @@ dependencies:
       - git+https://github.com/MillionConcepts/marslab.git
   - astropy
   - sympy
+  - pytest

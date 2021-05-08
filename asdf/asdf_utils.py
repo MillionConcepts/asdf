@@ -2,7 +2,7 @@
 import gc
 import string
 import random
-from collections import Mapping
+from collections.abc import Mapping
 from typing import Sequence
 
 import numpy as np
