@@ -84,7 +84,7 @@ def generate_default_rapidlooks(
         preloaded_images,
     )
     pointing_name, target_name = titular_names(pointing)
-    pool = Pool(4)
+    pool = Pool(6)
     for look_name, figure in default_rapidlooks.items():
         pool.apply_async(
             annotate_and_save_rapidlook,
@@ -207,7 +207,7 @@ def preload_zcam_iof_images(pointing):
     print("Loading images into memory.")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        pool = Pool(4)
+        pool = Pool(6)
         preloaded_images = {}
         for filt in pointing["FILTER"]:
             preloaded_images[filt] = pool.apply_async(
