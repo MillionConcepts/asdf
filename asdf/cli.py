@@ -53,6 +53,7 @@ import asdf.settings as settings
 def asdf(
     iof,
     roi="",
+    *,
     output: "o" = "",
     upload: "u" = False,
     copy_target: "c" = False,
@@ -67,8 +68,7 @@ def asdf(
     :param iof: path to one iof file from the 'pointing' you want to archive
     :param roi: path to a SEL or Marslab ROI file containing ROIs corresponding
         to these images
-    :param output: output path; default is the parent directory of the ROI
-        file, or working directory if no ROI file
+    :param output: output path; default is the working directory
     :param copy_target: copies 'target' across all ROIs
     :param skip_rapidlooks: don't write default rapidlooks
     :param upload: upload metadata to google drive
