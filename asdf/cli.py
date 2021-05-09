@@ -70,7 +70,7 @@ def asdf(
     :param roi: path to a SEL or Marslab ROI file containing ROIs corresponding
         to these images
     :param upload: upload metadata to google drive
-    :param output: output path; default is "output/"
+    :param output: output path; default is "output/$username/$sol"
     :param copy_target: copies 'target' across all ROIs
     :param skip_rapidlooks: don't write default rapidlooks
     :param merspect: take data from passed merspect file
