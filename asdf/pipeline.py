@@ -308,10 +308,11 @@ def convert_roi_file(
     roi_fits = add_pointing_name_to_roi(pointing_name, roi_fits)
     # TODO: should we actually add feature names to the ROI files?
     #  so therefore wait to save until after grilling the user?
+    roi_fits_fn = Path(outpath, pointing_name + "-roi.fits")
     roi_fits.writeto(
         Path(outpath, pointing_name + "-roi.fits"), overwrite=True
     )
-    return roi_fits, str(roi_path)
+    return roi_fits, str(roi_fits_fn)
 
 
 def add_input_roi_metadata(marslab_data, fixed_target, ci):
