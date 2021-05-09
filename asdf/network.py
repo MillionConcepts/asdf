@@ -143,11 +143,10 @@ def backup_marslab_files(metadata_fn, extended_metadata_fn, roi_fn=None):
     client = make_asdf_s3_client()
     bucket = settings.sources.BACKUP_BUCKET
     epoch = round(time.time())
-    marslab_key = (
-        "marslab/" + str(epoch) + "_" + os.path.split(metadata_fn)[-1]
-    )
+    s3_metadata_prefix = "marslab/" + str(epoch) + "_" + os.getlogin() + "_"
+    marslab_key = s3_metadata_prefix + os.path.split(metadata_fn)[-1]
     extended_marslab_key = (
-        "marslab/" + str(epoch) + "_" + os.path.split(extended_metadata_fn)[-1]
+        s3_metadata_prefix + os.path.split(extended_metadata_fn)[-1]
     )
     try:
         upload_s3(bucket, metadata_fn, marslab_key, client)
@@ -165,7 +164,7 @@ def backup_marslab_files(metadata_fn, extended_metadata_fn, roi_fn=None):
         tar = tarfile.open(tar_fn, "w:gz")
         tar.add(roi_fn, os.path.split(roi_fn)[-1])
         tar.close()
-        roi_key = "marslab/" + str(epoch) + "_" + os.path.split(tar_fn)[-1]
+        roi_key = s3_metadata_prefix + os.path.split(tar_fn)[-1]
         try:
             upload_s3(bucket, tar_fn, roi_key, client)
         except ClientError as error:
