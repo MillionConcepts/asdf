@@ -165,6 +165,7 @@ def backup_marslab_files(metadata_fn, extended_metadata_fn, roi_fn=None):
             upload_s3(bucket, tar_fn, roi_key, client)
         except ClientError as error:
             print("sorry, couldn't upload ROI file backup: " + str(error))
+        os.remove(tar_fn)
 
 
 def upload_thumbnails(thumbnails, pointing_name):
