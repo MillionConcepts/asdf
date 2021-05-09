@@ -147,3 +147,6 @@ examples/
 /rapidlooks.ipynb
 /asdf_bulk.py
 /*scratch.ipynb
+
+# deployment
+vendor/
