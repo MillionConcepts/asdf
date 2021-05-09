@@ -3,8 +3,12 @@ functions for uploading, downloading, querying, fetching, etc.
 """
 import datetime as dt
 import json
-import urllib.request
+import os
 from pathlib import Path
+import time
+import urllib.request
+import tarfile
+
 
 import boto3
 import botocore.config
@@ -73,7 +77,11 @@ def post_google_sheet(
 
 
 def upload_s3(
-    bucket, upload_object=None, object_name=None, client=None, pass_string=True
+    bucket,
+    upload_object=None,
+    object_name=None,
+    client=None,
+    pass_string=False,
 ):
     """Upload a file or buffer to an S3 bucket
 
@@ -130,18 +138,47 @@ def make_asdf_s3_client():
     return client
 
 
+def backup_marslab_files(metadata_fn, extended_metadata_fn, roi_fn=None):
+    print("backing up marslab & ROI files.")
+    client = make_asdf_s3_client()
+    bucket = settings.sources.BACKUP_BUCKET
+    epoch = round(time.time())
+    marslab_key = (
+        "marslab/" + os.path.split(metadata_fn)[-1] + "_" + str(epoch)
+    )
+    extended_marslab_key = (
+        "marslab/" + os.path.split(extended_metadata_fn)[-1] + "_" + str(epoch)
+    )
+    try:
+        upload_s3(bucket, metadata_fn, marslab_key, client)
+        upload_s3(bucket, extended_metadata_fn, extended_marslab_key, client)
+    except ClientError as error:
+        print("sorry, couldn't upload marslab file backups: " + str(error))
+    # TODO: clean this up; i.e., create iterable of closures of upload_s3
+    if roi_fn is not None:
+        tar_fn = os.path.splitext(os.path.split(roi_fn)[-1])[0] + ".tar.gz"
+        tar = tarfile.open(tar_fn, "w:gz")
+        tar.add(roi_fn, os.path.split(roi_fn)[-1])
+        tar.close()
+        roi_key = "marslab/" + tar_fn + str(epoch)
+        try:
+            upload_s3(bucket, tar_fn, roi_key, client)
+        except ClientError as error:
+            print("sorry, couldn't upload ROI file backup: " + str(error))
+
+
 def upload_thumbnails(thumbnails, pointing_name):
     if not thumbnails:
         return {}
     print("uploading thumbnails.")
     client = make_asdf_s3_client()
-    bucket = settings.sources.THUMB_BUCKET
+    bucket = settings.sources.BACKUP_BUCKET
     bucket_url = "https://" + bucket + ".s3.amazonaws.com/"
     links = {}
     for name, image_buffer in thumbnails.items():
         try:
             if settings.sources.OBFUSCATE_THUMBNAIL_NAMES:
-                key = obfuscated_name()
+                key = "thumb/" + obfuscated_name()
             else:
                 key = name + "_thumb_" + pointing_name
             image_buffer.seek(0)
@@ -152,7 +189,15 @@ def upload_thumbnails(thumbnails, pointing_name):
     return links
 
 
-def upload_metadata(pointing_summary, thumbnails, pointing_name):
+def upload_metadata(
+    pointing_summary,
+    thumbnails,
+    pointing_name,
+    metadata_fn,
+    extended_metadata_fn,
+    roi_fn=None,
+):
+    backup_marslab_files(metadata_fn, extended_metadata_fn, roi_fn)
     try:
         thumbnail_links = upload_thumbnails(thumbnails, pointing_name)
         if thumbnail_links:

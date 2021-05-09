@@ -56,7 +56,7 @@ def asdf(
     roi=None,
     *,
     output: "o" = "output/",
-    upload = False,
+    upload=False,
     copy_target: "c" = False,
     skip_rapidlooks: "s" = False,
     merspect: "m" = None,
@@ -138,7 +138,7 @@ def asdf(
         onboard_debayer = False
     # handle ROI file conversion, ROI counting, user input per-ROI metadata
     if roi_path.name != "":
-        roi_fits = convert_roi_file(pointing_name, roi_path, outpath)
+        roi_fits, roi_fn = convert_roi_file(pointing_name, roi_path, outpath)
         if merspect is None:
             marslab_data = count_rois_on_xcam_images(
                 roi_fits, preloaded_images, "ZCAM", debayer=not onboard_debayer
@@ -146,6 +146,7 @@ def asdf(
         else:
             # allow user to override counting behavior with a MERspect file
             # TODO, maybe: basic check to make sure file matches pointing
+            roi_fn = None
             marslab_data = merspect_to_marslab(merspect, write=False)
             metadata["ROI_SOURCE"] = "[merspect] " + merspect
         assert (
@@ -155,10 +156,11 @@ def asdf(
     else:
         print("No ROI file has been passed: using null values for data.")
         marslab_data = null_marslab_data_section()
+        roi_fn = None
 
     # glom all the data and metadata together into our three output formats;
     # write the compact and extended versions, save the summary in memory
-    summary = create_marslab_output(
+    summary, metadata_fn, extended_metadata_fn = create_marslab_output(
         marslab_data, metadata, outpath, pointing_name
     )
 
@@ -200,7 +202,14 @@ def asdf(
         thumbnails = make_rapidlook_thumbnails(
             thumbnail_staging, settings.rapidlooks.THUMBNAIL_SIZE
         )
-        upload_metadata(summary, thumbnails, pointing_name)
+        upload_metadata(
+            summary,
+            thumbnails,
+            pointing_name,
+            metadata_fn,
+            extended_metadata_fn,
+            roi_fn,
+        )
     del thumbnail_staging
 
     # pretty-plot data if we've got it; just quit if we don't

@@ -3,7 +3,6 @@ inline handling functions for the runtime asdf workflow
 """
 import datetime as dt
 import warnings
-from itertools import product
 from multiprocessing import Pool
 from pathlib import Path
 
@@ -28,13 +27,12 @@ from marslab.imgops import (
     RGGB_PATTERN,
     normalize_range,
     make_roi_edgemaps,
-    render_enhanced,
-    preprocess_image,
     depth_stack,
 )
 from marslab.imgops import rapidlooks_from_pointing, read_from_pointing
 
 import asdf
+import asdf.settings as settings
 import pplot
 from asdf.asdf_utils import absolutely_destroy
 from asdf.chatter import ask_user_about_roi
@@ -45,8 +43,6 @@ from asdf.scrape import (
     dupe_df_block,
     melt_metadata,
 )
-
-import asdf.settings as settings
 from pplot.convert import convert_for_plot
 
 
@@ -166,21 +162,24 @@ def assemble_marslab_versions(marslab_data, metadata):
 def verbosely_write_marslab_versions(
     marslab_compact, marslab_extended, output_path, pointing_name
 ):
+    metadata_fn = str(Path(output_path, pointing_name + "-marslab.csv"))
+    extended_metadata_fn = str(Path(output_path, pointing_name + "-marslab-extended.csv"))
     print(
         "Writing extended-format marslab file: "
-        + str(Path(output_path, pointing_name + "-marslab-extended.csv"))
+        + extended_metadata_fn
     )
     marslab_extended.fillna("-").to_csv(
-        Path(output_path, pointing_name + "-marslab-extended.csv"),
+        extended_metadata_fn,
         index=False,
     )
     print(
         "Writing compact-format marslab file: "
-        + str(Path(output_path, pointing_name + "-marslab.csv"))
+        + metadata_fn
     )
     marslab_compact.fillna("-").to_csv(
-        Path(output_path, pointing_name + "-marslab.csv"), index=False
+        metadata_fn, index=False
     )
+    return metadata_fn, extended_metadata_fn
 
 
 def read_scaled(pointing, filt):
@@ -274,10 +273,10 @@ def create_marslab_output(marslab_data, metadata, outpath, pointing_name):
         marslab_extended,
         pointing_summary,
     ) = assemble_marslab_versions(marslab_data, metadata)
-    verbosely_write_marslab_versions(
+    metadata_fn, extended_metadata_fn = verbosely_write_marslab_versions(
         marslab_compact, marslab_extended, outpath, pointing_name
     )
-    return pointing_summary
+    return pointing_summary, metadata_fn, extended_metadata_fn
 
 
 def add_pointing_name_to_roi(pointing_name, roi_fits):
@@ -318,7 +317,7 @@ def convert_roi_file(
     roi_fits.writeto(
         Path(outpath, pointing_name + "-roi.fits"), overwrite=True
     )
-    return roi_fits
+    return roi_fits, str(roi_path)
 
 
 def add_input_roi_metadata(marslab_data, fixed_target, ci):
@@ -410,7 +409,7 @@ def make_context_images(
     edgemaps = add_merspect_colors_to_edgemaps(edgemaps)
     for eye in ("left", "right"):
         eye_image = write_context_image(
-            preloaded_images, edgemaps, eye, pointing, outpath
+            preloaded_images, edgemaps, eye, pointing, outpath, onboard_debayer
         )
         if eye_image:
             context_images["context image " + eye] = eye_image
