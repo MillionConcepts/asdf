@@ -156,7 +156,7 @@ def backup_marslab_files(metadata_fn, extended_metadata_fn, roi_fn=None):
         print("sorry, couldn't upload marslab file backups: " + str(error))
     # TODO: clean this up; i.e., create iterable of closures of upload_s3
     if roi_fn is not None:
-        tar_fn = roi_fn + ".tar.gz"
+        tar_fn = os.path.split(metadata_fn)[0] + os.path.split(roi_fn)[-1] + ".tar.gz"
         tar = tarfile.open(tar_fn, "w:gz")
         tar.add(roi_fn, os.path.split(roi_fn)[-1])
         tar.close()
@@ -165,7 +165,7 @@ def backup_marslab_files(metadata_fn, extended_metadata_fn, roi_fn=None):
             upload_s3(bucket, tar_fn, roi_key, client)
         except ClientError as error:
             print("sorry, couldn't upload ROI file backup: " + str(error))
-        os.remove(tar_fn)
+        # os.remove(tar_fn)
 
 
 def upload_thumbnails(thumbnails, pointing_name):
