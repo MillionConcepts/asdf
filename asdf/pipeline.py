@@ -163,22 +163,16 @@ def verbosely_write_marslab_versions(
     marslab_compact, marslab_extended, output_path, pointing_name
 ):
     metadata_fn = str(Path(output_path, pointing_name + "-marslab.csv"))
-    extended_metadata_fn = str(Path(output_path, pointing_name + "-marslab-extended.csv"))
-    print(
-        "Writing extended-format marslab file: "
-        + extended_metadata_fn
+    extended_metadata_fn = str(
+        Path(output_path, pointing_name + "-marslab-extended.csv")
     )
+    print("Writing extended-format marslab file: " + extended_metadata_fn)
     marslab_extended.fillna("-").to_csv(
         extended_metadata_fn,
         index=False,
     )
-    print(
-        "Writing compact-format marslab file: "
-        + metadata_fn
-    )
-    marslab_compact.fillna("-").to_csv(
-        metadata_fn, index=False
-    )
+    print("Writing compact-format marslab file: " + metadata_fn)
+    marslab_compact.fillna("-").to_csv(metadata_fn, index=False)
     return metadata_fn, extended_metadata_fn
 
 
@@ -345,8 +339,10 @@ def write_context_image(
 ):
     if eye[0].upper() + "0" in preloaded_images.keys():
         if onboard_debayer is False:
-            base_image = rgb_from_bayer(
-                preloaded_images[eye[0].upper() + "0"], RGGB_PATTERN
+            base_image = normalize_range(
+                rgb_from_bayer(
+                    preloaded_images[eye[0].upper() + "0"], RGGB_PATTERN
+                )
             )
         else:
             base_image = normalize_range(
@@ -363,8 +359,8 @@ def write_context_image(
             base_image = depth_stack((base_image, base_image, base_image))
         else:
             pixel = NARROWBAND_TO_BAYER["ZCAM"][filt]
-            base_image = rgb_from_bayer(
-                image, RGGB_PATTERN, (pixel, pixel, pixel)
+            base_image = normalize_range(
+                rgb_from_bayer(image, RGGB_PATTERN, (pixel, pixel, pixel))
             )
     eye_edgemaps = {
         key: value for key, value in edgemaps.items() if eye in key
