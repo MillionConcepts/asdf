@@ -34,6 +34,7 @@ from marslab.imgops import (
 )
 from marslab.imgops import rapidlooks_from_pointing, read_from_pointing
 
+import asdf
 import pplot
 from asdf.asdf_utils import absolutely_destroy
 from asdf.chatter import ask_user_about_roi
@@ -154,6 +155,7 @@ def assemble_marslab_versions(marslab_data, metadata):
     creation_time = dt.datetime.utcnow().isoformat()
     pointing_summary["FILE_TIMESTAMP"] = creation_time
     pointing_summary["NAME"] = marslab_compact["NAME"]
+    marslab_extended["ASDF_VERSION"] = asdf.__version__
     return (
         polish_metadata(marslab_compact, creation_time),
         polish_metadata(marslab_extended, creation_time),
