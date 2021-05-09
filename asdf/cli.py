@@ -55,7 +55,7 @@ def asdf(
     iof,
     roi=None,
     *,
-    output: "o" = "output/",
+    output: "o" = None,
     upload=False,
     copy_target: "c" = False,
     skip_rapidlooks: "s" = False,
@@ -89,7 +89,10 @@ def asdf(
         roi_path = Path("")
     else:
         roi_path = Path(roi)
-    outpath = Path(output)
+    if output is None:
+        outpath = Path("output/", os.getlogin(), format(pointing['SOL'].iloc[0], '0>4'))
+    else:
+        outpath = Path(output)
     os.makedirs(outpath, exist_ok=True)
     no_rois = (roi_path.name == "") and (merspect is None)
     roi_fits = None
