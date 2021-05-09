@@ -2,8 +2,7 @@
 import gc
 import string
 import random
-from collections.abc import Mapping
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import numpy as np
 from matplotlib.figure import Figure

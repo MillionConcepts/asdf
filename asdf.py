@@ -127,12 +127,19 @@ def asdf(
     else:
         preloaded_images = None
 
+    if not all(metadata['BAYER'] == "RAW_BAYER"):
+        onboard_debayer = True
+    else:
+        # TODO: watch to see if there are in fact cases when some
+        #  but not all frames of a sequence are debayered onboard
+        onboard_debayer = False
     # handle ROI file conversion, ROI counting, user input per-ROI metadata
     if roi_path.name != "":
         roi_fits = convert_roi_file(pointing_name, roi_path, outpath)
         if merspect is None:
             marslab_data = count_rois_on_xcam_images(
-                roi_fits, preloaded_images, "ZCAM"
+                roi_fits, preloaded_images, "ZCAM",
+                debayer=not onboard_debayer
             )
         else:
             # allow user to override counting behavior with a MERspect file
@@ -171,7 +178,7 @@ def asdf(
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             looks = generate_default_rapidlooks(
-                pointing, outpath, preloaded_images
+                pointing, outpath, preloaded_images, onboard_debayer
             )
         # keep images that are to be thumbnailed for upload, discard those
         # that are not; waste not memory, want not memory
@@ -181,7 +188,7 @@ def asdf(
     # make context images and write them out
     if roi_fits is not None:
         context = make_context_images(
-            roi_fits, preloaded_images, pointing, outpath
+            roi_fits, preloaded_images, pointing, outpath, onboard_debayer
         )
         thumbnail_staging |= pick_thumbs(context)
         absolutely_destroy(context)

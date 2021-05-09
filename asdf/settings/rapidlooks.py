@@ -12,6 +12,13 @@ from marslab.compat.xcam import (
 from marslab.imgops import RGGB_PATTERN, norm_clip, normalize_range
 
 
+def cast_bilateral(array, *args, **kwargs):
+    # downsample float64 images for bilateralFilter
+    if array.dtype == np.float64:
+        return cv2.bilateralFilter(array.astype(np.float32), *args, **kwargs)
+    return cv2.bilateralFilter(array, *args, **kwargs)
+
+
 # TODO: clean this up
 def make_orange_teal_cmap():
     teal = (98, 252, 232)
@@ -62,11 +69,11 @@ SMEAR_SPECTRAL_RAPIDLOOK_OPTIONS = {
     "mpl_options": {"cmap": make_orange_teal_cmap(), "tick_fp": TICK_FONT},
 }
 
-GRAYSCALE_SPECTRAL_RAPIDLOOK_OPTIONS = {
+WINTER_SPECTRAL_RAPIDLOOK_OPTIONS = {
     "special_constants": [0],
     "clip": {"function": norm_clip},
     "image_filter": {"function": gaussian_filter, "params": {"sigma": 2}},
-    "mpl_options": {"cmap": cm.get_cmap("Greys_r"), "tick_fp": TICK_FONT},
+    "mpl_options": {"cmap": cm.get_cmap("winter"), "tick_fp": TICK_FONT},
 }
 
 ENHANCED_RAPIDLOOK_OPTIONS = {
@@ -85,7 +92,7 @@ OVERLAY_RAPIDLOOK_OPTIONS = {
     "special_constants": [0],
     "clip": {"function": norm_clip},
     "prefilter": {
-        "function": cv2.bilateralFilter,
+        "function": cast_bilateral,
         "params": {"d": 20, "sigmaColor": 5, "sigmaSpace": 10},
     },
 }
@@ -94,7 +101,7 @@ ACCENT_RAPIDLOOK_OPTIONS = {
     "special_constants": [0],
     "clip": {"function": norm_clip},
     "prefilter": {
-        "function": cv2.bilateralFilter,
+        "function": cast_bilateral,
         "params": {"d": 15, "sigmaColor": 3, "sigmaSpace": 7},
     },
 }
@@ -245,14 +252,14 @@ THUMBNAIL_THESE_RAPIDLOOKS = (
 )
 THUMBNAIL_SIZE = (240, 330)
 
-gray_looks = {}
+winter_looks = {}
 for look_name, look in DEFAULT_RAPIDLOOKS.items():
     if look["options"] == SPECTRAL_RAPIDLOOK_OPTIONS:
-        gray_look = look.copy()
-        gray_look["name"] = look["operation"] + " gray"
-        gray_look["options"] = GRAYSCALE_SPECTRAL_RAPIDLOOK_OPTIONS
-        gray_looks[look_name + " gray"] = gray_look
-DEFAULT_RAPIDLOOKS |= gray_looks
+        winter_look = look.copy()
+        winter_look["name"] = look["operation"] + " winter"
+        winter_look["options"] = WINTER_SPECTRAL_RAPIDLOOK_OPTIONS
+        winter_looks[look_name + " winter"] = winter_look
+DEFAULT_RAPIDLOOKS |= winter_looks
 
 
 overlay_looks = {}

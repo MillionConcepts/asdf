@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from astropy.io import fits
+from cytoolz import keyfilter
 from marslab.compat.mertools import (
     add_merspect_colors_to_edgemaps,
     is_sel_file,
@@ -17,6 +18,8 @@ from marslab.compat.mertools import (
 )
 from marslab.compat.xcam import (
     make_xcam_filter_dict,
+    TREAT_AS_BAYER_OPAQUE,
+    NARROWBAND_TO_BAYER,
 )
 from marslab.imgops import (
     draw_edgemaps_on_image,
@@ -25,6 +28,9 @@ from marslab.imgops import (
     RGGB_PATTERN,
     normalize_range,
     make_roi_edgemaps,
+    render_enhanced,
+    preprocess_image,
+    depth_stack,
 )
 from marslab.imgops import rapidlooks_from_pointing, read_from_pointing
 
@@ -63,12 +69,17 @@ def annotate_and_save_rapidlook(
     return 0
 
 
-def generate_default_rapidlooks(pointing, output_path, preloaded_images=None):
+def generate_default_rapidlooks(
+    pointing, output_path, preloaded_images=None, onboard_debayer=False
+):
+    pp_dict = settings.rapidlooks.DEFAULT_PREPROCESS_OPTIONS.copy()
+    if onboard_debayer is True:
+        pp_dict.pop("debayer")
     default_rapidlooks = rapidlooks_from_pointing(
         pointing,
         settings.rapidlooks.DEFAULT_RAPIDLOOKS,
         make_xcam_filter_dict("ZCAM"),
-        settings.rapidlooks.DEFAULT_PREPROCESS_OPTIONS,
+        pp_dict,
         preloaded_images,
     )
     pointing_name, target_name = titular_names(pointing)
@@ -170,6 +181,22 @@ def verbosely_write_marslab_versions(
     )
 
 
+def read_scaled(pointing, filt):
+    # need to scale inside the thread b/c pvl dtypes can't be
+    # serialized with vanilla pickle (could use pathos instead, of course)
+    data = read_from_pointing(pointing, filt, False)
+    if "SCALING_FACTOR" not in data.LABEL["IMAGE"].keys():
+        # iof_est / EPO-style float32 IOFs based on RAF-type products
+        return data.IMAGE
+    # leaving the special constant 0 at 0
+    image = data.IMAGE.copy().astype(np.float64)
+    scale = data.LABEL["IMAGE"]["SCALING_FACTOR"]
+    offset = data.LABEL["IMAGE"]["OFFSET"]
+    image[image != 0] *= scale
+    image[image != 0] += offset
+    return image
+
+
 def preload_zcam_iof_images(pointing):
     """
     asynchronously load iof images. make RGB-named copies of the L0/R0 images
@@ -182,18 +209,30 @@ def preload_zcam_iof_images(pointing):
         preloaded_images = {}
         for filt in pointing["FILTER"]:
             preloaded_images[filt] = pool.apply_async(
-                read_from_pointing, (pointing, filt)
+                read_scaled,
+                (pointing, filt),
             )
+            # preloaded_images[filt] = read_scaled(pointing, filt)
         pool.close()
         pool.join()
         preloaded_images = {
             filt: result.get() for filt, result in preloaded_images.items()
         }
-        for eye, color in product(("L", "R"), ("R", "G", "B")):
-            if eye + "0" in preloaded_images.keys():
-                preloaded_images[eye + "0" + color] = preloaded_images[
-                    eye + "0"
-                ].copy()
+        for eye in ("L", "R"):
+            if eye + "0" not in preloaded_images.keys():
+                continue
+            # case in which the image was debayered onboard
+            elif len(preloaded_images[eye + "0"].shape) == 3:
+                for color, band_ix in zip(("R", "G", "B"), (0, 1, 2)):
+                    preloaded_images[eye + "0" + color] = preloaded_images[
+                        eye + "0"
+                    ][band_ix, :, :]
+            # case in which it wasn't -- copies of the image for us to debayer later
+            else:
+                for color in ("R", "G", "B"):
+                    preloaded_images[eye + "0" + color] = preloaded_images[
+                        eye + "0"
+                    ].copy()
     return preloaded_images
 
 
@@ -211,7 +250,9 @@ def handle_pretty_plot(
         else:
             titular_plot_target = "unknown target"
     print("Writing " + str(Path(outpath, pointing_name + "-pretty-plot.png")))
-    marslab_spectra = convert_for_plot(str(marslab_file_name))
+    marslab_spectra = convert_for_plot(str(marslab_file_name)).replace(
+        "-", np.nan
+    )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         pplot.pplot_utils.pretty_plot(
@@ -299,25 +340,35 @@ def titular_names(pointing):
 
 
 def write_context_image(
-    preloaded_images,
-    edgemaps,
-    eye,
-    pointing,
-    outpath,
+    preloaded_images, edgemaps, eye, pointing, outpath, onboard_debayer=False
 ):
     if eye[0].upper() + "0" in preloaded_images.keys():
-        rgb_image = rgb_from_bayer(
-            preloaded_images[eye[0].upper() + "0"], RGGB_PATTERN
-        )
-        rgb_image = normalize_range(rgb_image, 0, 1)
+        if onboard_debayer is False:
+            base_image = rgb_from_bayer(
+                preloaded_images[eye[0].upper() + "0"], RGGB_PATTERN
+            )
+        else:
+            base_image = normalize_range(
+                preloaded_images[eye[0].upper() + "0"], 0, 1
+            )
     else:
-        # TODO: are there ever cases in which the clear filter isn't present
-        #  but we still have narrowband images?
-        return
+        filt, image = list(
+            keyfilter(
+                lambda key: eye[0].upper() in key, preloaded_images
+            ).items()
+        )[0]
+        if filt in TREAT_AS_BAYER_OPAQUE["ZCAM"]:
+            base_image = normalize_range(image)
+            base_image = depth_stack((base_image, base_image, base_image))
+        else:
+            pixel = NARROWBAND_TO_BAYER["ZCAM"][filt]
+            base_image = rgb_from_bayer(
+                image, RGGB_PATTERN, (pixel, pixel, pixel)
+            )
     eye_edgemaps = {
         key: value for key, value in edgemaps.items() if eye in key
     }
-    context_image = draw_edgemaps_on_image(rgb_image, eye_edgemaps, width=0.1)
+    context_image = draw_edgemaps_on_image(base_image, eye_edgemaps, width=0.1)
     pointing_name, target_name = titular_names(pointing)
     title = "\n".join(
         (
@@ -348,7 +399,9 @@ def make_rapidlook_thumbnails(rapidlooks, size):
     return thumbnails
 
 
-def make_context_images(roi_fits, preloaded_images, pointing, outpath):
+def make_context_images(
+    roi_fits, preloaded_images, pointing, outpath, onboard_debayer=False
+):
     context_images = {}
     print("... making ROI context images ...")
     edgemaps = make_roi_edgemaps(roi_fits, calculate_centers=False)
