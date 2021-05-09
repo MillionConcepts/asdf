@@ -137,6 +137,9 @@ dmypy.json
 /asdf/secrets/*.csv
 *asdf_deploy*
 
+# scratch space
+output/
+
 # images
 *.png
 *.fits

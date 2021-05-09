@@ -1,6 +1,7 @@
 """
 script for asdf pipeline
 """
+import os
 import warnings
 from functools import partial
 from operator import contains
@@ -54,8 +55,8 @@ def asdf(
     iof,
     roi=None,
     *,
-    output: "o" = ".",
-    upload: "u" = False,
+    output: "o" = "output/",
+    upload = False,
     copy_target: "c" = False,
     skip_rapidlooks: "s" = False,
     merspect: "m" = None,
@@ -68,10 +69,10 @@ def asdf(
     :param iof: path to one iof file from the 'pointing' you want to archive
     :param roi: path to a SEL or Marslab ROI file containing ROIs corresponding
         to these images
-    :param output: output path; default is the working directory
+    :param upload: upload metadata to google drive
+    :param output: output path; default is "output/"
     :param copy_target: copies 'target' across all ROIs
     :param skip_rapidlooks: don't write default rapidlooks
-    :param upload: upload metadata to google drive
     :param merspect: take data from passed merspect file
     :param noninteractive: run automatically; collect nothing from user
     :param binocular: assume images with distinct RMS can belong to the same
@@ -89,9 +90,9 @@ def asdf(
     else:
         roi_path = Path(roi)
     outpath = Path(output)
+    os.makedirs(outpath, exist_ok=True)
     no_rois = (roi_path.name == "") and (merspect is None)
     roi_fits = None
-
     # scrape headers for all desired metadata fields and derive values
     # from them as necessary
     print("... scraping default metadata ...")
