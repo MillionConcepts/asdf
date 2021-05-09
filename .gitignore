@@ -135,6 +135,7 @@ dmypy.json
 /asdf/secrets/*.json
 /asdf/secrets/*.pem
 /asdf/secrets/*.csv
+*asdf_deploy*
 
 # images
 *.png
@@ -150,3 +151,4 @@ examples/
 
 # deployment
 vendor/
+env/
