@@ -52,9 +52,9 @@ import asdf.settings as settings
 # CLI. (--output, -o; --upload, -u; etc.)
 def asdf(
     iof,
-    roi="",
+    roi=None,
     *,
-    output: "o" = "",
+    output: "o" = ".",
     upload: "u" = False,
     copy_target: "c" = False,
     skip_rapidlooks: "s" = False,
@@ -84,11 +84,11 @@ def asdf(
     # find all associated files and ask the user about them
     pointing = get_and_offer_pointing(iof_path, noninteractive, binocular)
     pointing_name = make_pointing_name(pointing)
-    roi_path = Path(roi)
-    if output != "":
-        outpath = Path(output)
+    if roi is None:
+        roi_path = Path("")
     else:
-        outpath = Path(".")
+        roi_path = Path(roi)
+    outpath = Path(output)
     no_rois = (roi_path.name == "") and (merspect is None)
     roi_fits = None
 
