@@ -46,17 +46,20 @@ from asdf.scrape import (
 import asdf.settings as settings
 
 
+# NOTE: ignore any complaints from static analyzers about parameter annotations
+# for the following function. They are not malformed type hints, but
+# instructions to clize to create single-letter aliases for parameters in the
+# CLI. (--output, -o; --upload, -u; etc.)
 def asdf(
-    iof: str,
-    roi: str = "",
-    output: str = "",
-    *,
-    copy_target: bool = False,
-    skip_rapidlooks: bool = False,
-    upload: bool = False,
-    merspect: str = None,
-    noninteractive: bool = False,
-    binocular=True
+    iof,
+    roi="",
+    output: "o" = "",
+    upload: "u" = False,
+    copy_target: "c" = False,
+    skip_rapidlooks: "s" = False,
+    merspect: "m" = None,
+    noninteractive: "n" = False,
+    binocular: "b" = True,
 ):
     """
     processes and archives everything
@@ -126,7 +129,7 @@ def asdf(
     else:
         preloaded_images = None
 
-    if not all(metadata['BAYER'] == "RAW_BAYER"):
+    if not all(metadata["BAYER"] == "RAW_BAYER"):
         onboard_debayer = True
     else:
         # TODO: watch to see if there are in fact cases when some
@@ -137,8 +140,7 @@ def asdf(
         roi_fits = convert_roi_file(pointing_name, roi_path, outpath)
         if merspect is None:
             marslab_data = count_rois_on_xcam_images(
-                roi_fits, preloaded_images, "ZCAM",
-                debayer=not onboard_debayer
+                roi_fits, preloaded_images, "ZCAM", debayer=not onboard_debayer
             )
         else:
             # allow user to override counting behavior with a MERspect file
