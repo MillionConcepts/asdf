@@ -13,7 +13,7 @@ from urllib.error import URLError
 import numpy as np
 import pandas as pd
 from cytoolz.curried import keyfilter
-from marslab.compat.xcam import ZCAM_ZOOM_MOTOR_COUNT_TO_FOCAL_LENGTH
+from marslab.compat.xcam import piecewise_interpolate_focal_length
 
 from asdf.network import get_public_m20_waypoints
 import asdf.settings as settings
@@ -143,7 +143,7 @@ def parse_pointing(sequence: Union[Mapping, pd.DataFrame]) -> dict:
         "RMS": row["RMC"][6],
         "SOL": row["SOL"],
         "SEQ_ID": row["SEQ_ID"],
-        "ZOOM": ZCAM_ZOOM_MOTOR_COUNT_TO_FOCAL_LENGTH[row["MINI_HEADER"][2]],
+        "ZOOM": piecewise_interpolate_focal_length(row["MINI_HEADER"][2]),
     }
 
 

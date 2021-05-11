@@ -92,7 +92,6 @@ def asdf(
     # find all associated files and ask the user about them
     pointing = get_and_offer_pointing(iof_path, noninteractive, binocular)
     pointing_name = make_pointing_name(pointing)
-
     ci = partial(catch_interaction, noninteractive)
     username = ci(you_prompt)
 
