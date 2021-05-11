@@ -21,8 +21,7 @@ import asdf.settings as settings
 METADATA_REGEX = MappingProxyType(
     {
         field: re.compile(pattern)
-        for field, pattern
-        in settings.metadata.IOF_METADATA_REGEX_STRINGS.items()
+        for field, pattern in settings.metadata.IOF_METADATA_REGEX_STRINGS.items()
     }
 )
 
@@ -247,7 +246,8 @@ def find_iof_siblings(
         raise ValueError(
             "There are multiple pointings in this directory that, for whatever"
             " reason, I can't distinguish. Try pulling the files you want to"
-            " use into another directory."
+            " use into another directory. If you passed an abbreviated path,"
+            " try passing a full path instead."
         )
 
 
@@ -383,9 +383,7 @@ def add_effective_taus(metadata):
         return metadata
     stringified_taus = []
     for taufile in metadata["TAU_ESTIMATE_FILENAME"]:
-        if not os.path.exists(
-            settings.sources.EFFECTIVE_TAU_PATH + taufile
-        ):
+        if not os.path.exists(settings.sources.EFFECTIVE_TAU_PATH + taufile):
             stringified_taus.append(np.nan)
         else:
             stringified_taus.append(

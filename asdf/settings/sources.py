@@ -5,6 +5,14 @@ PUBLIC_WAYPOINTS_URL = (
 FIND_EFFECTIVE_TAUS = True
 EFFECTIVE_TAU_PATH = "/project/m2020/gds/radcal/effective_taus/"
 
+# abbreviated path settings
+PATH_ABBREVIATIONS = {
+    'scratch': "/scratch/cal_wg/flight/products/",
+    "proj": "/project/m2020/mastcamz/surface/flight/products",
+}
+DEFAULT_PRODUCT_SUBDIRECTORY = 'iof'
+
+
 GOOGLE_CLIENT_SECRETS_FILE = "asdf/secrets/google_client_secrets.json"
 GOOGLE_SHEET_ID = "1mUg_gsvOuB5FACW9BEDEIXEpPtXewOC3-l5NHj_LN9Q"
 METADATA_BACKUP_FOLDER_ID = "1iu-AS6pv924f_zN9t4HjlV6qaqRYtu46"

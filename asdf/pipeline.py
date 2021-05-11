@@ -9,7 +9,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from astropy.io import fits
-from cytoolz import keyfilter
+from clize import UserError
+from cytoolz import keyfilter, valfilter
 from marslab.compat.mertools import (
     add_merspect_colors_to_edgemaps,
     is_sel_file,
@@ -259,6 +260,46 @@ def handle_pretty_plot(
             plot_fn=Path(outpath, pointing_name + "-pretty-plot.png"),
             underplot=None,
         )
+
+
+def handle_abbreviation(sol, seq_id, root=None, filetype=None):
+    sol_path = format(int(sol), "0>4")
+    # default path root and subdirectory, which can be overridden
+    if root:
+        try:
+            path_root = settings.sources.PATH_ABBREVIATIONS[root]
+        except KeyError:
+            raise UserError(
+                "sorry, I don't know the abbreviation \""
+                + root
+                + '".  I know '
+                + " ".join(
+                    ["\"" + key + "\"," for key in settings.sources.PATH_ABBREVIATIONS.keys()]
+                )
+            )
+    else:
+        path_root = list(settings.sources.PATH_ABBREVIATIONS.values())[0]
+    if filetype:
+        product_subdirectory = filetype
+    else:
+        product_subdirectory = settings.sources.DEFAULT_PRODUCT_SUBDIRECTORY
+    iof_search_path = Path(path_root, sol_path, product_subdirectory)
+    candidates = [
+        path for path in iof_search_path.iterdir() if seq_id in path.name
+    ]
+    if len(candidates) == 0:
+        raise UserError(
+            "Sorry, couldn't find a file with seq_id "
+            + seq_id
+            + " in "
+            + str(iof_search_path)
+        )
+    version_slice = slice(-6, -4)
+    versions = {path: int(path.name[version_slice]) for path in candidates}
+    latest_version = max(versions.values())
+    return next(
+        iter(valfilter(lambda key: int(key) == latest_version, versions))
+    )
 
 
 def create_marslab_output(marslab_data, metadata, outpath, pointing_name):

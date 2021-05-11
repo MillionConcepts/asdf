@@ -87,7 +87,12 @@ def get_and_offer_pointing(iof_path, noninteractive, binocular):
     while ok_input is not True:
         ok_input = input("Does this look right? (Y/N) ")
         if ok_input.lower() == "n":
-            raise UserError("halting due to user rejection of file list")
+            raise UserError(
+                "halting due to user rejection of file list. If you passed an "
+                "abbreviated path, try passing a full path instead. You could "
+                "also try copying the files you want to work with into their "
+                "own subdirectory."
+            )
         elif ok_input.lower() == "y":
             ok_input = True
     return pointing

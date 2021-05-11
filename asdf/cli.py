@@ -36,6 +36,7 @@ from asdf.pipeline import (
     make_context_images,
     convert_roi_file,
     add_input_roi_metadata,
+    handle_abbreviation,
 )
 from asdf.scrape import (
     bulk_scrape_metadata,
@@ -57,8 +58,9 @@ def asdf(
     *,
     output: "o" = None,
     upload=False,
+    abbreviate: "a" = False,
     copy_target: "c" = False,
-    skip_rapidlooks: "s" = False,
+    skip_rapidlooks: "r" = False,
     merspect: "m" = None,
     noninteractive: "n" = False,
     binocular: "b" = True,
@@ -71,6 +73,10 @@ def asdf(
         to these images
     :param upload: upload metadata to google drive
     :param output: output path; default is "output/$username/$sol"
+    :param abbreviate: pass abbreviated version of iof location:
+        sol,seq_id,(optional) root directory code,(optional) product type
+        examples: 36,03107,scratch,iof
+                  36,03107
     :param copy_target: copies 'target' across all ROIs
     :param skip_rapidlooks: don't write default rapidlooks
     :param merspect: take data from passed merspect file
@@ -79,18 +85,25 @@ def asdf(
         pointing until proven otherwise
     """
     # wrapper that suppresses input calls in non-interactive mode
-    ci = partial(catch_interaction, noninteractive)
-    username = ci(you_prompt)
-    iof_path = Path(iof)
+    if abbreviate:
+        iof_path = handle_abbreviation(*iof.split(","))
+    else:
+        iof_path = Path(iof)
     # find all associated files and ask the user about them
     pointing = get_and_offer_pointing(iof_path, noninteractive, binocular)
     pointing_name = make_pointing_name(pointing)
+
+    ci = partial(catch_interaction, noninteractive)
+    username = ci(you_prompt)
+
     if roi is None:
         roi_path = Path("")
     else:
         roi_path = Path(roi)
     if output is None:
-        outpath = Path("output/", os.getlogin(), format(pointing['SOL'].iloc[0], '0>4'))
+        outpath = Path(
+            "output/", os.getlogin(), format(pointing["SOL"].iloc[0], "0>4")
+        )
     else:
         outpath = Path(output)
     os.makedirs(outpath, exist_ok=True)
