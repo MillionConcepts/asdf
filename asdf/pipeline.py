@@ -36,7 +36,7 @@ import asdf
 import asdf.settings as settings
 import pplot
 from asdf.asdf_utils import absolutely_destroy
-from asdf.chatter import ask_user_about_roi
+from asdf.chatter import ask_user_about_roi, get_and_offer_pointing
 from asdf.scrape import (
     make_pointing_name,
     parse_pointing,
@@ -262,7 +262,10 @@ def handle_pretty_plot(
         )
 
 
-def handle_abbreviation(sol, seq_id, root=None, filetype=None):
+def handle_abbreviation(
+    sol, seq_id, root=None, filetype=None, noninteractive=False, binocular=True
+):
+    # TODO: clean this up and document it
     sol_path = format(int(sol), "0>4")
     # default path root and subdirectory, which can be overridden
     if root:
@@ -274,7 +277,10 @@ def handle_abbreviation(sol, seq_id, root=None, filetype=None):
                 + root
                 + '".  I know '
                 + " ".join(
-                    ["\"" + key + "\"," for key in settings.sources.PATH_ABBREVIATIONS.keys()]
+                    [
+                        '"' + key + '",'
+                        for key in settings.sources.PATH_ABBREVIATIONS.keys()
+                    ]
                 )
             )
     else:
@@ -297,9 +303,34 @@ def handle_abbreviation(sol, seq_id, root=None, filetype=None):
     version_slice = slice(-6, -4)
     versions = {path: int(path.name[version_slice]) for path in candidates}
     latest_version = max(versions.values())
-    return next(
-        iter(valfilter(lambda key: int(key) == latest_version, versions))
+    good_input = False
+    iof_path = None
+    pointing = None
+    latest_candidates = iter(
+        valfilter(lambda key: int(key) == latest_version, versions)
     )
+    while good_input is not True:
+        try:
+            iof_path = Path(next(latest_candidates))
+        except StopIteration:
+            latest_version -= 1
+            if latest_version <= 0:
+                raise UserError(
+                    "No pointings in this directory matching the requested "
+                    "seq_id appear usable."
+                )
+            latest_candidates = iter(
+                valfilter(lambda key: int(key) == latest_version, versions)
+            )
+            continue
+        try:
+            pointing = get_and_offer_pointing(
+                iof_path, noninteractive, binocular
+            )
+        except UserError:
+            continue
+        good_input = True
+    return iof_path, pointing
 
 
 def create_marslab_output(marslab_data, metadata, outpath, pointing_name):

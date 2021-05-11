@@ -86,11 +86,13 @@ def asdf(
     """
     # wrapper that suppresses input calls in non-interactive mode
     if abbreviate:
-        iof_path = handle_abbreviation(*iof.split(","))
+        iof_path, pointing = handle_abbreviation(
+            *iof.split(","), noninteractive, binocular
+        )
     else:
         iof_path = Path(iof)
+        pointing = get_and_offer_pointing(iof_path, noninteractive, binocular)
     # find all associated files and ask the user about them
-    pointing = get_and_offer_pointing(iof_path, noninteractive, binocular)
     pointing_name = make_pointing_name(pointing)
     ci = partial(catch_interaction, noninteractive)
     username = ci(you_prompt)
