@@ -155,6 +155,7 @@ def make_pointing_name(pointing):
         ]
     )
     pointing_name = pointing_name.replace("SEQ_ID", "SEQID")
+    pointing_name = pointing_name.replace(".", "_")
     return pointing_name
 
 
