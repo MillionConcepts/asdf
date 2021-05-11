@@ -327,7 +327,7 @@ def handle_abbreviation(
             pointing = get_and_offer_pointing(
                 iof_path, noninteractive, binocular
             )
-        except UserError:
+        except (UserError, ValueError):
             continue
         good_input = True
     return iof_path, pointing
