@@ -87,7 +87,7 @@ def asdf(
     # wrapper that suppresses input calls in non-interactive mode
     if abbreviate:
         iof_path, pointing = handle_abbreviation(
-            *iof.split(","), noninteractive, binocular
+            *iof.split(","), noninteractive=noninteractive, binocular=binocular
         )
     else:
         iof_path = Path(iof)
