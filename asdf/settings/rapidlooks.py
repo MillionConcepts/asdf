@@ -7,7 +7,6 @@ from scipy.ndimage import gaussian_filter
 
 from marslab.compat.xcam import (
     NARROWBAND_TO_BAYER,
-    TREAT_AS_BAYER_OPAQUE,
 )
 from marslab.imgops import RGGB_PATTERN, norm_clip, normalize_range
 
@@ -102,7 +101,7 @@ ACCENT_RAPIDLOOK_OPTIONS = {
     "clip": {"function": norm_clip},
     "prefilter": {
         "function": cast_bilateral,
-        "params": {"d": 15, "sigmaColor": 3, "sigmaSpace": 7},
+        "params": {"d": 15, "sigmaColor": 3, "sigmaSpace": 7}
     },
 }
 
@@ -121,7 +120,6 @@ DEFAULT_PREPROCESS_OPTIONS = {
     "debayer": {
         "pattern": RGGB_PATTERN,
         "mapping": NARROWBAND_TO_BAYER["ZCAM"],
-        "eschew_filters": TREAT_AS_BAYER_OPAQUE["ZCAM"],
     },
 }
 
@@ -129,32 +127,32 @@ DEFAULT_PREPROCESS_OPTIONS = {
 DEFAULT_RAPIDLOOKS = {
     "BD529": {
         "operation": "band_depth",
-        "filters": ("L6", "L4", "L5"),
+        "bands": ("L6", "L4", "L5"),
         "options": SPECTRAL_RAPIDLOOK_OPTIONS,
     },
     "BD866": {
         "operation": "band_depth",
-        "filters": ("R1", "R4", "R2"),
+        "bands": ("R1", "R4", "R2"),
         "options": SPECTRAL_RAPIDLOOK_OPTIONS,
     },
     "BD678": {
         "operation": "band_depth",
-        "filters": ("L4", "L2", "L3"),
+        "bands": ("L4", "L2", "L3"),
         "options": SPECTRAL_RAPIDLOOK_OPTIONS,
     },
     "S56": {
         "operation": "slope",
-        "filters": ("R5", "R6"),
+        "bands": ("R5", "R6"),
         "options": SPECTRAL_RAPIDLOOK_OPTIONS,
     },
     "S16": {
         "operation": "slope",
-        "filters": ("R1", "R6"),
+        "bands": ("R1", "R6"),
         "options": SPECTRAL_RAPIDLOOK_OPTIONS,
     },
     "enhanced color": {
         "operation": "enhanced color",
-        "filters": ("L2", "L5", "L6"),
+        "bands": ("L2", "L5", "L6"),
         "options": {
             "special_constants": [0],
             "normalize": False,
@@ -167,7 +165,7 @@ DEFAULT_RAPIDLOOKS = {
     },
     "L0 enhanced color": {
         "operation": "enhanced color",
-        "filters": ("L0R", "L0G", "L0B"),
+        "bands": ("L0R", "L0G", "L0B"),
         "options": {
             "special_constants": [0],
             "normalize": False,
@@ -180,7 +178,7 @@ DEFAULT_RAPIDLOOKS = {
     },
     "R0 enhanced color": {
         "operation": "enhanced color",
-        "filters": ("R0R", "R0G", "R0B"),
+        "bands": ("R0R", "R0G", "R0B"),
         "options": {
             "special_constants": [0],
             "normalize": False,
@@ -193,23 +191,23 @@ DEFAULT_RAPIDLOOKS = {
     },
     "dcs": {
         "operation": "dcs",
-        "filters": ("L2", "L5", "L6"),
+        "bands": ("L2", "L5", "L6"),
         "options": STRETCHY_RAPIDLOOK_OPTIONS,
     },
     "R0 dcs": {
         "operation": "dcs",
-        "filters": ("R0R", "R0G", "R0B"),
+        "bands": ("R0R", "R0G", "R0B"),
         "options": STRETCHY_RAPIDLOOK_OPTIONS,
     },
     "L0 dcs": {
         "operation": "dcs",
-        "filters": ("L0R", "L0G", "L0B"),
+        "bands": ("L0R", "L0G", "L0B"),
         "options": STRETCHY_RAPIDLOOK_OPTIONS,
     },
     "3dg_dcs": {
         "operation": "dcs",
         "name": "3dg dcs",
-        "filters": ("L2", "L5", "L6"),
+        "bands": ("L2", "L5", "L6"),
         "options": STRETCHY_RAPIDLOOK_OPTIONS
         | {
             "image_filter": {
@@ -221,13 +219,13 @@ DEFAULT_RAPIDLOOKS = {
     "IR_dcs": {
         "operation": "dcs",
         "name": "IR dcs",
-        "filters": ("R6", "R3", "R1"),
+        "bands": ("R6", "R3", "R1"),
         "options": STRETCHY_RAPIDLOOK_OPTIONS | {"contrast_stretch": 2},
     },
     "3dg_IR_dcs": {
         "operation": "dcs",
         "name": "3dg IR dcs",
-        "filters": ("R6", "R3", "R1"),
+        "bands": ("R6", "R3", "R1"),
         "options": STRETCHY_RAPIDLOOK_OPTIONS
         | {
             "contrast_stretch": 2,
@@ -268,9 +266,11 @@ for look_name, look in DEFAULT_RAPIDLOOKS.items():
         new_look = look.copy()
         new_look["name"] = look["operation"] + " accent"
         new_look["options"] = ACCENT_RAPIDLOOK_OPTIONS
-        eye = look["filters"][0][0]
+        eye = look["bands"][0][0]
         # noinspection PyTypeChecker
-        new_look["overlay"] = AQUA_PINK_ACCENT_OPTIONS | {"filter": eye + "0R"}
+        new_look["overlay"] = AQUA_PINK_ACCENT_OPTIONS | {
+            "band": look["bands"][0]
+        }
         overlay_looks[look_name + " overlay"] = new_look
 DEFAULT_RAPIDLOOKS |= overlay_looks
 
@@ -289,9 +289,11 @@ for look_name, look in DEFAULT_RAPIDLOOKS.items():
         new_look = look.copy()
         new_look["name"] = look["operation"] + " rainbow overlay"
         new_look["options"] = OVERLAY_RAPIDLOOK_OPTIONS
-        eye = look["filters"][0][0]
+        eye = look["bands"][0][0]
         # noinspection PyTypeChecker
-        new_look["overlay"] = RAINBOW_OVERLAY_OPTIONS | {"filter": eye + "0R"}
+        new_look["overlay"] = RAINBOW_OVERLAY_OPTIONS | {
+            "band": look["bands"][0]
+        }
         rainbow_overlay_looks[look_name + " rainbow overlay"] = new_look
 DEFAULT_RAPIDLOOKS |= rainbow_overlay_looks
 

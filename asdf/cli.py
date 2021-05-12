@@ -9,17 +9,10 @@ from pathlib import Path
 
 import pandas as pd
 from cytoolz.curried import keyfilter
-from marslab.compat.mertools import (
-    merspect_to_marslab,
-)
-from marslab.compat.xcam import (
-    count_rois_on_xcam_images,
-)
+from marslab.compat.mertools import merspect_to_marslab
+from marslab.compat.xcam import count_rois_on_xcam_images
 
-from asdf.asdf_utils import (
-    catch_interaction,
-    absolutely_destroy,
-)
+from asdf.asdf_utils import catch_interaction, absolutely_destroy
 from asdf.chatter import (
     you_prompt,
     get_and_offer_pointing,
