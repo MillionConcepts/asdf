@@ -25,13 +25,15 @@ def float_prompt(title=None) -> str:
         title = "this"
     else:
         title = "the " + title
-    value = ""
-    while value.upper() not in ("Y", "N"):
+    value = "-"
+    while value.upper() not in ("Y", "N", ""):
         value = input(
             "    Is the feature associated with "
             + title
-            + " ROI a float? (Y/N)"
+            + " ROI a float? (Y/N) (press Enter for N)"
         )
+    if value == "":
+        value = "N"
     return value.upper()
 
 

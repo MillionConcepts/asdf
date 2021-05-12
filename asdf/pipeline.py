@@ -117,7 +117,7 @@ def polish_metadata(dataframe, creation_time):
     return pd.concat([ordered_fields, dataframe[extra_columns]], axis=1)
 
 
-def assemble_marslab_versions(marslab_data, metadata):
+def assemble_marslab_versions(marslab_data, metadata, suffix):
     # TODO: messy.
     metadata_block = dupe_df_block(
         melt_metadata(metadata), len(marslab_data.index)
@@ -151,7 +151,7 @@ def assemble_marslab_versions(marslab_data, metadata):
             marslab_compact[field] = value
     creation_time = dt.datetime.utcnow().isoformat()
     pointing_summary["FILE_TIMESTAMP"] = creation_time
-    pointing_summary["NAME"] = marslab_compact["NAME"]
+    pointing_summary["NAME"] = marslab_compact["NAME"] + suffix
     marslab_extended["ASDF_VERSION"] = asdf.__version__
     return (
         polish_metadata(marslab_compact, creation_time),
@@ -161,8 +161,10 @@ def assemble_marslab_versions(marslab_data, metadata):
 
 
 def verbosely_write_marslab_versions(
-    marslab_compact, marslab_extended, output_path, pointing_name
+    marslab_compact, marslab_extended, output_path, pointing_name, suffix=""
 ):
+    if suffix != "":
+        pointing_name = pointing_name + "-" + suffix
     metadata_fn = str(Path(output_path, pointing_name + "-marslab.csv"))
     extended_metadata_fn = str(
         Path(output_path, pointing_name + "-marslab-extended.csv")
@@ -233,7 +235,8 @@ def preload_zcam_iof_images(pointing):
 
 
 def handle_pretty_plot(
-    marslab_file_name, fixed_target, outpath, pointing_name
+    marslab_file_name, fixed_target, outpath, pointing_name,
+        suffix=""
 ):
     print("pretty-plotting data")
     marslab_file = pd.read_csv(marslab_file_name).replace("-", np.nan)
@@ -245,6 +248,8 @@ def handle_pretty_plot(
             titular_plot_target = targets[0]
         else:
             titular_plot_target = "unknown target"
+    if suffix != "":
+        pointing_name = pointing_name + "-" + suffix
     print("Writing " + str(Path(outpath, pointing_name + "-pretty-plot.png")))
     marslab_spectra = convert_for_plot(str(marslab_file_name)).replace(
         "-", np.nan
@@ -333,14 +338,14 @@ def handle_abbreviation(
     return iof_path, pointing
 
 
-def create_marslab_output(marslab_data, metadata, outpath, pointing_name):
+def create_marslab_output(marslab_data, metadata, outpath, pointing_name, suffix):
     (
         marslab_compact,
         marslab_extended,
         pointing_summary,
-    ) = assemble_marslab_versions(marslab_data, metadata)
+    ) = assemble_marslab_versions(marslab_data, metadata, suffix)
     metadata_fn, extended_metadata_fn = verbosely_write_marslab_versions(
-        marslab_compact, marslab_extended, outpath, pointing_name
+        marslab_compact, marslab_extended, outpath, pointing_name, suffix
     )
     return pointing_summary, metadata_fn, extended_metadata_fn
 
@@ -371,6 +376,7 @@ def convert_roi_file(
     pointing_name,
     roi_path,
     outpath=None,
+    suffix=""
 ):
     # if passed ROI file is a SEL, convert to marslab FITS and save
     if is_sel_file(roi_path):
@@ -380,6 +386,8 @@ def convert_roi_file(
     roi_fits = add_pointing_name_to_roi(pointing_name, roi_fits)
     # TODO: should we actually add feature names to the ROI files?
     #  so therefore wait to save until after grilling the user?
+    if suffix != "":
+        pointing_name = pointing_name + "-" + suffix
     roi_fits_fn = Path(outpath, pointing_name + "-roi.fits")
     roi_fits.writeto(
         Path(outpath, pointing_name + "-roi.fits"), overwrite=True
@@ -408,7 +416,8 @@ def titular_names(pointing):
 
 
 def write_context_image(
-    preloaded_images, edgemaps, eye, pointing, outpath, onboard_debayer=False
+    preloaded_images, edgemaps, eye, pointing, outpath, onboard_debayer=False,
+        suffix=""
 ):
     if eye[0].upper() + "0" in preloaded_images.keys():
         if onboard_debayer is False:
@@ -440,6 +449,9 @@ def write_context_image(
     }
     context_image = draw_edgemaps_on_image(base_image, eye_edgemaps, width=0.1)
     pointing_name, target_name = titular_names(pointing)
+    if suffix != "":
+        target_name = target_name + " " + suffix + " "
+        pointing_name = pointing_name + "-" + suffix
     title = "\n".join(
         (
             target_name + eye + " ROI context image",
@@ -470,7 +482,8 @@ def make_rapidlook_thumbnails(rapidlooks, size):
 
 
 def make_context_images(
-    roi_fits, preloaded_images, pointing, outpath, onboard_debayer=False
+    roi_fits, preloaded_images, pointing, outpath, onboard_debayer=False,
+        suffix=""
 ):
     context_images = {}
     print("... making ROI context images ...")
@@ -478,7 +491,8 @@ def make_context_images(
     edgemaps = add_merspect_colors_to_edgemaps(edgemaps)
     for eye in ("left", "right"):
         eye_image = write_context_image(
-            preloaded_images, edgemaps, eye, pointing, outpath, onboard_debayer
+            preloaded_images, edgemaps, eye, pointing, outpath, onboard_debayer,
+            suffix
         )
         if eye_image:
             context_images["context image " + eye] = eye_image

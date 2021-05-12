@@ -61,6 +61,7 @@ def asdf(
     abbreviate: "a" = False,
     copy_target: "c" = False,
     skip_rapidlooks: "r" = False,
+    suffix: "s" = "",
     merspect: "m" = None,
     noninteractive: "n" = False,
     binocular: "b" = True,
@@ -79,6 +80,8 @@ def asdf(
                   36,03107
     :param copy_target: copies 'target' across all ROIs
     :param skip_rapidlooks: don't write default rapidlooks
+    :param suffix: add suffix for this analysis/group of ROIs to data,
+        metadata, and context image outputs (e.g. "rocks" or "soils")
     :param merspect: take data from passed merspect file
     :param noninteractive: run automatically; collect nothing from user
     :param binocular: assume images with distinct RMS can belong to the same
@@ -155,7 +158,9 @@ def asdf(
         onboard_debayer = False
     # handle ROI file conversion, ROI counting, user input per-ROI metadata
     if roi_path.name != "":
-        roi_fits, roi_fn = convert_roi_file(pointing_name, roi_path, outpath)
+        roi_fits, roi_fn = convert_roi_file(
+            pointing_name, roi_path, outpath, suffix
+        )
         if merspect is None:
             marslab_data = count_rois_on_xcam_images(
                 roi_fits, preloaded_images, "ZCAM", debayer=not onboard_debayer
@@ -178,7 +183,7 @@ def asdf(
     # glom all the data and metadata together into our three output formats;
     # write the compact and extended versions, save the summary in memory
     summary, metadata_fn, extended_metadata_fn = create_marslab_output(
-        marslab_data, metadata, outpath, pointing_name
+        marslab_data, metadata, outpath, pointing_name, suffix
     )
 
     # TODO: this is messy
@@ -209,7 +214,12 @@ def asdf(
     # make context images and write them out
     if roi_fits is not None:
         context = make_context_images(
-            roi_fits, preloaded_images, pointing, outpath, onboard_debayer
+            roi_fits,
+            preloaded_images,
+            pointing,
+            outpath,
+            onboard_debayer,
+            suffix,
         )
         thumbnail_staging |= pick_thumbs(context)
         absolutely_destroy(context)
@@ -234,9 +244,6 @@ def asdf(
         print("... all done ...")
         return
     handle_pretty_plot(
-        Path(outpath, pointing_name + "-marslab.csv"),
-        fixed_target,
-        outpath,
-        pointing_name,
+        metadata_fn, fixed_target, outpath, pointing_name, suffix
     )
     print("... all done ...")
