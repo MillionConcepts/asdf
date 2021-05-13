@@ -10,7 +10,7 @@ from pplot.convert import convert_for_plot
 
 
 def looks_like_marslab(fn):
-    if fn.endswith('-marslab.csv'):
+    if str(fn).endswith('-marslab.csv'):
         return True
     return False
 
