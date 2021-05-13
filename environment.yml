@@ -21,9 +21,11 @@ dependencies:
   - fs
   - gspread
   - boto3
-  - pip:
-      - git+https://github.com/MillionConcepts/pdr.git
-      - git+https://github.com/MillionConcepts/marslab.git
+# currently commented out in preference to vendoring
+# on islamorada
+#  - pip:
+#      - git+https://github.com/MillionConcepts/pdr.git
+#      - git+https://github.com/MillionConcepts/marslab.git
   - astropy
   - sympy
   - pytest
