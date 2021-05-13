@@ -22,9 +22,9 @@ def directory_of(path):
 
 
 def do_pplot(
-    path_or_file,
-    *,
-    recursive: "r" = False
+        path_or_file,
+        *,
+        recursive: "r" = False
 ):
     """
     non-interactive CLI to pretty-plot. generates .png files
@@ -52,25 +52,35 @@ def do_pplot(
     else:
         marslab_files = [path]
     for marslab_file in marslab_files:
-        marslab = pd.read_csv(marslab_file).replace("-", np.nan)
-        titular_plot_target = "unknown target"
-        if "NAME" in marslab.columns:
-            names = marslab["NAME"].dropna().unique()
-            if len(names) > 0:
-                titular_plot_target = names[0]
-        plot_fn = str(marslab_file).replace("-marslab.csv", "-pretty-plot.png")
-        print("Writing " + plot_fn)
-        marslab_spectra = convert_for_plot(str(marslab_file)).replace(
-            "-", np.nan
-        )
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        pplot.pplot_utils.pretty_plot(
-            marslab_spectra,
-            target_name=titular_plot_target,
-            sol=marslab["SOL"].iloc[0],
-            solar_elevation=marslab["SOLAR_ELEVATION"].iloc[0],
-            seq_id=marslab["SEQ_ID"].iloc[0],
-            plot_fn=plot_fn,
-            underplot=None,
-        )
+        try:
+            marslab = pd.read_csv(marslab_file).replace("-", np.nan)
+            titular_plot_target = "unknown target"
+            if "NAME" in marslab.columns:
+                names = marslab["NAME"].dropna().unique()
+                if len(names) > 0:
+                    titular_plot_target = names[0]
+            plot_fn = str(marslab_file).replace("-marslab.csv", "-pretty-plot.png")
+            print("Writing " + plot_fn)
+            marslab_spectra = convert_for_plot(str(marslab_file)).replace(
+                "-", np.nan
+            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                pplot.pplot_utils.pretty_plot(
+                    marslab_spectra,
+                    target_name=titular_plot_target,
+                    sol=marslab["SOL"].iloc[0],
+                    solar_elevation=marslab["SOLAR_ELEVATION"].iloc[0],
+                    seq_id=marslab["SEQ_ID"].iloc[0],
+                    plot_fn=plot_fn,
+                    underplot=None
+                )
+        except (KeyError, ValueError) as error:
+            print(
+                "couldn't plot "
+                + str(marslab_file)
+                + ": "
+                + str(type(error))
+                + " "
+                + str(error)
+            )
