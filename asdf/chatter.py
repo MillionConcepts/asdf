@@ -14,11 +14,6 @@ from asdf.scrape import find_iof_siblings
 import asdf.settings as settings
 
 
-def you_prompt() -> str:
-    """who are you? tell me."""
-    return input("Please enter your name, user code, or other identifier: ")
-
-
 def float_prompt(title=None) -> str:
     """is this a float? tell me."""
     if title is None:

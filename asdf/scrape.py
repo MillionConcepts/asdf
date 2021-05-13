@@ -275,9 +275,9 @@ def check_and_drop_duplicate_columns(dataframe):
     return dataframe.loc[:, ~dataframe.columns.duplicated()]
 
 
-def melt_metadata(metadata: pd.DataFrame) -> pd.DataFrame:
+def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
     """
-    unpivot a metadata frame by FILTER, for appending per-file metadata to the
+    unpivot a metadata frame by key (default BAND), for appending per-file metadata to the
     extended marslab format
     """
     unchanging_columns = (
@@ -293,23 +293,16 @@ def melt_metadata(metadata: pd.DataFrame) -> pd.DataFrame:
     uc_here = [col for col in unchanging_columns if col in metadata.columns]
     unchanging_block = metadata.reindex(columns=uc_here)
     melted = metadata.drop(columns=uc_here)
-    melted = melted.melt("FILTER").T
-    melted.columns = melted.loc["FILTER"] + "_" + melted.loc["variable"]
+    melted = melted.melt(unpivot).T
+    melted.columns = melted.loc[unpivot] + "_" + melted.loc["variable"]
     melted = (
-        melted.drop(["FILTER", "variable"])
+        melted.drop([unpivot, "variable"])
         .reset_index(drop=True)
         .sort_index(axis=1)
     )
     return pd.DataFrame(
         pd.concat([unchanging_block.loc[0], melted.loc[0]], axis=0)
     ).T
-
-
-def dupe_df_block(dataframe, rows_to_repeat):
-    return pd.DataFrame(
-        np.repeat(dataframe.values, rows_to_repeat, axis=0),
-        columns=dataframe.columns,
-    )
 
 
 def matching_waypoints(site, drive, m20_waypoint_dict):

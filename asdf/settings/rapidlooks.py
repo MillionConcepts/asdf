@@ -5,17 +5,7 @@ from matplotlib import cm
 import matplotlib.font_manager as mplf
 from scipy.ndimage import gaussian_filter
 
-from marslab.compat.xcam import (
-    NARROWBAND_TO_BAYER,
-)
-from marslab.imgops import RGGB_PATTERN, norm_clip, normalize_range
-
-
-def cast_bilateral(array, *args, **kwargs):
-    # downsample float64 images for bilateralFilter
-    if array.dtype == np.float64:
-        return cv2.bilateralFilter(array.astype(np.float32), *args, **kwargs)
-    return cv2.bilateralFilter(array, *args, **kwargs)
+from marslab.imgops import norm_clip, normalize_range
 
 
 # TODO: clean this up
@@ -91,7 +81,7 @@ OVERLAY_RAPIDLOOK_OPTIONS = {
     "special_constants": [0],
     "clip": {"function": norm_clip},
     "prefilter": {
-        "function": cast_bilateral,
+        "function": cv2.bilateralFilter,
         "params": {"d": 20, "sigmaColor": 5, "sigmaSpace": 10},
     },
 }
@@ -100,7 +90,7 @@ ACCENT_RAPIDLOOK_OPTIONS = {
     "special_constants": [0],
     "clip": {"function": norm_clip},
     "prefilter": {
-        "function": cast_bilateral,
+        "function": cv2.bilateralFilter,
         "params": {"d": 15, "sigmaColor": 3, "sigmaSpace": 7}
     },
 }
@@ -115,13 +105,7 @@ AQUA_PINK_ACCENT_OPTIONS = {
 }
 
 
-DEFAULT_PREPROCESS_OPTIONS = {
-    "crop_bounds": (25, 25, 11, 11),
-    "debayer": {
-        "pattern": RGGB_PATTERN,
-        "mapping": NARROWBAND_TO_BAYER["ZCAM"],
-    },
-}
+
 
 # noinspection PyTypeChecker
 DEFAULT_RAPIDLOOKS = {
@@ -298,6 +282,8 @@ for look_name, look in DEFAULT_RAPIDLOOKS.items():
 DEFAULT_RAPIDLOOKS |= rainbow_overlay_looks
 
 
+
+
 # TODO: troubleshoot make_three_channel_filter
 # smooth_dcs_looks = {}
 # for look_name, look in DEFAULT_RAPIDLOOKS.items():
@@ -310,3 +296,14 @@ DEFAULT_RAPIDLOOKS |= rainbow_overlay_looks
 #                 }
 #         smooth_dcs_looks[look_name + " smooth"] = new_look
 # DEFAULT_RAPIDLOOKS |= smooth_dcs_looks
+
+
+# add crop
+# TODO: is this gross?
+
+DEFAULT_CROP = {
+    "crop": (25, 25, 11, 11),
+}
+
+for look in DEFAULT_RAPIDLOOKS:
+    DEFAULT_RAPIDLOOKS[look] |= DEFAULT_CROP
