@@ -14,6 +14,7 @@ from cytoolz import valfilter
 
 import asdf.settings as settings
 import pplot
+from asdf.asdf_utils import dashify
 from asdf.chatter import ask_user_about_roi, get_and_offer_pointing
 from asdf.scrape import (
     parse_pointing,
@@ -193,12 +194,10 @@ def make_pointing_annotation(pointing):
     )
 
 
-def add_input_roi_metadata(marslab_data, fixed_target, ci):
+def add_input_roi_metadata(marslab_data, ci):
     for region in marslab_data["COLOR"]:
         ci(print, "Please enter information about the " + region + " ROI.")
-        user_provided_roi_metadata = ask_user_about_roi(
-            fixed_target, region, ci
-        )
+        user_provided_roi_metadata = ask_user_about_roi(region, ci)
         for field, value in user_provided_roi_metadata.items():
             marslab_data.loc[marslab_data["COLOR"] == region, field] = value
     return marslab_data
@@ -223,15 +222,14 @@ def pretty_plot_bandset(bandset, outpath):
     if bandset.compact["NAME"].iloc[0]:
         target_name = bandset.compact["NAME"].iloc[0]
     plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
-    plot_data.replace(np.nan, "-", inplace=True)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         pplot.pplot_utils.pretty_plot(
-            plot_data,
+            dashify(plot_data),
             target_name=target_name,
-            sol=plot_data["SOL"].iloc[0],
-            solar_elevation=plot_data["SOLAR_ELEVATION"].iloc[0],
-            seq_id=plot_data["SEQ_ID"].iloc[0],
+            sol=bandset.compact["SOL"].iloc[0],
+            solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
+            seq_id=bandset.compact["SEQ_ID"].iloc[0],
             plot_fn=plot_fn,
             underplot=None,
         )

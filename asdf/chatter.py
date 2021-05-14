@@ -113,16 +113,13 @@ def get_pointing_wrapper(iof_path, noninteractive, binocular, debug=False):
 
 
 def ask_user_about_roi(
-    fixed_target=None, roi_title=None, ci: Callable = pass_parameters
+    roi_title=None, ci: Callable = pass_parameters
 ) -> dict:
     """
     ask the user about all of the ROI properties we care about, unless
     the application is in noninteractive mode, in which case return our
     null value "-" for all of them.
 
-    :param fixed_target: this is a string that defines a single target for
-        every ROI so that we don't bother the user. currently set if no ROIs
-        or if copy_target is passed.
     :param roi_title: title of the ROI we're asking about -- presently always
         color, but no logical reason it must be
     :param ci: optional wrapper function that suppresses attempts to request
@@ -130,10 +127,6 @@ def ask_user_about_roi(
     """
     roi_metadata = {}
     metadata_fields = list(settings.metadata.ROI_METADATA_FIELDS)
-    if fixed_target is None:
-        metadata_fields.append("NAME")
-    else:
-        roi_metadata["NAME"] = fixed_target
     for field in metadata_fields:
         roi_metadata[field] = ci(dispatched_metadata_prompt, field, roi_title)
     return roi_metadata

@@ -144,7 +144,7 @@ def bind_asdf_bucket() -> Callable[Any, str]:
     bucket = settings.sources.BACKUP_BUCKET
 
     def upload_to_default_bucket(obj, key, pass_string=False):
-        return upload_s3(bucket, obj, key, pass_string, client)
+        return upload_s3(bucket, obj, key, client, pass_string)
 
     return upload_to_default_bucket
 
@@ -162,12 +162,15 @@ def backup_marslab_files(bandset, roi_fits_fn, debug_prefix=""):
     if roi_fits_fn is not None:
         # TODO: is this going to create some kind of weird upload permissions
         #  issue? keep an eye on this
-        fits_tar_key = os.path.split(roi_fits_fn)[-1].replace("fits", "tar.gz")
+        fits_tar_key = s3_prefix + os.path.split(roi_fits_fn)[-1].replace(
+            "fits", "tar.gz"
+        )
         tarbuffer = io.BytesIO()
         fits_tar = tarfile.open(fileobj=tarbuffer, mode="w:gz")
         fits_tar.add(roi_fits_fn, os.path.split(roi_fits_fn)[-1])
         fits_tar.close()
-        upload_hopper.append((fits_tar, fits_tar_key))
+        tarbuffer.seek(0)
+        upload_hopper.append((tarbuffer, fits_tar_key))
     for obj, key in upload_hopper:
         try:
             upload(obj, key)

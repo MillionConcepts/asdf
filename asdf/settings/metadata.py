@@ -11,7 +11,16 @@ from marslab.compat.xcam import make_xcam_filter_dict
 
 
 # fields we want to ask the user about at each ROI.
-ROI_METADATA_FIELDS = ("FLOAT", "FEATURE", "FORMATION", "MEMBER", "TARGET")
+ROI_METADATA_FIELDS = (
+    "FLOAT",
+    "FEATURE",
+    "MORPHOLOGY",
+    "SCAM",
+    "TARGET",
+    "DISTANCE",
+    "LOCATION",
+    "WORKSPACE",
+)
 
 # fields we put in the 'compact' marslab file. metadata fields are
 # explicitly listed for easy modification; the *list(chain.from_iterable(...
@@ -49,7 +58,7 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
             ]
         )
     ),
-    *ROI_METADATA_FIELDS
+    *ROI_METADATA_FIELDS,
 )
 
 # # metadata fields we want in the summary spreadsheet.
@@ -122,5 +131,5 @@ metadata_dtypes = {
     "L_S": "float32",
     "INSTRUMENT_AZIMUTH": "float32",
     "SOLAR_AZIMUTH": "float32",
-    "SCLK": "float64"
+    "SCLK": "float64",
 }

@@ -11,13 +11,17 @@ from astropy.io import fits
 from marslab.compat.mertools import is_sel_file, sel_to_roi
 
 
+def dashify(df):
+    return df.replace("", "-").fillna("-")
+
+
 def pass_parameters(func, *args, **kwargs):
     return func(*args, **kwargs)
 
 
 def catch_interaction(noninteractive, func, *args, **kwargs):
     if noninteractive:
-        return "-"
+        return ""
     return func(*args, **kwargs)
 
 

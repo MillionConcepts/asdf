@@ -91,7 +91,7 @@ ACCENT_RAPIDLOOK_OPTIONS = {
     "clip": {"function": norm_clip},
     "prefilter": {
         "function": cv2.bilateralFilter,
-        "params": {"d": 15, "sigmaColor": 3, "sigmaSpace": 7}
+        "params": {"d": 15, "sigmaColor": 3, "sigmaSpace": 7},
     },
 }
 
@@ -103,8 +103,6 @@ AQUA_PINK_ACCENT_OPTIONS = {
         "base_cmap": cm.get_cmap("Greys_r"),
     }
 }
-
-
 
 
 # noinspection PyTypeChecker
@@ -147,79 +145,126 @@ DEFAULT_RAPIDLOOKS = {
             },
         },
     },
-    "L0 enhanced color": {
-        "operation": "enhanced color",
-        "bands": ("L0R", "L0G", "L0B"),
-        "options": {
-            "special_constants": [0],
-            "normalize": False,
-            "render_mpl": True,
-            "prefilter": {
-                "function": normalize_range,
-                "params": {"cheat_low": 1, "cheat_high": 1},
-            },
-        },
-    },
-    "R0 enhanced color": {
-        "operation": "enhanced color",
-        "bands": ("R0R", "R0G", "R0B"),
-        "options": {
-            "special_constants": [0],
-            "normalize": False,
-            "render_mpl": True,
-            "prefilter": {
-                "function": normalize_range,
-                "params": {"cheat_low": 1, "cheat_high": 1},
-            },
-        },
-    },
+    # "L0 enhanced color": {
+    #     "operation": "enhanced color",
+    #     "bands": ("L0R", "L0G", "L0B"),
+    #     "options": {
+    #         "special_constants": [0],
+    #         "normalize": False,
+    #         "render_mpl": True,
+    #         "prefilter": {
+    #             "function": normalize_range,
+    #             "params": {"cheat_low": 1, "cheat_high": 1},
+    #         },
+    #     },
+    # },
+    # "R0 enhanced color": {
+    #     "operation": "enhanced color",
+    #     "bands": ("R0R", "R0G", "R0B"),
+    #     "options": {
+    #         "special_constants": [0],
+    #         "normalize": False,
+    #         "render_mpl": True,
+    #         "prefilter": {
+    #             "function": normalize_range,
+    #             "params": {"cheat_low": 1, "cheat_high": 1},
+    #         },
+    #     },
+    # },
     "dcs": {
         "operation": "dcs",
         "bands": ("L2", "L5", "L6"),
         "options": STRETCHY_RAPIDLOOK_OPTIONS,
     },
-    "R0 dcs": {
+    # "R0 dcs": {
+    #     "operation": "dcs",
+    #     "bands": ("R0R", "R0G", "R0B"),
+    #     "options": STRETCHY_RAPIDLOOK_OPTIONS,
+    # },
+    # "L0 dcs": {
+    #     "operation": "dcs",
+    #     "bands": ("L0R", "L0G", "L0B"),
+    #     "options": STRETCHY_RAPIDLOOK_OPTIONS,
+    # },
+    # "3dg_dcs": {
+    #     "operation": "dcs",
+    #     "name": "3dg dcs",
+    #     "bands": ("L2", "L5", "L6"),
+    #     "options": STRETCHY_RAPIDLOOK_OPTIONS
+    #     | {
+    #         "image_filter": {
+    #             "function": gaussian_filter,
+    #             "params": {"sigma": 1},
+    #         }
+    #     },
+    # },
+    # "IR_dcs": {
+    #     "operation": "dcs",
+    #     "name": "IR dcs",
+    #     "bands": ("R6", "R3", "R1"),
+    #     "options": STRETCHY_RAPIDLOOK_OPTIONS | {"contrast_stretch": 2},
+    # },
+    # "3dg_IR_dcs": {
+    #     "operation": "dcs",
+    #     "name": "3dg IR dcs",
+    #     "bands": ("R6", "R3", "R1"),
+    #     "options": STRETCHY_RAPIDLOOK_OPTIONS
+    #     | {
+    #         "contrast_stretch": 2,
+    #         "image_filter": {
+    #             "function": gaussian_filter,
+    #             "params": {"sigma": 1},
+    #         },
+    #     },
+    # },
+    "normed dcs low": {
         "operation": "dcs",
-        "bands": ("R0R", "R0G", "R0B"),
-        "options": STRETCHY_RAPIDLOOK_OPTIONS,
-    },
-    "L0 dcs": {
-        "operation": "dcs",
-        "bands": ("L0R", "L0G", "L0B"),
-        "options": STRETCHY_RAPIDLOOK_OPTIONS,
-    },
-    "3dg_dcs": {
-        "operation": "dcs",
-        "name": "3dg dcs",
+        "name": "normed dcs low",
         "bands": ("L2", "L5", "L6"),
         "options": STRETCHY_RAPIDLOOK_OPTIONS
         | {
-            "image_filter": {
-                "function": gaussian_filter,
-                "params": {"sigma": 1},
-            }
+            "prefilter": {
+                "function": normalize_range,
+                "params": {"cheat_low": 0.05, "cheat_high": 0.05},
+            },
+            "contrast_stretch": 0.05,
         },
     },
-    "IR_dcs": {
+    "normed dcs high": {
         "operation": "dcs",
-        "name": "IR dcs",
-        "bands": ("R6", "R3", "R1"),
-        "options": STRETCHY_RAPIDLOOK_OPTIONS | {"contrast_stretch": 2},
-    },
-    "3dg_IR_dcs": {
-        "operation": "dcs",
-        "name": "3dg IR dcs",
-        "bands": ("R6", "R3", "R1"),
+        "name": "normed dcs high",
+        "bands": ("L2", "L5", "L6"),
         "options": STRETCHY_RAPIDLOOK_OPTIONS
         | {
-            "contrast_stretch": 2,
-            "image_filter": {
-                "function": gaussian_filter,
-                "params": {"sigma": 1},
+            "prefilter": {
+                "function": normalize_range,
+                "params": {"cheat_low": 1, "cheat_high": 1},
             },
+            "contrast_stretch": 1,
         },
     },
+    "sigma-stretch dcs low": {
+        "operation": "dcs",
+        "name": "sigma-stretch dcs low",
+        "bands": ("L2", "L5", "L6"),
+        "options": STRETCHY_RAPIDLOOK_OPTIONS
+        | {"sigma": 0.5, "contrast_stretch": 0.1},
+    },
+    "sigma-stretch dcs high": {
+        "operation": "dcs",
+        "name": "sigma-stretch dcs high",
+        "bands": ("L2", "L5", "L6"),
+        "options": STRETCHY_RAPIDLOOK_OPTIONS
+        | {"sigma": 0.95, "contrast_stretch": 1},
+    },
+
 }
+DEFAULT_RAPIDLOOKS = {
+    key: value
+    for key, value in DEFAULT_RAPIDLOOKS.items()
+    if value["options"] != SPECTRAL_RAPIDLOOK_OPTIONS
+}
+
 CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
 
 # noinspection PyTypeChecker
@@ -280,8 +325,6 @@ for look_name, look in DEFAULT_RAPIDLOOKS.items():
         }
         rainbow_overlay_looks[look_name + " rainbow overlay"] = new_look
 DEFAULT_RAPIDLOOKS |= rainbow_overlay_looks
-
-
 
 
 # TODO: troubleshoot make_three_channel_filter

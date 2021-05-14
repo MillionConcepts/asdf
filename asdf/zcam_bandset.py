@@ -11,7 +11,7 @@ from asdf.asdf_utils import (
     dupe_df_block,
     load_roi_file,
     null_marslab_data_section,
-    check_and_drop_duplicate_columns,
+    check_and_drop_duplicate_columns, dashify,
 )
 from asdf.scrape import (
     make_pointing_name,
@@ -109,6 +109,9 @@ class ZcamBandSet(BandSet):
         self.name = make_pointing_name(self.metadata)
         if suffix != "":
             self.suffix = "-" + suffix
+        else:
+            self.suffix = suffix
+        self.check_onboard_debayer()
 
     def check_onboard_debayer(self):
         """
@@ -198,10 +201,11 @@ class ZcamBandSet(BandSet):
             extended_file = io.BytesIO()
         if verbose and (in_memory is not False):
             print("Writing extended-format marslab file: " + extended_file)
-        self.extended.fillna("-").to_csv(extended_file, index=False)
+
+        dashify(self.extended).to_csv(extended_file, index=False)
         if verbose and (in_memory is not False):
             print("Writing compact-format marslab file: " + metadata_file)
-        self.compact.fillna("-").to_csv(metadata_file, index=False)
+        dashify(self.compact).to_csv(metadata_file, index=False)
         return metadata_file, extended_file
 
     def draw_context(self, edgemaps, eye):

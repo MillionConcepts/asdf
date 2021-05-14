@@ -89,7 +89,7 @@ def asdf(
         )
     # where is the roi file?
     if roi is None:
-        roi_path = Path("")
+        roi_path = None
     else:
         roi_path = Path(roi)
 
@@ -108,7 +108,7 @@ def asdf(
 
     # do we have any ROIs? maybe not? there are lots of things we don't
     # do if we haven't been passed an ROI file.
-    we_do_not_have_rois = (roi_path.name == "") and (merspect is None)
+    we_do_not_have_rois = (roi_path is None) and (merspect is None)
 
     # wrapper that suppresses input calls in non-interactive mode
     ci = partial(catch_interaction, noninteractive)
@@ -121,6 +121,7 @@ def asdf(
     # this is wasteful in the case if are images that are used
     # by no rapidlook or ROI (but not very wasteful, and this is rare).
     if (we_do_not_have_rois is False) or (not skip_rapidlooks):
+        print("... loading images ...")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             bandset.load("all")
@@ -130,25 +131,24 @@ def asdf(
     # did we get a ROI file path? convert it if it's SEL, save to
     # .fits, load it; if it's already FITS, load it
     roi_fits_fn = None
-    if bandset.rois:
+    if we_do_not_have_rois is False:
         # suffix goes on this filename as it is 'analysis' - specific
         roi_fits_fn = bandset.load_rois(
             bandset.name + bandset.suffix, outpath, convert=True
         )
         if merspect is None:
             marslab_data = bandset.count_rois()
-            marslab_data["ROI_SOURCE"] = roi_fits_fn
+            marslab_data["ROI_SOURCE"] = Path(roi_fits_fn).name
         else:
             # allow user to override counting behavior with a MERspect file
             # TODO, maybe: basic check to make sure file matches pointing
             marslab_data = merspect_to_marslab(merspect, write=False)
-            marslab_data["ROI_SOURCE"] = "[merspect] " + merspect
+            marslab_data["ROI_SOURCE"] = "[merspect] " + Path(merspect).name
         assert (
             marslab_data is not None
         ), "something has gone wrong in loading ROI data."
-        marslab_data = add_input_roi_metadata(
-            marslab_data, bandset.metadata["NAME"].iloc[0], ci
-        )
+        # prompt users for info on each ROI
+        marslab_data = add_input_roi_metadata(marslab_data, ci)
     else:
         print("No ROI file has been passed: using null values for data.")
         marslab_data = null_marslab_data_section()
