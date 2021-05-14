@@ -14,6 +14,13 @@ from asdf.scrape import find_iof_siblings
 import asdf.settings as settings
 
 
+def name_prompt() -> str:
+    """what is the overall name of this observation? tell me."""
+    return input(
+        " Please enter the name of this observation (press Enter to skip)"
+    )
+
+
 def float_prompt(title=None) -> str:
     """is this a float? tell me."""
     if title is None:
@@ -62,16 +69,10 @@ def dispatched_metadata_prompt(field_name: str, title: str = None) -> str:
 
 
 def get_and_offer_pointing(iof_path, noninteractive, binocular):
-    # TODO: this try-except block should be in here but is currently commented
-    #  out for debug purposes -- when behind clize.run(), it's very hard to
-    #  get the stack trace from a caught exception. need a testing version of
-    #  asdf()
-    # try:
-    #     pointing = pd.DataFrame(find_iof_siblings(iof_path)).sort_values(
-    #         by="FILTER"
-    #     )
-    # except (ValueError, FileNotFoundError) as err:
-    #     raise UserError(err)
+    """
+    look for siblings of the passed IOF and ask the user if the detected
+    set is ok.
+    """
     pointing = pd.DataFrame(
         find_iof_siblings(iof_path, binocular=binocular)
     ).sort_values(by="FILTER")
@@ -93,6 +94,22 @@ def get_and_offer_pointing(iof_path, noninteractive, binocular):
         elif ok_input.lower() == "y":
             ok_input = True
     return pointing
+
+
+def get_pointing_wrapper(iof_path, noninteractive, binocular, debug=False):
+    """
+    debug wrapper for get_and_offer_pointing
+    TODO: probably a cleaner way to do this, like actually swapping out the
+      function? maybe not. cost in verbosity.
+    """
+    if debug:
+        return get_and_offer_pointing(iof_path, noninteractive, binocular)
+    try:
+        return get_and_offer_pointing(iof_path, noninteractive, binocular)
+    except (ValueError, FileNotFoundError) as err:
+        raise UserError(err)
+    except UserError:
+        raise
 
 
 def ask_user_about_roi(

@@ -1,0 +1,3 @@
+THREADS = {
+    'save': 8
+}

@@ -4,11 +4,12 @@ functions for uploading, downloading, querying, fetching, etc.
 import datetime as dt
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 import time
 import urllib.request
 import tarfile
-
+from typing import Any
 
 import boto3
 import botocore.config
@@ -138,109 +139,106 @@ def make_asdf_s3_client():
     return client
 
 
-def backup_marslab_files(metadata_fn, extended_metadata_fn, roi_fn=None):
-    print("backing up marslab & ROI files.")
+def bind_asdf_bucket() -> Callable[Any, str]:
     client = make_asdf_s3_client()
     bucket = settings.sources.BACKUP_BUCKET
-    epoch = round(time.time())
-    s3_metadata_prefix = "marslab/" + str(epoch) + "_" + os.getlogin() + "_"
-    marslab_key = s3_metadata_prefix + os.path.split(metadata_fn)[-1]
-    extended_marslab_key = (
-        s3_metadata_prefix + os.path.split(extended_metadata_fn)[-1]
-    )
-    try:
-        upload_s3(bucket, metadata_fn, marslab_key, client)
-        upload_s3(bucket, extended_metadata_fn, extended_marslab_key, client)
-    except ClientError as error:
-        print("sorry, couldn't upload marslab file backups: " + str(error))
-    # TODO: clean this up; i.e., create iterable of closures of upload_s3
-    if roi_fn is not None:
-        tar_fn = (
-            os.path.split(metadata_fn)[0]
-            + "/"
-            + os.path.split(roi_fn)[-1]
-            + ".tar.gz"
-        )
-        tar = tarfile.open(tar_fn, "w:gz")
-        tar.add(roi_fn, os.path.split(roi_fn)[-1])
-        tar.close()
-        roi_key = s3_metadata_prefix + os.path.split(tar_fn)[-1]
+
+    def upload_to_default_bucket(obj, key, pass_string=False):
+        return upload_s3(bucket, obj, key, pass_string, client)
+
+    return upload_to_default_bucket
+
+
+def backup_marslab_files(bandset, roi_fits_fn, debug_prefix=""):
+    print("backing up marslab & ROI files.")
+    upload = bind_asdf_bucket()
+    epoch = str(round(time.time()))
+    s3_prefix = "marslab/" + debug_prefix + epoch + "_" + os.getlogin() + "_"
+    marslab_stem = bandset.name + bandset.suffix
+    marslab_key = s3_prefix + marslab_stem + "-marslab.csv"
+    extended_key = s3_prefix + marslab_stem + "-marslab-extended.csv"
+    marslab, extended = bandset.write_data_files()
+    upload_hopper = [(marslab, marslab_key), (extended, extended_key)]
+    if roi_fits_fn is not None:
+        # TODO: is this going to create some kind of weird upload permissions
+        #  issue? keep an eye on this
+        fits_tar_key = os.path.split(roi_fits_fn)[-1].replace("fits", "tar.gz")
+        tarbuffer = io.BytesIO()
+        fits_tar = tarfile.open(fileobj=tarbuffer, mode="w:gz")
+        fits_tar.add(roi_fits_fn, os.path.split(roi_fits_fn)[-1])
+        fits_tar.close()
+        upload_hopper.append((fits_tar, fits_tar_key))
+    for obj, key in upload_hopper:
         try:
-            upload_s3(bucket, tar_fn, roi_key, client)
+            upload(obj, key)
         except ClientError as error:
-            print("sorry, couldn't upload ROI file backup: " + str(error))
-        # os.remove(tar_fn)
+            print("sorry, couldn't upload a backup file: " + str(error))
 
 
-def upload_thumbnails(thumbnails, pointing_name):
+def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
     if not thumbnails:
         return {}
     print("uploading thumbnails.")
-    client = make_asdf_s3_client()
-    bucket = settings.sources.BACKUP_BUCKET
-    bucket_url = "https://" + bucket + ".s3.amazonaws.com/"
+    upload = bind_asdf_bucket()
+    bucket_url = (
+        "https://" + settings.sources.BACKUP_BUCKET + ".s3.amazonaws.com/"
+    )
     links = {}
     for name, image_buffer in thumbnails.items():
         try:
-            if settings.sources.OBFUSCATE_THUMBNAIL_NAMES:
-                key = "thumb/" + obfuscated_name()
+            if settings.sources.OBFUSCATE_THUMBNAIL_NAMES is True:
+                key = "thumb/" + debug_prefix + obfuscated_name()
             else:
-                key = name + "_thumb_" + pointing_name
+                key = "thumb/" + name + "_thumb_" + pointing_name
             image_buffer.seek(0)
-            upload_s3(bucket, image_buffer, key, client)
+            upload(image_buffer, key)
             links[name] = bucket_url + key
         except ClientError as error:
             print("sorry, couldn't upload thumb " + name + " " + str(error))
     return links
 
 
-def upload_metadata(
-    pointing_summary,
-    thumbnails,
-    pointing_name,
-    metadata_fn,
-    extended_metadata_fn,
-    roi_fn=None,
-):
-    backup_marslab_files(metadata_fn, extended_metadata_fn, roi_fn)
+def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
+    if debug is True:
+        sheet_id = settings.sources.DEBUG_GOOGLE_SHEET_ID
+        folder_id = settings.sources.DEBUG_METADATA_BACKUP_FOLDER_ID
+        s3_debug_prefix = "debug/"
+    else:
+        sheet_id = settings.sources.GOOGLE_SHEET_ID
+        folder_id = settings.sources.METADATA_BACKUP_FOLDER_ID
+        s3_debug_prefix = ""
+    backup_marslab_files(bandset, roi_fits_fn, s3_debug_prefix)
     try:
-        thumbnail_links = upload_thumbnails(thumbnails, pointing_name)
+        thumbnail_links = upload_thumbnails(
+            thumbnails, bandset.name, s3_debug_prefix
+        )
         if thumbnail_links:
             for name, link in thumbnail_links.items():
-                pointing_summary[name] = '=IMAGE("' + link + '")'
+                bandset.summary[name] = '=IMAGE("' + link + '")'
         sheetbot = gspread.service_account(
             settings.sources.GOOGLE_CLIENT_SECRETS_FILE
         )
-        metadata_sheet = sheetbot.open_by_key(
-            settings.sources.GOOGLE_SHEET_ID
-        ).worksheets()[0]
+        metadata_sheet = sheetbot.open_by_key(sheet_id).worksheets()[0]
         metadata_sheet_values = metadata_sheet.get_all_values()
-        # TODO: maybe just do this right in the first place
-        pointing_summary["NAME"] = pointing_summary["NAME"].iloc[0]
         if len(metadata_sheet_values) == 0:
             print("note: existing metadata sheet contains no content")
             new_sheet = (
-                pd.DataFrame(pointing_summary)
-                .copy()
-                .T.applymap(itemize_numpy)
-                .fillna("-")
+                bandset.summary.copy().T.applymap(itemize_numpy).fillna("-")
             )
-            post_google_sheet(
-                new_sheet, settings.sources.GOOGLE_SHEET_ID, sheetbot
-            )
+            post_google_sheet(new_sheet, sheet_id, sheetbot)
         else:
             print("saving backup sheet")
             # TODO: when gspread implements this, replace it with .copy()
             backup = sheetbot.create(
                 title="metadata backup " + dt.datetime.utcnow().isoformat(),
-                folder_id=settings.sources.METADATA_BACKUP_FOLDER_ID,
+                folder_id=folder_id,
             )
             backup.worksheets()[0].update(metadata_sheet_values)
             print("posting new metadata")
             columns = metadata_sheet_values[0]
-            pointing_summary = pointing_summary.reindex(columns).fillna("-")
+            row_df = bandset.summary.reindex(columns).fillna("-")
             metadata_sheet.append_row(
-                pointing_summary.apply(itemize_numpy).tolist(),
+                row_df.apply(itemize_numpy).tolist(),
                 value_input_option="USER_ENTERED",
             )
     except gspread.exceptions.APIError as api_error:

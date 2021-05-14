@@ -1,6 +1,9 @@
 import datetime as dt
+import io
 from functools import partial
 from pathlib import Path
+
+from cytoolz import keyfilter
 
 import asdf
 from asdf import settings
@@ -8,6 +11,7 @@ from asdf.asdf_utils import (
     dupe_df_block,
     load_roi_file,
     null_marslab_data_section,
+    check_and_drop_duplicate_columns,
 )
 from asdf.scrape import (
     make_pointing_name,
@@ -15,7 +19,6 @@ from asdf.scrape import (
     add_derived_illumination_geometry,
     melt_metadata,
     parse_pointing,
-    check_and_drop_duplicate_columns,
 )
 from marslab.bandset import BandSet, rasterio_load_scaled
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
@@ -75,7 +78,7 @@ def setup_zcam_bandset_metadata(metadata):
 
 
 class ZcamBandSet(BandSet):
-    def __init__(self, pointing, rois, suffix=""):
+    def __init__(self, pointing, rois, suffix="", threads=None):
         files = setup_zcam_bandset_metadata(pointing)
         load_method = partial(rasterio_load_scaled, preserve_constants=[0])
         bayer_info = {"pattern": RGGB_PATTERN}
@@ -84,11 +87,24 @@ class ZcamBandSet(BandSet):
             load_method=load_method,
             bayer_info=bayer_info,
             rois=rois,
+            threads = threads
         )
         # scrape headers for all desired metadata fields and derive values
         # from them as necessary
+        dtypes = settings.metadata.metadata_dtypes
+        self.metadata = self.metadata.astype(
+            keyfilter(lambda key: key in self.metadata.columns, dtypes)
+        )
         headers = pd.DataFrame(bulk_scrape_metadata(self.metadata["PATH"]))
-        self.metadata = pd.concat((self.metadata, headers), axis=1)
+        headers = headers.astype(
+            keyfilter(lambda key: key in headers.columns, dtypes)
+        )
+        self.metadata = pd.concat(
+            [self.metadata, headers], axis=1, join="inner"
+        )
+        # todo: maybe add some checks here, it's a headache
+        concat = pd.concat((self.metadata, headers), axis=1)
+        self.metadata = concat.iloc[:, ~concat.columns.duplicated()].copy()
         self.metadata = add_derived_illumination_geometry(self.metadata)
         self.name = make_pointing_name(self.metadata)
         if suffix != "":
@@ -134,7 +150,13 @@ class ZcamBandSet(BandSet):
             self.rois,
             self.raw,
             "ZCAM",
-            bayer_pixel_dict=self.metadata["BAYER_PIXEL"].to_dict(),
+            bayer_pixel_dict={
+                band: pixel
+                for band, pixel in zip(
+                    self.metadata["BAND"].tolist(),
+                    self.metadata["BAYER_PIXEL"].tolist(),
+                )
+            },
         )
         return self.counts
 
@@ -166,78 +188,44 @@ class ZcamBandSet(BandSet):
         self.extended = polish_metadata(extended, creation_time)
         self.compact = polish_metadata(compact, creation_time)
 
-    def write_data_files(self, output_path, verbose=False):
-        metadata_fn = str(
-            Path(output_path, self.name + self.suffix + "-marslab.csv")
-        )
-        extended_metadata_fn = str(
-            Path(
-                output_path, self.name + self.suffix + "-marslab-extended.csv"
-            )
-        )
-        if verbose:
-            print(
-                "Writing extended-format marslab file: " + extended_metadata_fn
-            )
-        self.extended.fillna("-").to_csv(
-            extended_metadata_fn,
-            index=False,
-        )
-        if verbose:
-            print("Writing compact-format marslab file: " + metadata_fn)
-        self.compact.fillna("-").to_csv(metadata_fn, index=False)
-        return metadata_fn, extended_metadata_fn
-
-    def write_context_image(
-        self,
-        edgemaps,
-        eye,
-    ):
-        instruction = {
-            "operation": "enhanced color",
-            "options": {
-                "special_constants": [0],
-                "normalize": (0, 1, 1, 1)
-            },
-            "crop": (25, 25, 11, 11),
-        }
-        if eye[0].upper() + "0R" in self.metadata["BAND"]:
-            instruction["bands"] = (eye[0] + "0R", eye[0] + "0G", eye[0] + "0B")
+    def write_data_files(self, outpath=".", verbose=False, in_memory=False):
+        if in_memory is False:
+            stem = str(Path(outpath, self.name + self.suffix))
+            metadata_file = stem + "-marslab.csv"
+            extended_file = stem + "-marslab-extended.csv"
         else:
-            band = self.metadata.loc[self.metadata["BAND"].str.startswith(eye[0]), "BAND"].iloc[0]
-            instruction["bands"] = (band, band, band)
-        self.make_look_set({'context ' + eye: instruction})
-        # wait do i not look at key? do i need to set 'name'? yikes
-        context_image = self.looks['context ' + eye]
+            metadata_file = io.BytesIO()
+            extended_file = io.BytesIO()
+        if verbose and (in_memory is not False):
+            print("Writing extended-format marslab file: " + extended_file)
+        self.extended.fillna("-").to_csv(extended_file, index=False)
+        if verbose and (in_memory is not False):
+            print("Writing compact-format marslab file: " + metadata_file)
+        self.compact.fillna("-").to_csv(metadata_file, index=False)
+        return metadata_file, extended_file
+
+    def draw_context(self, edgemaps, eye):
+        inst = {
+            "operation": "enhanced color",
+            "name": "context image " + eye,
+            "no_band_names": True,
+            "options": {"special_constants": [0], "normalize": (0, 1, 0, 0.1)},
+        }
+        initial = eye[0].upper()
+        if initial + "0R" in self.metadata["BAND"].values:
+            inst["bands"] = (initial + "0R", initial + "0G", initial + "0B")
+        else:
+            band = self.metadata.loc[
+                self.metadata["BAND"].str.startswith(initial), "BAND"
+            ].iloc[0]
+            inst["bands"] = (band, band, band)
+        self.make_look_set({"context " + eye: inst})
         eye_edgemaps = {
             key: value for key, value in edgemaps.items() if eye in key
         }
-
-        # context_image = draw_edgemaps_on_image(base_image, eye_edgemaps,
-        #                                        width=0.1)
-        # pointing_name, target_name = titular_names(pointing)
-        # if suffix != "":
-        #     target_name = target_name + " " + suffix + " "
-        #     pointing_name = pointing_name + "-" + suffix
-        # title = "\n".join(
-        #     (
-        #         target_name + eye + " ROI context image",
-        #         make_pointing_annotation(pointing),
-        #         settings.rapidlooks.CREDIT_TEXT,
-        #     )
-        # )
-        # context_image.axes[0].set_xlabel(
-        #     title, loc="center", fontproperties=settings.rapidlooks.TITLE_FONT
-        # )
-        # print(
-        #     "writing "
-        #     + str(Path(outpath, pointing_name + "-context-" + eye + ".png"))
-        # )
-        # context_image.savefig(
-        #     Path(outpath, pointing_name + "-context-" + eye + ".png"),
-        #     dpi=240,
-        # )
-        # return context_image
+        self.looks["context image " + eye] = draw_edgemaps_on_image(
+            self.looks["context image " + eye], eye_edgemaps, width=0.1
+        )
 
     def make_context_images(self, verbose=False):
         # TODO: automatically try to count ROIs and stuff
@@ -246,15 +234,18 @@ class ZcamBandSet(BandSet):
         edgemaps = make_roi_edgemaps(self.rois, calculate_centers=False)
         edgemaps = add_merspect_colors_to_edgemaps(edgemaps)
         for eye in ("left", "right"):
-            eye_image = write_context_image(
-                preloaded_images,
-                edgemaps,
-                eye,
-                pointing,
-                outpath,
-                onboard_debayer,
-                suffix,
-            )
-            if eye_image:
-                context_images["context image " + eye] = eye_image
-        return context_images
+            self.draw_context(edgemaps, eye)
+
+    def titular_target(self):
+        """
+        return the observation name, if set, falling back
+        to the first ROI target name, if available
+        """
+        target_name = self.metadata["NAME"].iloc[0]
+        if (not target_name) and (self.counts is not None):
+            if len(self.counts["TARGET"].dropna()) > 0:
+                target_name = self.metadata["TARGET"].dropna().iloc[0]
+        # TODO: check if this is a nan, make it an empty string or whatever
+        if target_name:
+            return target_name
+        return ""

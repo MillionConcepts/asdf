@@ -11,11 +11,11 @@ from marslab.compat.xcam import make_xcam_filter_dict
 
 
 # fields we want to ask the user about at each ROI.
-ROI_METADATA_FIELDS = ("FLOAT", "FEATURE", "FORMATION", "MEMBER")
+ROI_METADATA_FIELDS = ("FLOAT", "FEATURE", "FORMATION", "MEMBER", "TARGET")
 
 # fields we put in the 'compact' marslab file. metadata fields are
 # explicitly listed for easy modification; the *list(chain.from_iterable(...
-# statement at the bottom adds the data fields based on our ZCAM instrument
+# statement near the bottom adds the data fields based on our ZCAM instrument
 # definition in marslab.compat.xcam.
 COMPACT_ZCAM_MARSLAB_FIELDS = (
     "NAME",
@@ -49,36 +49,37 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
             ]
         )
     ),
+    *ROI_METADATA_FIELDS
 )
 
-# metadata fields we want in the summary spreadsheet.
-# TODO: this is somewhat redundant with column-checking in the upload
-#  functions. assess.
-SUMMARY_COLUMNS = (
-    "NAME",
-    "SOL",
-    "SEQ_ID",
-    "SCLK",
-    "LMST",
-    "LTST",
-    "SOLAR_ELEVATION",
-    "INCIDENCE_ANGLE",
-    "INCIDENCE_AZIMUTH",
-    "EMISSION_ANGLE",
-    "EMISSION_AZIMUTH",
-    "PHASE_ANGLE",
-    "L_S",
-    "SITE",
-    "DRIVE",
-    "LAT",
-    "LON",
-    "ROVER_ELEVATION",
-    "ODOMETRY",
-    "ZOOM",
-    "CREATOR",
-    "FILE_TIMESTAMP",
-    "COMPRESSION",
-)
+# # metadata fields we want in the summary spreadsheet.
+# # TODO: this is somewhat redundant with column-checking in the upload
+# #  functions. assess.
+# SUMMARY_COLUMNS = (
+#     "NAME",
+#     "SOL",
+#     "SEQ_ID",
+#     "SCLK",
+#     "LMST",
+#     "LTST",
+#     "SOLAR_ELEVATION",
+#     "INCIDENCE_ANGLE",
+#     "INCIDENCE_AZIMUTH",
+#     "EMISSION_ANGLE",
+#     "EMISSION_AZIMUTH",
+#     "PHASE_ANGLE",
+#     "L_S",
+#     "SITE",
+#     "DRIVE",
+#     "LAT",
+#     "LON",
+#     "ROVER_ELEVATION",
+#     "ODOMETRY",
+#     "ZOOM",
+#     "CREATOR",
+#     "FILE_TIMESTAMP",
+#     "COMPRESSION",
+# )
 
 
 # regexes for yoinking label data from attached file headers without parsing
@@ -111,3 +112,15 @@ IOF_METADATA_REGEX_STRINGS = MappingProxyType(
         "INSTRUMENT_AZIMUTH": r"(?<=INSTRUMENT_AZIMUTH ).*?([\d\.]+)",
     }
 )
+
+metadata_dtypes = {
+    "SOL": "int16",
+    "WAVELENGTH": "float16",
+    "IX": "uint8",
+    "SOLAR_ELEVATION": "float32",
+    "INSTRUMENT_ELEVATION": "float32",
+    "L_S": "float32",
+    "INSTRUMENT_AZIMUTH": "float32",
+    "SOLAR_AZIMUTH": "float32",
+    "SCLK": "float64"
+}

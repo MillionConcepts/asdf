@@ -1,46 +1,29 @@
 """
 inline handling functions for runtime asdf workflow
 """
-import datetime as dt
 import os
 import warnings
+from multiprocessing import Pool
 from pathlib import Path
 
+import matplotlib.figure
 import numpy as np
 import pandas as pd
-from astropy.io import fits
 from clize import UserError
-from cytoolz import keyfilter, valfilter
-from marslab.compat.mertools import (
-    add_merspect_colors_to_edgemaps,
-    is_sel_file,
-    sel_to_roi,
-)
-from marslab.compat.xcam import (
-    NARROWBAND_TO_BAYER,
-)
-from marslab.imgops import (
-    draw_edgemaps_on_image,
-    make_thumbnail,
-    rgb_from_bayer,
-    RGGB_PATTERN,
-    normalize_range,
-    make_roi_edgemaps,
-    depth_stack,
-)
+from cytoolz import valfilter
 
-import asdf
 import asdf.settings as settings
 import pplot
-from asdf.asdf_utils import absolutely_destroy, dupe_df_block
 from asdf.chatter import ask_user_about_roi, get_and_offer_pointing
 from asdf.scrape import (
-    make_pointing_name,
     parse_pointing,
-    check_and_drop_duplicate_columns,
-    melt_metadata,
     add_effective_taus,
     add_public_waypoints_to_metadata,
+)
+from marslab.imgops import (
+    make_thumbnail,
+    simple_mpl_figure,
+    absolutely_destroy,
 )
 from pplot.convert import convert_for_plot
 
@@ -78,62 +61,51 @@ def make_asdf_outpath(output, bandset):
     return outpath
 
 
-def annotate_and_save_rapidlook(
-    target_name, look_name, pointing, figure, pointing_name, output_path
-):
-    title = "\n".join(
-        (
-            target_name + look_name,
-            make_pointing_annotation(pointing),
-            settings.rapidlooks.CREDIT_TEXT,
+def look_annotation(headline, annotation):
+    return "\n".join((headline, annotation, settings.rapidlooks.CREDIT_TEXT))
+
+
+def annotate_and_save(annotation, look, filename, outpath, verbose):
+    # TODO: decide if these annotation things should live on zcambandset --
+    #  this is not urgent. I think _maybe_ they should be separate.
+    if not isinstance(look, matplotlib.figure.Figure):
+        look = simple_mpl_figure(look)
+    look.axes[0].set_xlabel(
+        annotation, loc="center", fontproperties=settings.rapidlooks.TITLE_FONT
+    )
+    if verbose:
+        print("writing " + filename)
+    look.savefig(Path(outpath, filename), dpi=275)
+    absolutely_destroy(look)
+
+
+def save_looks(bandset, outpath, prefix=None, threads=None, verbose=False):
+    # TODO: decide if this and annotate_and_save_rapidlook() should live on
+    #  zcambandset -- this is not urgent.
+    if prefix is None:
+        prefix = bandset.name
+    pool = None
+    if threads is not None:
+        pool = Pool(threads)
+    for look_name, look in bandset.looks.items():
+        filename = prefix + " " + look_name + ".png"
+        annotation = "\n".join(
+            (
+                look_name,
+                make_pointing_annotation(bandset.metadata),
+                settings.rapidlooks.CREDIT_TEXT,
+            )
         )
-    )
-    figure.axes[0].set_xlabel(
-        title, loc="center", fontproperties=settings.rapidlooks.TITLE_FONT
-    )
-    filename = pointing_name + " " + look_name + ".png"
-    print("writing " + filename)
-    figure.savefig(Path(output_path, filename), dpi=275)
-    absolutely_destroy(figure)
-    return 0
-
-
-
-
-
-
-
-
-def handle_pretty_plot(
-    marslab_file_name, fixed_target, outpath, pointing_name, suffix=""
-):
-    print("pretty-plotting data")
-    marslab_file = pd.read_csv(marslab_file_name).replace("-", np.nan)
-    if fixed_target is not None:
-        titular_plot_target = fixed_target
-    else:
-        targets = marslab_file["NAME"].dropna().unique()
-        if len(targets) > 0:
-            titular_plot_target = targets[0]
+        if pool is None:
+            annotate_and_save(annotation, look, filename, outpath, verbose)
         else:
-            titular_plot_target = "unknown target"
-    if suffix != "":
-        pointing_name = pointing_name + "-" + suffix
-    print("Writing " + str(Path(outpath, pointing_name + "-pretty-plot.png")))
-    marslab_spectra = convert_for_plot(str(marslab_file_name)).replace(
-        "-", np.nan
-    )
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        pplot.pplot_utils.pretty_plot(
-            marslab_spectra,
-            target_name=titular_plot_target,
-            sol=marslab_file["SOL"].iloc[0],
-            solar_elevation=marslab_file["SOLAR_ELEVATION"].iloc[0],
-            seq_id=marslab_file["SEQ_ID"].iloc[0],
-            plot_fn=Path(outpath, pointing_name + "-pretty-plot.png"),
-            underplot=None,
-        )
+            pool.apply_async(
+                annotate_and_save,
+                (annotation, look, filename, outpath, verbose),
+            )
+    if pool is not None:
+        pool.close()
+        pool.join()
 
 
 def handle_abbreviation(
@@ -178,7 +150,6 @@ def handle_abbreviation(
     versions = {path: int(path.name[version_slice]) for path in candidates}
     latest_version = max(versions.values())
     good_input = False
-    iof_path = None
     pointing = None
     latest_candidates = iter(
         valfilter(lambda key: int(key) == latest_version, versions)
@@ -207,20 +178,6 @@ def handle_abbreviation(
     return pointing
 
 
-def create_marslab_output(
-    marslab_data, metadata, outpath, pointing_name, suffix
-):
-    (
-        marslab_compact,
-        marslab_extended,
-        pointing_summary,
-    ) = assemble_marslab_versions(marslab_data, metadata, suffix)
-    metadata_fn, extended_metadata_fn = verbosely_write_marslab_versions(
-        marslab_compact, marslab_extended, outpath, pointing_name, suffix
-    )
-    return pointing_summary, metadata_fn, extended_metadata_fn
-
-
 def xlabel_figure(fig, text, fontproperties):
     fig.axes[0].set_xlabel(
         xlabel=text, loc="center", fontproperties=fontproperties
@@ -247,18 +204,6 @@ def add_input_roi_metadata(marslab_data, fixed_target, ci):
     return marslab_data
 
 
-def titular_names(pointing):
-    pointing_name = make_pointing_name(pointing)
-    if "NAME" in pointing.keys():
-        target_name = pointing["NAME"].iloc[0] + " "
-    else:
-        target_name = ""
-    return pointing_name, target_name
-
-
-
-
-
 def make_rapidlook_thumbnails(rapidlooks, size):
     print("making thumbnails (if necessary).")
     thumbnails = {}
@@ -267,28 +212,26 @@ def make_rapidlook_thumbnails(rapidlooks, size):
     return thumbnails
 
 
-def make_context_images(
-    roi_fits,
-    preloaded_images,
-    pointing,
-    outpath,
-    onboard_debayer=False,
-    suffix="",
-):
-    context_images = {}
-    print("... making ROI context images ...")
-    edgemaps = make_roi_edgemaps(roi_fits, calculate_centers=False)
-    edgemaps = add_merspect_colors_to_edgemaps(edgemaps)
-    for eye in ("left", "right"):
-        eye_image = write_context_image(
-            preloaded_images,
-            edgemaps,
-            eye,
-            pointing,
-            outpath,
-            onboard_debayer,
-            suffix,
+def pretty_plot_bandset(bandset, outpath):
+    print("pretty-plotting data")
+    plot_fn = str(
+        Path(outpath, bandset.name + bandset.suffix + "-pretty-plot.png")
+    )
+    print("Writing " + plot_fn)
+    from pplot.convert import scale_eyes
+    target_name = ""
+    if bandset.compact["NAME"].iloc[0]:
+        target_name = bandset.compact["NAME"].iloc[0]
+    plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
+    plot_data.replace(np.nan, "-", inplace=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pplot.pplot_utils.pretty_plot(
+            plot_data,
+            target_name=target_name,
+            sol=plot_data["SOL"].iloc[0],
+            solar_elevation=plot_data["SOLAR_ELEVATION"].iloc[0],
+            seq_id=plot_data["SEQ_ID"].iloc[0],
+            plot_fn=plot_fn,
+            underplot=None,
         )
-        if eye_image:
-            context_images["context image " + eye] = eye_image
-    return context_images

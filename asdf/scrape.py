@@ -128,11 +128,13 @@ def scrape_asdf_metadata(label: Union[Path, str]) -> dict:
 def parse_pointing(sequence: Union[Mapping, pd.DataFrame]) -> dict:
     """
     basically a parsing rule: grab the subset of pointing-discriminating
-    fields from a dict of metadata. recall: pointings are equivalence
-    relations.
-    every product with these values for these fields is in a pointing. no
-    product that does not have these values for these fields is in that
-    pointing. every product is in the same pointing as itself.
+    fields from a dict of metadata. pointings are basically equivalence
+    relations: every product with these values for these fields
+    is in the same pointing, no product that does not have these
+    values for these fields is in that pointing. the relaxed "binocular"
+    version of this allows RMS to differ for for observations in which
+    the mast moves in the middle of a sequence to coregister eyes on the
+    same target.
     """
     row = sequence
     if isinstance(sequence, pd.DataFrame):
@@ -225,7 +227,7 @@ def find_iof_siblings(
             continue
         pointing = parse_pointing(sequence_dict)
         if binocular:
-            # permit co-registered binocular observations with different
+            # permit coregistered binocular observations with different
             # RMS to be defined as a single pointing
             no_rms = keyfilter(lambda key: key != "RMS")
             pointings_are_equal = no_rms(pointing) == no_rms(base_pointing)
@@ -240,7 +242,7 @@ def find_iof_siblings(
     versioned = drop_mismatched_versions(sibdf, base_version)
     if not any(versioned["FILTER"].duplicated()):
         return versioned
-    # not a binocular observation after all, or something is wrong!
+    # perhaps not a binocular observation after all? check this possiblity..
     if binocular:
         return find_iof_siblings(path_to_iof, override_names, binocular=False)
     else:
@@ -261,18 +263,6 @@ def bulk_scrape_metadata(iof_files: Iterable) -> list[dict]:
     for iof in iof_files:
         metaframe.append(scrape_asdf_metadata(iof))
     return metaframe
-
-
-def check_and_drop_duplicate_columns(dataframe):
-    extra_columns = dataframe.columns[dataframe.columns.duplicated()]
-    if len(extra_columns) == 0:
-        return dataframe
-    for column in extra_columns:
-        test_equality = (
-            dataframe.loc[:, column] == dataframe.loc[:, column].iloc[0, 0]
-        )
-        assert test_equality.all(axis=None)
-    return dataframe.loc[:, ~dataframe.columns.duplicated()]
 
 
 def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
@@ -377,17 +367,13 @@ def add_effective_taus(metadata):
         return metadata
     stringified_taus = []
     for taufile in metadata["TAU_ESTIMATE_FILENAME"]:
-        if not os.path.exists(settings.sources.EFFECTIVE_TAU_PATH + taufile):
+        taupath = settings.sources.EFFECTIVE_TAU_PATH + taufile
+        if not os.path.exists(taupath):
             stringified_taus.append(np.nan)
         else:
             stringified_taus.append(
                 ",".join(
-                    pd.read_csv(
-                        settings.sources.EFFECTIVE_TAU_PATH + taufile,
-                        header=None,
-                    )
-                    .values[0]
-                    .astype(str)
+                    pd.read_csv(taupath, header=None).values[0].astype(str)
                 )
             )
     if len(pd.Series(stringified_taus).dropna()) == 0:

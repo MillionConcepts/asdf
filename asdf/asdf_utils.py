@@ -1,17 +1,14 @@
 """generic utility-type functions for asdf"""
 
-import gc
 import random
 import string
 from pathlib import Path
-from typing import Mapping, Sequence
 
-from astropy.io import fits
-from marslab.compat.mertools import is_sel_file, sel_to_roi
-from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from astropy.io import fits
+
+from marslab.compat.mertools import is_sel_file, sel_to_roi
 
 
 def pass_parameters(func, *args, **kwargs):
@@ -36,25 +33,6 @@ def itemize_numpy(obj):
     if isinstance(obj, np.generic):
         return obj.item()
     return obj
-
-
-def close_fig(thing):
-    if isinstance(thing, Figure):
-        plt.close(thing)
-
-
-def absolutely_destroy(thing):
-    if isinstance(thing, Mapping):
-        keys = list(thing.keys())
-        for key in keys:
-            del(thing[key])
-    elif isinstance(thing, Sequence):
-        for _ in thing:
-            del _
-    else:
-        del thing
-    plt.close('all')
-    gc.collect()
 
 
 def dupe_df_block(dataframe, rows_to_repeat):
@@ -96,3 +74,15 @@ def load_roi_file(
 
 def null_marslab_data_section():
     return pd.DataFrame({"COLOR": "-", "INSTRUMENT": "ZCAM"}, index=[0])
+
+
+def check_and_drop_duplicate_columns(dataframe):
+    extra_columns = dataframe.columns[dataframe.columns.duplicated()]
+    if len(extra_columns) == 0:
+        return dataframe
+    for column in extra_columns:
+        test_equality = (
+            dataframe.loc[:, column] == dataframe.loc[:, column].iloc[0, 0]
+        )
+        assert test_equality.all(axis=None)
+    return dataframe.loc[:, ~dataframe.columns.duplicated()]
