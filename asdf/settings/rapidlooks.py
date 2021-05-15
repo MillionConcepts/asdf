@@ -1,11 +1,19 @@
+from copy import deepcopy
+
 import cv2
-import numpy as np
-from matplotlib.colors import ListedColormap
-from matplotlib import cm
 import matplotlib.font_manager as mplf
+import numpy as np
+from cytoolz.functoolz import curry
+from matplotlib import cm
+from matplotlib.colors import ListedColormap
 from scipy.ndimage import gaussian_filter
 
-from marslab.imgops import norm_clip, normalize_range
+from marslab.imgops import (
+    norm_clip,
+    normalize_range,
+    colormapped_plot,
+    simple_mpl_figure, make_multi_channel_filter,
+)
 
 
 # TODO: clean this up
@@ -27,7 +35,7 @@ def make_aqua_pink_accent():
     aqua = (0, 1, 1, 1)
     pink = (1, 0, 1, 1)
     transparent = (0.5, 0.5, 0.5, 0)
-    vals = np.full((7, 4), transparent)
+    vals = np.full((10, 4), transparent)
     for channel in range(3):
         vals[:, channel][0] = aqua[channel]
         vals[:, channel][-1] = pink[channel]
@@ -45,229 +53,248 @@ ROI_FONT = mplf.FontProperties(
 )
 
 
-SPECTRAL_RAPIDLOOK_OPTIONS = {
-    "special_constants": [0],
-    "clip": {"function": norm_clip},
-    "image_filter": {"function": gaussian_filter, "params": {"sigma": 2}},
-    "mpl_options": {"cmap": make_orange_teal_cmap(), "tick_fp": TICK_FONT},
-}
-SMEAR_SPECTRAL_RAPIDLOOK_OPTIONS = {
-    "special_constants": [0],
-    "clip": {"function": norm_clip},
-    "prefilter": {"function": gaussian_filter, "params": {"sigma": 3}},
-    "mpl_options": {"cmap": make_orange_teal_cmap(), "tick_fp": TICK_FONT},
-}
-
-WINTER_SPECTRAL_RAPIDLOOK_OPTIONS = {
-    "special_constants": [0],
-    "clip": {"function": norm_clip},
-    "image_filter": {"function": gaussian_filter, "params": {"sigma": 2}},
-    "mpl_options": {"cmap": cm.get_cmap("winter"), "tick_fp": TICK_FONT},
-}
-
-ENHANCED_RAPIDLOOK_OPTIONS = {
-    "special_constants": [0],
-    "normalize": (0, 1, 1, 1),
-    "render_mpl": True,
-}
-
-STRETCHY_RAPIDLOOK_OPTIONS = {
-    "special_constants": [0],
-    "contrast_stretch": 1,
-    "render_mpl": True,
-}
-
-OVERLAY_RAPIDLOOK_OPTIONS = {
-    "special_constants": [0],
-    "clip": {"function": norm_clip},
-    "prefilter": {
-        "function": cv2.bilateralFilter,
-        "params": {"d": 20, "sigmaColor": 5, "sigmaSpace": 10},
+SPECTRAL_DEFAULTS = {
+    "look_params": {"special_constants": [0], "clip": {"function": norm_clip}},
+    "postfilter": {"function": gaussian_filter, "params": {"sigma": 2}},
+    "mpl_settings": {
+        "function": colormapped_plot,
+        "params": {
+            "cmap": make_orange_teal_cmap(),
+            "colorbar_fp": TICK_FONT,
+            "render_colorbar": True,
+        },
     },
 }
 
-ACCENT_RAPIDLOOK_OPTIONS = {
-    "special_constants": [0],
-    "clip": {"function": norm_clip},
+STRETCHY_DEFAULTS = {
+    "look_params": {"special_constants": [0], "contrast_stretch": 1},
+    "mpl_settings": {"function": simple_mpl_figure},
+}
+ENHANCED_DEFAULTS = {
+    "operation": "composite",
     "prefilter": {
-        "function": cv2.bilateralFilter,
-        "params": {"d": 15, "sigmaColor": 3, "sigmaSpace": 7},
+        "function": normalize_range,
+        "params": {"cheat_low": 1.5, "cheat_high": 1},
     },
+    "look_params": {"special_constants": [0], "normalize": False},
+    "mpl_settings": {"function": simple_mpl_figure},
 }
 
-AQUA_PINK_ACCENT_OPTIONS = {
+TRUE_DEFAULTS = {
+    "operation": "composite",
+    "look_params": {"special_constants": [0], "normalize": (0, 1, 0.1, 0.1)},
+    "mpl_settings": {"function": simple_mpl_figure},
+}
+
+
+# noinspection PyTypeChecker
+DEFAULT_RAPIDLOOKS = {
+    "BD529": SPECTRAL_DEFAULTS
+    | {
+        "operation": "band_depth",
+        "bands": ("L6", "L4", "L5"),
+    },
+    "BD866": SPECTRAL_DEFAULTS
+    | {
+        "operation": "band_depth",
+        "bands": ("R1", "R4", "R2"),
+    },
+    "BD678": SPECTRAL_DEFAULTS
+    | {
+        "operation": "band_depth",
+        "bands": ("L4", "L2", "L3"),
+    },
+    "S56": SPECTRAL_DEFAULTS
+    | {
+        "operation": "slope",
+        "bands": ("R5", "R6"),
+    },
+    "S16": SPECTRAL_DEFAULTS
+    | {
+        "operation": "slope",
+        "bands": ("R1", "R6"),
+    },
+    "enhanced color": ENHANCED_DEFAULTS
+    | {"name": "enhanced color", "bands": ("L2", "L5", "L6")},
+    "L0 enhanced color": ENHANCED_DEFAULTS
+    | {"name": "enhanced color", "bands": ("L0R", "L0G", "L0B")},
+    "R0 enhanced color": ENHANCED_DEFAULTS
+    | {"name": "enhanced color", "bands": ("R0R", "R0G", "R0B")},
+    "L0 true color": TRUE_DEFAULTS
+    | {
+        "name": "true color",
+        "bands": ("L0R", "L0G", "L0B"),
+    },
+    "R0 true color": TRUE_DEFAULTS
+    | {
+        "name": "true color",
+        "bands": ("R0R", "R0G", "R0B"),
+    },
+    "dcs": STRETCHY_DEFAULTS
+    | {"operation": "dcs", "name": "dcs", "bands": ("L2", "L5", "L6")},
+    "R0 dcs": STRETCHY_DEFAULTS
+    | {"operation": "dcs", "name": "dcs", "bands": ("R0R", "R0G", "R0B")},
+    "L0 dcs": STRETCHY_DEFAULTS
+    | {"operation": "dcs", "name": "dcs", "bands": ("L0R", "L0G", "L0B")},
+    "IR dcs": STRETCHY_DEFAULTS
+    | {"operation": "dcs", "name": "dcs", "bands": ("R6", "R3", "R1")},
+}
+
+# ###########################################################3
+# section to procedurally generate additional looks
+# ######################################################
+
+GENERATED_LOOKS = {}
+
+normed_dcs_looks = {}
+for look_name, look in DEFAULT_RAPIDLOOKS.items():
+    if look["operation"] != "dcs":
+        continue
+    if "IR" in look["name"]:
+        continue
+    normed_look = deepcopy(look)
+    normed_look["name"] = "normed " + look["name"]
+    # noinspection PyTypeChecker
+    normed_look["prefilter"] = {
+        "function": normalize_range,
+        "params": {"cheat_low": 1, "cheat_high": 1},
+    }
+    normed_dcs_looks["normed " + look["name"]] = normed_look
+GENERATED_LOOKS |= normed_dcs_looks
+
+sigma_dcs_looks = {}
+for look_name, look in DEFAULT_RAPIDLOOKS.items():
+    if look["operation"] != "dcs":
+        continue
+    if "IR" in look["name"]:
+        continue
+    sigma_look = deepcopy(look)
+    sigma_look["name"] = "fixed sigma " + look["name"]
+    sigma_look["look_params"] = {
+        "special_constants": [0],
+        "contrast_stretch": 1,
+        "sigma": 0.95,
+    }
+    sigma_dcs_looks["fixed sigma " + look["name"]] = sigma_look
+GENERATED_LOOKS |= sigma_dcs_looks
+
+
+# smooth_dcs_looks = {}
+# smoother = make_multi_channel_filter(curry(gaussian_filter))
+# # we're applying these to the procgen dcs also
+# for look_name, look in (DEFAULT_RAPIDLOOKS | GENERATED_LOOKS).items():
+#     if look["operation"] != "dcs":
+#         continue
+#     smooth_look = deepcopy(look)
+#     smooth_look["name"] = "smoothed " + look["name"]
+#     # noinspection PyTypeChecker
+#     smooth_look["postfilter"] = {
+#         "function": smoother, "params": {"sigma": 0.8}
+#     }
+#     smooth_dcs_looks["smoothed " + look["name"]] = smooth_look
+# GENERATED_LOOKS |= smooth_dcs_looks
+
+
+cubehelix_looks = {}
+for look_name, look in DEFAULT_RAPIDLOOKS.items():
+    if look["operation"] not in ("band_depth", "ratio", "slope"):
+        continue
+    cubehelix_look = deepcopy(look)
+    cubehelix_look["name"] = look["operation"] + " cubehelix"
+    # noinspection PyTypeChecker
+    cubehelix_look["mpl_settings"]["params"]["cmap"] = "cubehelix"
+    cubehelix_looks[look_name + " cubehelix"] = cubehelix_look
+GENERATED_LOOKS |= cubehelix_looks
+
+
+# cv2.bilateralFilter is a weird exception to the cytoolz.functoolz.curry-based
+# gradual partial evaluation we use later in the pipeline -- it has
+# some over-the-hood overload resolution that breaks it. so we bind arguments
+# to it manually here.
+
+
+def make_bilateralfilter(d, sigmaColor, sigmaSpace):
+    def do_bilateralfilter(array):
+        return cv2.bilateralFilter(
+            array, d=d, sigmaColor=sigmaColor, sigmaSpace=sigmaSpace
+        )
+
+    return do_bilateralfilter
+
+
+ACCENT_DEFAULTS = deepcopy(SPECTRAL_DEFAULTS)
+ACCENT_DEFAULTS["prefilter"] = {"function": make_bilateralfilter(15, 3, 7)}
+
+AQUA_PINK_OVERLAY_DEFAULTS = {
     "options": {
-        "mpl_options": {"tick_fp": TICK_FONT},
+        "mpl_settings": {"colorbar_fp": TICK_FONT},
         "overlay_opacity": 0.3,
         "overlay_cmap": make_aqua_pink_accent(),
         "base_cmap": cm.get_cmap("Greys_r"),
+    },
+}
+
+accent_looks = {}
+for look_name, look in DEFAULT_RAPIDLOOKS.items():
+    if look["operation"] not in ("band_depth", "ratio", "slope"):
+        continue
+    new_look = deepcopy(look)
+    new_look["name"] = look["operation"] + " accent"
+    new_look |= ACCENT_DEFAULTS
+    # noinspection PyTypeChecker
+    new_look["overlay"] = AQUA_PINK_OVERLAY_DEFAULTS | {
+        "band": look["bands"][0]
+    }
+    accent_looks[look_name + " accent"] = new_look
+GENERATED_LOOKS |= accent_looks
+
+HEATMAP_DEFAULTS = deepcopy(SPECTRAL_DEFAULTS)
+HEATMAP_DEFAULTS["prefilter"] = {
+    # "function": make_bilateralfilter(20, 5, 10),
+    "function": make_bilateralfilter(10, 10, 10),
+}
+smoother = make_multi_channel_filter(curry(gaussian_filter), axis=0)
+
+HEATMAP_DEFAULTS["postfilter"] = {
+    "function": smoother, "params": {"sigma": 5}
+}
+
+RAINBOW_OVERLAY_DEFAULTS = {
+    "options": {
+        "mpl_settings": {"tick_fp": TICK_FONT},
+        "overlay_opacity": 0.35,
+        "overlay_cmap": "gist_rainbow",
+        "base_cmap": "Greys_r",
     }
 }
+rainbow_looks = {}
+for look_name, look in DEFAULT_RAPIDLOOKS.items():
+    if look["operation"] not in ("band_depth", "ratio", "slope"):
+        continue
+    new_look = deepcopy(look)
+    new_look["name"] = look["operation"] + " heatmap"
+    new_look |= HEATMAP_DEFAULTS
+    # noinspection PyTypeChecker
+    new_look["overlay"] = RAINBOW_OVERLAY_DEFAULTS | {"band": look["bands"][0]}
+    rainbow_looks[look_name + " heatmap"] = new_look
+GENERATED_LOOKS |= rainbow_looks
 
 
-# noinspection PyTypeChecker
-DEFAULT_RAPIDLOOKS = {
-    "BD529": {
-        "operation": "band_depth",
-        "bands": ("L6", "L4", "L5"),
-        "options": SPECTRAL_RAPIDLOOK_OPTIONS,
-    },
-    "BD866": {
-        "operation": "band_depth",
-        "bands": ("R1", "R4", "R2"),
-        "options": SPECTRAL_RAPIDLOOK_OPTIONS,
-    },
-    "BD678": {
-        "operation": "band_depth",
-        "bands": ("L4", "L2", "L3"),
-        "options": SPECTRAL_RAPIDLOOK_OPTIONS,
-    },
-    "S56": {
-        "operation": "slope",
-        "bands": ("R5", "R6"),
-        "options": SPECTRAL_RAPIDLOOK_OPTIONS,
-    },
-    "S16": {
-        "operation": "slope",
-        "bands": ("R1", "R6"),
-        "options": SPECTRAL_RAPIDLOOK_OPTIONS,
-    },
-    "enhanced color": {
-        "operation": "enhanced color",
-        "bands": ("L2", "L5", "L6"),
-        "options": {
-            "special_constants": [0],
-            "normalize": False,
-            "render_mpl": True,
-            "prefilter": {
-                "function": normalize_range,
-                "params": {"cheat_low": 2, "cheat_high": 1},
-            },
-        },
-    },
-    # "L0 enhanced color": {
-    #     "operation": "enhanced color",
-    #     "bands": ("L0R", "L0G", "L0B"),
-    #     "options": {
-    #         "special_constants": [0],
-    #         "normalize": False,
-    #         "render_mpl": True,
-    #         "prefilter": {
-    #             "function": normalize_range,
-    #             "params": {"cheat_low": 1, "cheat_high": 1},
-    #         },
-    #     },
-    # },
-    # "R0 enhanced color": {
-    #     "operation": "enhanced color",
-    #     "bands": ("R0R", "R0G", "R0B"),
-    #     "options": {
-    #         "special_constants": [0],
-    #         "normalize": False,
-    #         "render_mpl": True,
-    #         "prefilter": {
-    #             "function": normalize_range,
-    #             "params": {"cheat_low": 1, "cheat_high": 1},
-    #         },
-    #     },
-    # },
-    "dcs": {
-        "operation": "dcs",
-        "bands": ("L2", "L5", "L6"),
-        "options": STRETCHY_RAPIDLOOK_OPTIONS,
-    },
-    # "R0 dcs": {
-    #     "operation": "dcs",
-    #     "bands": ("R0R", "R0G", "R0B"),
-    #     "options": STRETCHY_RAPIDLOOK_OPTIONS,
-    # },
-    # "L0 dcs": {
-    #     "operation": "dcs",
-    #     "bands": ("L0R", "L0G", "L0B"),
-    #     "options": STRETCHY_RAPIDLOOK_OPTIONS,
-    # },
-    # "3dg_dcs": {
-    #     "operation": "dcs",
-    #     "name": "3dg dcs",
-    #     "bands": ("L2", "L5", "L6"),
-    #     "options": STRETCHY_RAPIDLOOK_OPTIONS
-    #     | {
-    #         "image_filter": {
-    #             "function": gaussian_filter,
-    #             "params": {"sigma": 1},
-    #         }
-    #     },
-    # },
-    # "IR_dcs": {
-    #     "operation": "dcs",
-    #     "name": "IR dcs",
-    #     "bands": ("R6", "R3", "R1"),
-    #     "options": STRETCHY_RAPIDLOOK_OPTIONS | {"contrast_stretch": 2},
-    # },
-    # "3dg_IR_dcs": {
-    #     "operation": "dcs",
-    #     "name": "3dg IR dcs",
-    #     "bands": ("R6", "R3", "R1"),
-    #     "options": STRETCHY_RAPIDLOOK_OPTIONS
-    #     | {
-    #         "contrast_stretch": 2,
-    #         "image_filter": {
-    #             "function": gaussian_filter,
-    #             "params": {"sigma": 1},
-    #         },
-    #     },
-    # },
-    "normed dcs low": {
-        "operation": "dcs",
-        "name": "normed dcs low",
-        "bands": ("L2", "L5", "L6"),
-        "options": STRETCHY_RAPIDLOOK_OPTIONS
-        | {
-            "prefilter": {
-                "function": normalize_range,
-                "params": {"cheat_low": 0.05, "cheat_high": 0.05},
-            },
-            "contrast_stretch": 0.05,
-        },
-    },
-    "normed dcs high": {
-        "operation": "dcs",
-        "name": "normed dcs high",
-        "bands": ("L2", "L5", "L6"),
-        "options": STRETCHY_RAPIDLOOK_OPTIONS
-        | {
-            "prefilter": {
-                "function": normalize_range,
-                "params": {"cheat_low": 1, "cheat_high": 1},
-            },
-            "contrast_stretch": 1,
-        },
-    },
-    "sigma-stretch dcs low": {
-        "operation": "dcs",
-        "name": "sigma-stretch dcs low",
-        "bands": ("L2", "L5", "L6"),
-        "options": STRETCHY_RAPIDLOOK_OPTIONS
-        | {"sigma": 0.5, "contrast_stretch": 0.1},
-    },
-    "sigma-stretch dcs high": {
-        "operation": "dcs",
-        "name": "sigma-stretch dcs high",
-        "bands": ("L2", "L5", "L6"),
-        "options": STRETCHY_RAPIDLOOK_OPTIONS
-        | {"sigma": 0.95, "contrast_stretch": 1},
-    },
+DEFAULT_RAPIDLOOKS |= GENERATED_LOOKS
 
+
+# add crop
+# TODO: is it gross to do it this way?
+
+DEFAULT_CROP = {
+    "crop": (25, 25, 11, 11),
 }
-DEFAULT_RAPIDLOOKS = {
-    key: value
-    for key, value in DEFAULT_RAPIDLOOKS.items()
-    if value["options"] != SPECTRAL_RAPIDLOOK_OPTIONS
-}
+
+for look in DEFAULT_RAPIDLOOKS:
+    DEFAULT_RAPIDLOOKS[look] |= DEFAULT_CROP
+
 
 CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
-
-# noinspection PyTypeChecker
 
 THUMBNAIL_THESE_RAPIDLOOKS = (
     "enhanced color L2_L5_L6",
@@ -278,75 +305,3 @@ THUMBNAIL_THESE_RAPIDLOOKS = (
     "dcs R0R_R0G_R0B",
 )
 THUMBNAIL_SIZE = (240, 330)
-
-winter_looks = {}
-for look_name, look in DEFAULT_RAPIDLOOKS.items():
-    if look["options"] == SPECTRAL_RAPIDLOOK_OPTIONS:
-        winter_look = look.copy()
-        winter_look["name"] = look["operation"] + " winter"
-        winter_look["options"] = WINTER_SPECTRAL_RAPIDLOOK_OPTIONS
-        winter_looks[look_name + " winter"] = winter_look
-DEFAULT_RAPIDLOOKS |= winter_looks
-
-
-overlay_looks = {}
-for look_name, look in DEFAULT_RAPIDLOOKS.items():
-    if look["options"] == SPECTRAL_RAPIDLOOK_OPTIONS:
-        new_look = look.copy()
-        new_look["name"] = look["operation"] + " accent"
-        new_look["options"] = ACCENT_RAPIDLOOK_OPTIONS
-        eye = look["bands"][0][0]
-        # noinspection PyTypeChecker
-        new_look["overlay"] = AQUA_PINK_ACCENT_OPTIONS | {
-            "band": look["bands"][0]
-        }
-        overlay_looks[look_name + " overlay"] = new_look
-DEFAULT_RAPIDLOOKS |= overlay_looks
-
-RAINBOW_OVERLAY_OPTIONS = {
-    "options": {
-        "mpl_options": {"tick_fp": TICK_FONT},
-        "overlay_opacity": 0.25,
-        "overlay_cmap": cm.get_cmap("jet"),
-        "base_cmap": cm.get_cmap("Greys_r"),
-    }
-}
-
-rainbow_overlay_looks = {}
-for look_name, look in DEFAULT_RAPIDLOOKS.items():
-    if look["options"] == SPECTRAL_RAPIDLOOK_OPTIONS:
-        new_look = look.copy()
-        new_look["name"] = look["operation"] + " rainbow overlay"
-        new_look["options"] = OVERLAY_RAPIDLOOK_OPTIONS
-        eye = look["bands"][0][0]
-        # noinspection PyTypeChecker
-        new_look["overlay"] = RAINBOW_OVERLAY_OPTIONS | {
-            "band": look["bands"][0]
-        }
-        rainbow_overlay_looks[look_name + " rainbow overlay"] = new_look
-DEFAULT_RAPIDLOOKS |= rainbow_overlay_looks
-
-
-# TODO: troubleshoot make_three_channel_filter
-# smooth_dcs_looks = {}
-# for look_name, look in DEFAULT_RAPIDLOOKS.items():
-#     if look["options"] == STRETCHY_RAPIDLOOK_OPTIONS:
-#         new_look = look.copy()
-#         new_look["name"] = look["operation"] + " smooth"
-#         new_look["options"]["image_filter"] = {
-#                     "function": make_three_channel_filter(gaussian_filter),
-#                     "params": {"sigma": 1},
-#                 }
-#         smooth_dcs_looks[look_name + " smooth"] = new_look
-# DEFAULT_RAPIDLOOKS |= smooth_dcs_looks
-
-
-# add crop
-# TODO: is this gross?
-
-DEFAULT_CROP = {
-    "crop": (25, 25, 11, 11),
-}
-
-for look in DEFAULT_RAPIDLOOKS:
-    DEFAULT_RAPIDLOOKS[look] |= DEFAULT_CROP

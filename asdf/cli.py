@@ -87,10 +87,9 @@ def asdf(
         pointing = get_pointing_wrapper(
             Path(iof), noninteractive, binocular, debug
         )
-    # where is the roi file?
-    if roi is None:
-        roi_path = None
-    else:
+    # do we have an roi file? if so, turn passed string into a Path
+    roi_path = None
+    if roi is not None:
         roi_path = Path(roi)
 
     # ok? great. initialize BandSet object from these paths

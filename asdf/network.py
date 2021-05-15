@@ -157,11 +157,9 @@ def backup_marslab_files(bandset, roi_fits_fn, debug_prefix=""):
     marslab_stem = bandset.name + bandset.suffix
     marslab_key = s3_prefix + marslab_stem + "-marslab.csv"
     extended_key = s3_prefix + marslab_stem + "-marslab-extended.csv"
-    marslab, extended = bandset.write_data_files()
+    marslab, extended = bandset.write_data_files(in_memory=True)
     upload_hopper = [(marslab, marslab_key), (extended, extended_key)]
     if roi_fits_fn is not None:
-        # TODO: is this going to create some kind of weird upload permissions
-        #  issue? keep an eye on this
         fits_tar_key = s3_prefix + os.path.split(roi_fits_fn)[-1].replace(
             "fits", "tar.gz"
         )
