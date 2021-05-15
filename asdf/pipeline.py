@@ -3,30 +3,26 @@ inline handling functions for runtime asdf workflow
 """
 import os
 import warnings
-from multiprocessing import Pool
 from pathlib import Path
 
+import dill
+from pathos.multiprocessing import ProcessingPool
+
 import matplotlib.figure
-import numpy as np
-import pandas as pd
 from clize import UserError
 from cytoolz import valfilter
 
 import asdf.settings as settings
 import pplot
 from asdf.asdf_utils import dashify
-from asdf.chatter import ask_user_about_roi, get_and_offer_pointing
+from asdf.chatter import get_and_offer_pointing
 from asdf.scrape import (
     parse_pointing,
     add_effective_taus,
     add_public_waypoints_to_metadata,
 )
-from marslab.imgops import (
-    make_thumbnail,
-    simple_mpl_figure,
-    absolutely_destroy,
-)
-from pplot.convert import convert_for_plot
+from marslab.imgops.render import make_thumbnail, simple_mpl_figure
+from marslab.imgops.imgutils import absolutely_destroy
 
 
 def collect_dispersed_metadata(metadata):
@@ -87,7 +83,9 @@ def save_looks(bandset, outpath, prefix=None, threads=None, verbose=False):
         prefix = bandset.name
     pool = None
     if threads is not None:
-        pool = Pool(threads)
+        # pool = Pool(threads)
+        pool = ProcessingPool(threads)
+        pool.restart()
     for look_name, look in bandset.looks.items():
         filename = prefix + " " + look_name + ".png"
         annotation = "\n".join(
@@ -100,9 +98,12 @@ def save_looks(bandset, outpath, prefix=None, threads=None, verbose=False):
         if pool is None:
             annotate_and_save(annotation, look, filename, outpath, verbose)
         else:
-            pool.apply_async(
-                annotate_and_save,
-                (annotation, look, filename, outpath, verbose),
+            # pool.apply_async(
+            #     annotate_and_save,
+            #     (annotation, look, filename, outpath, verbose),
+            # )
+            pool.apipe(
+                annotate_and_save, annotation, look, filename, outpath, verbose
             )
     if pool is not None:
         pool.close()
@@ -194,15 +195,6 @@ def make_pointing_annotation(pointing):
     )
 
 
-def add_input_roi_metadata(marslab_data, ci):
-    for region in marslab_data["COLOR"]:
-        ci(print, "Please enter information about the " + region + " ROI.")
-        user_provided_roi_metadata = ask_user_about_roi(region, ci)
-        for field, value in user_provided_roi_metadata.items():
-            marslab_data.loc[marslab_data["COLOR"] == region, field] = value
-    return marslab_data
-
-
 def make_rapidlook_thumbnails(rapidlooks, size):
     print("making thumbnails (if necessary).")
     thumbnails = {}
@@ -218,6 +210,7 @@ def pretty_plot_bandset(bandset, outpath):
     )
     print("Writing " + plot_fn)
     from pplot.convert import scale_eyes
+
     target_name = ""
     if bandset.compact["NAME"].iloc[0]:
         target_name = bandset.compact["NAME"].iloc[0]

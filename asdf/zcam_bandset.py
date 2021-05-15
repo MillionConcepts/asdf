@@ -4,23 +4,11 @@ from functools import partial
 from pathlib import Path
 
 from cytoolz import keyfilter
+from marslab.imgops.bandset import BandSet
+from marslab.imgops.debayer import RGGB_PATTERN
+from marslab.imgops.loaders import rasterio_load_scaled
+from marslab.imgops.regions import make_roi_edgemaps, draw_edgemaps_on_image
 
-import asdf
-from asdf import settings
-from asdf.asdf_utils import (
-    dupe_df_block,
-    load_roi_file,
-    null_marslab_data_section,
-    check_and_drop_duplicate_columns, dashify,
-)
-from asdf.scrape import (
-    make_pointing_name,
-    bulk_scrape_metadata,
-    add_derived_illumination_geometry,
-    melt_metadata,
-    parse_pointing,
-)
-from marslab.bandset import BandSet, rasterio_load_scaled
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
 from marslab.compat.xcam import (
     DERIVED_CAM_DICT,
@@ -28,10 +16,22 @@ from marslab.compat.xcam import (
     count_rois_on_xcam_images,
 )
 import pandas as pd
-from marslab.imgops import (
-    RGGB_PATTERN,
-    make_roi_edgemaps,
-    draw_edgemaps_on_image,
+
+import asdf
+from asdf import settings
+from asdf.asdf_utils import (
+    dupe_df_block,
+    load_roi_file,
+    null_marslab_data_section,
+    check_and_drop_duplicate_columns,
+    dashify,
+)
+from asdf.scrape import (
+    make_pointing_name,
+    bulk_scrape_metadata,
+    add_derived_illumination_geometry,
+    melt_metadata,
+    parse_pointing,
 )
 
 
@@ -87,7 +87,7 @@ class ZcamBandSet(BandSet):
             load_method=load_method,
             bayer_info=bayer_info,
             rois=rois,
-            threads = threads
+            threads=threads,
         )
         # scrape headers for all desired metadata fields and derive values
         # from them as necessary

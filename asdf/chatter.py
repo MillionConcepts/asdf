@@ -112,9 +112,7 @@ def get_pointing_wrapper(iof_path, noninteractive, binocular, debug=False):
         raise
 
 
-def ask_user_about_roi(
-    roi_title=None, ci: Callable = pass_parameters
-) -> dict:
+def ask_user_about_roi(roi_title=None, ci: Callable = pass_parameters) -> dict:
     """
     ask the user about all of the ROI properties we care about, unless
     the application is in noninteractive mode, in which case return our
@@ -130,3 +128,12 @@ def ask_user_about_roi(
     for field in metadata_fields:
         roi_metadata[field] = ci(dispatched_metadata_prompt, field, roi_title)
     return roi_metadata
+
+
+def input_roi_metadata(marslab_data, ci):
+    for region in marslab_data["COLOR"]:
+        ci(print, "Please enter information about the " + region + " ROI.")
+        user_provided_roi_metadata = ask_user_about_roi(region, ci)
+        for field, value in user_provided_roi_metadata.items():
+            marslab_data.loc[marslab_data["COLOR"] == region, field] = value
+    return marslab_data

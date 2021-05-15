@@ -8,31 +8,21 @@ from operator import contains
 from pathlib import Path
 
 from cytoolz.curried import keyfilter
+from marslab.compat.mertools import merspect_to_marslab
 
 import asdf.settings as settings
-from asdf.asdf_utils import (
-    catch_interaction,
-    null_marslab_data_section,
-)
-from asdf.chatter import (
-    get_pointing_wrapper,
-    name_prompt,
-)
+from asdf.asdf_utils import catch_interaction, null_marslab_data_section
+from asdf.chatter import get_pointing_wrapper, name_prompt, input_roi_metadata
 from asdf.network import upload_asdf_analysis
 from asdf.pipeline import (
     pretty_plot_bandset,
     make_rapidlook_thumbnails,
-    add_input_roi_metadata,
     handle_abbreviation,
     make_asdf_outpath,
     collect_dispersed_metadata,
     save_looks,
 )
-from asdf.settings.rapidlooks import DEFAULT_RAPIDLOOKS
 from asdf.zcam_bandset import ZcamBandSet
-from marslab.compat.mertools import (
-    merspect_to_marslab,
-)
 
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
@@ -94,7 +84,9 @@ def asdf(
 
     # ok? great. initialize BandSet object from these paths
     print("... scraping default metadata ...")
-    bandset = ZcamBandSet(pointing, roi_path, suffix, threads=settings.process.THREADS)
+    bandset = ZcamBandSet(
+        pointing, roi_path, suffix, threads=settings.process.THREADS
+    )
     bandset.metadata["CREATOR"] = os.getlogin()
 
     # where are we locally writing files? by default, directories separated
@@ -147,7 +139,7 @@ def asdf(
             marslab_data is not None
         ), "something has gone wrong in loading ROI data."
         # prompt users for info on each ROI
-        marslab_data = add_input_roi_metadata(marslab_data, ci)
+        marslab_data = input_roi_metadata(marslab_data, ci)
     else:
         print("No ROI file has been passed: using null values for data.")
         marslab_data = null_marslab_data_section()
@@ -158,8 +150,7 @@ def asdf(
     bandset.write_data_files(outpath, verbose=True)
     # set up thumbnail cache
     thumbnail_staging = {}
-    # TODO: maybe do something fancier with a method on the bandset?
-    #   or not.
+    # TODO: maybe do something fancier with a method on the bandset?  or not.
     pick_thumbs = keyfilter(
         partial(contains, settings.rapidlooks.THUMBNAIL_THESE_RAPIDLOOKS)
     )
@@ -178,7 +169,7 @@ def asdf(
         # and matplotlib about opening a bunch of figures
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            bandset.make_look_set(DEFAULT_RAPIDLOOKS)
+            bandset.make_look_set(settings.rapidlooks.DEFAULT_RAPIDLOOKS)
         save_images(prefix=bandset.name)
         # keep images that are to be thumbnailed for upload, discard those
         # that are not; waste not memory, want not memory

@@ -275,8 +275,8 @@ def bulk_scrape_metadata(iof_files: Iterable) -> list[dict]:
 
 def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
     """
-    unpivot a metadata frame by key (default BAND), for appending per-file metadata to the
-    extended marslab format
+    unpivot a metadata frame by key (default BAND), for appending per-file
+    metadata to the extended marslab format
     """
     unchanging_columns = (
         "SOL",

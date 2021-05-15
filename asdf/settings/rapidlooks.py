@@ -8,15 +8,13 @@ from matplotlib import cm
 from matplotlib.colors import ListedColormap
 from scipy.ndimage import gaussian_filter
 
-from marslab.imgops import (
-    norm_clip,
-    normalize_range,
-    colormapped_plot,
-    simple_mpl_figure, make_multi_channel_filter,
-)
 
 
 # TODO: clean this up
+from marslab.imgops.imgutils import std_clip, normalize_range, split_filter
+from marslab.imgops.render import colormapped_plot, simple_mpl_figure
+
+
 def make_orange_teal_cmap():
     teal = (98, 252, 232)
     orange = (255, 151, 41)
@@ -54,7 +52,7 @@ ROI_FONT = mplf.FontProperties(
 
 
 SPECTRAL_DEFAULTS = {
-    "look_params": {"special_constants": [0], "clip": {"function": norm_clip}},
+    "look_params": {"special_constants": [0], "clip": {"function": std_clip}},
     "postfilter": {"function": gaussian_filter, "params": {"sigma": 2}},
     "mpl_settings": {
         "function": colormapped_plot,
@@ -150,7 +148,7 @@ normed_dcs_looks = {}
 for look_name, look in DEFAULT_RAPIDLOOKS.items():
     if look["operation"] != "dcs":
         continue
-    if "IR" in look["name"]:
+    if "R6" in look["bands"]:
         continue
     normed_look = deepcopy(look)
     normed_look["name"] = "normed " + look["name"]
@@ -159,23 +157,23 @@ for look_name, look in DEFAULT_RAPIDLOOKS.items():
         "function": normalize_range,
         "params": {"cheat_low": 1, "cheat_high": 1},
     }
-    normed_dcs_looks["normed " + look["name"]] = normed_look
+    normed_dcs_looks["normed " + look_name] = normed_look
 GENERATED_LOOKS |= normed_dcs_looks
 
 sigma_dcs_looks = {}
 for look_name, look in DEFAULT_RAPIDLOOKS.items():
     if look["operation"] != "dcs":
         continue
-    if "IR" in look["name"]:
+    if "R6" in look["bands"]:
         continue
     sigma_look = deepcopy(look)
-    sigma_look["name"] = "fixed sigma " + look["name"]
+    sigma_look["name"] = "fixed sigma " + look_name
     sigma_look["look_params"] = {
         "special_constants": [0],
         "contrast_stretch": 1,
         "sigma": 0.95,
     }
-    sigma_dcs_looks["fixed sigma " + look["name"]] = sigma_look
+    sigma_dcs_looks["fixed sigma " + look_name] = sigma_look
 GENERATED_LOOKS |= sigma_dcs_looks
 
 
@@ -253,7 +251,7 @@ HEATMAP_DEFAULTS["prefilter"] = {
     # "function": make_bilateralfilter(20, 5, 10),
     "function": make_bilateralfilter(10, 10, 10),
 }
-smoother = make_multi_channel_filter(curry(gaussian_filter), axis=0)
+smoother = split_filter(curry(gaussian_filter), axis=0)
 
 HEATMAP_DEFAULTS["postfilter"] = {
     "function": smoother, "params": {"sigma": 5}
@@ -261,7 +259,7 @@ HEATMAP_DEFAULTS["postfilter"] = {
 
 RAINBOW_OVERLAY_DEFAULTS = {
     "options": {
-        "mpl_settings": {"tick_fp": TICK_FONT},
+        "mpl_settings": {"colorbar_fp": TICK_FONT},
         "overlay_opacity": 0.35,
         "overlay_cmap": "gist_rainbow",
         "base_cmap": "Greys_r",
