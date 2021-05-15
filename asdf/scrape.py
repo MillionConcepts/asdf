@@ -246,11 +246,11 @@ def find_iof_siblings(
     if binocular:
         print(
             "Warning: asdf found too many images for this seq_id and is "
-            "falling back to 'monocular' mode. This may mean that a sequence "
+            "falling back to strict mode. This may mean that a sequence "
             "that includes a mast movement was executed several times during "
-            "this sol. If you don't see all the images you want, try copying "
-            "the specific files you'd like to use into a separate directory "
-            "and running asdf on them there."
+            "this sol. It may also not mean that. If you don't see all the "
+            "images you want, try copying the specific files you want "
+            "into a separate directory and running asdf on them there."
         )
         return find_iof_siblings(path_to_iof, override_names, binocular=False)
     else:
