@@ -9,7 +9,6 @@ from matplotlib.colors import ListedColormap
 from scipy.ndimage import gaussian_filter
 
 
-
 # TODO: clean this up
 from marslab.imgops.imgutils import std_clip, normalize_range, split_filter
 from marslab.imgops.render import colormapped_plot, simple_mpl_figure
@@ -73,15 +72,16 @@ ENHANCED_DEFAULTS = {
     "look": "composite",
     "prefilter": {
         "function": normalize_range,
-        "params": {"cheat_low": 1.5, "cheat_high": 1},
+        "params": {"stretch": (1.25, 1)},
     },
-    "params": {"special_constants": [0], "normalize": False},
+    "params": {"special_constants": [0]},
     "plotter": {"function": simple_mpl_figure},
 }
 
 TRUE_DEFAULTS = {
     "look": "composite",
-    "params": {"special_constants": [0], "normalize": (0, 1, 0.1, 0.1)},
+    "params": {"special_constants": [0]},
+    "limiter": {"function": normalize_range, "params": {"stretch": 0.1}},
     "plotter": {"function": simple_mpl_figure},
 }
 
@@ -156,7 +156,7 @@ for look_name, look in DEFAULT_RAPIDLOOKS.items():
     # noinspection PyTypeChecker
     normed_look["prefilter"] = {
         "function": normalize_range,
-        "params": {"cheat_low": 1, "cheat_high": 1},
+        "params": {"stretch": 1},
     }
     normed_dcs_looks["normed " + look_name] = normed_look
 GENERATED_LOOKS |= normed_dcs_looks
@@ -253,9 +253,7 @@ HEATMAP_DEFAULTS["prefilter"] = {
 }
 smoother = split_filter(curry(gaussian_filter), axis=0)
 
-HEATMAP_DEFAULTS["postfilter"] = {
-    "function": smoother, "params": {"sigma": 5}
-}
+HEATMAP_DEFAULTS["postfilter"] = {"function": smoother, "params": {"sigma": 5}}
 
 RAINBOW_OVERLAY_DEFAULTS = {
     "params": {
