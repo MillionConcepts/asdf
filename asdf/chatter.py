@@ -10,7 +10,7 @@ from clize import UserError
 import pandas as pd
 
 from asdf.asdf_utils import pass_parameters
-from asdf.scrape import find_iof_siblings
+from asdf.scrape import find_cam_siblings
 import asdf.settings as settings
 
 
@@ -74,7 +74,7 @@ def get_and_offer_pointing(iof_path, noninteractive, binocular):
     set is ok.
     """
     pointing = pd.DataFrame(
-        find_iof_siblings(iof_path, binocular=binocular)
+        find_cam_siblings(iof_path, binocular=binocular)
     ).sort_values(by="FILTER")
     print("Found the following IOFs associated with this pointing:")
     for filt, path in zip(pointing["FILTER"], pointing["PATH"]):

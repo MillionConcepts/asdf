@@ -5,7 +5,7 @@ import os
 import warnings
 from pathlib import Path
 
-import dill
+import PIL.Image
 from pathos.multiprocessing import ProcessingPool
 
 import matplotlib.figure
@@ -21,8 +21,9 @@ from asdf.scrape import (
     add_effective_taus,
     add_public_waypoints_to_metadata,
 )
+from marslab.imgops.pltutils import get_mpl_image, set_label
 from marslab.imgops.render import make_thumbnail, simple_mpl_figure
-from marslab.imgops.imgutils import absolutely_destroy
+from marslab.imgops.imgutils import absolutely_destroy, eightbit
 
 
 def collect_dispersed_metadata(metadata):
@@ -58,8 +59,20 @@ def make_asdf_outpath(output, bandset):
     return outpath
 
 
-def look_annotation(headline, annotation):
-    return "\n".join((headline, annotation, settings.rapidlooks.CREDIT_TEXT))
+def make_pointing_annotation(pointing):
+    return ", ".join(
+        [
+            key.lower() + " " + str(value)
+            for key, value in parse_pointing(pointing).items()
+        ]
+    )
+
+
+def save_plainly(_, look, filename, outpath):
+    if isinstance(look, matplotlib.figure.Figure):
+        look = get_mpl_image(look)
+    image = PIL.Image.fromarray(eightbit(look))
+    image.save(Path(outpath, filename))
 
 
 def annotate_and_save(annotation, look, filename, outpath, verbose):
@@ -67,9 +80,7 @@ def annotate_and_save(annotation, look, filename, outpath, verbose):
     #  this is not urgent. I think _maybe_ they should be separate.
     if not isinstance(look, matplotlib.figure.Figure):
         look = simple_mpl_figure(look)
-    look.axes[0].set_xlabel(
-        annotation, loc="center", fontproperties=settings.rapidlooks.TITLE_FONT
-    )
+    set_label(look, annotation, fontproperties=settings.rapidlooks.TITLE_FONT)
     if verbose:
         print("writing " + filename)
     look.savefig(Path(outpath, filename), dpi=275)
@@ -97,11 +108,8 @@ def save_looks(bandset, outpath, prefix=None, threads=None, verbose=False):
         )
         if pool is None:
             annotate_and_save(annotation, look, filename, outpath, verbose)
+            # TODO: add option to _not_ wrap in figures
         else:
-            # pool.apply_async(
-            #     annotate_and_save,
-            #     (annotation, look, filename, outpath, verbose),
-            # )
             pool.apipe(
                 annotate_and_save, annotation, look, filename, outpath, verbose
             )
@@ -178,21 +186,6 @@ def handle_abbreviation(
             continue
         good_input = True
     return pointing
-
-
-def xlabel_figure(fig, text, fontproperties):
-    fig.axes[0].set_xlabel(
-        xlabel=text, loc="center", fontproperties=fontproperties
-    )
-
-
-def make_pointing_annotation(pointing):
-    return ", ".join(
-        [
-            key.lower() + " " + str(value)
-            for key, value in parse_pointing(pointing).items()
-        ]
-    )
 
 
 def make_rapidlook_thumbnails(rapidlooks, size):

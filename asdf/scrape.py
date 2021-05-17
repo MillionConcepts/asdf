@@ -1,7 +1,7 @@
 """
 functions for actively scraping metadata from input files, web sources, etc.
 """
-
+from functools import cache
 import os
 import re
 from ast import literal_eval
@@ -13,6 +13,8 @@ from urllib.error import URLError
 import numpy as np
 import pandas as pd
 from cytoolz.curried import keyfilter
+from cytoolz.dicttoolz import dissoc
+
 from marslab.compat.xcam import piecewise_interpolate_focal_length
 
 from asdf.network import get_public_m20_waypoints
@@ -106,6 +108,10 @@ def scrape_sequence_dict(label: Union[Path, str]) -> dict:
     }
 
 
+# cached version for slightly faster operation on networked filesystems..
+cached_scraper = cache(scrape_sequence_dict)
+
+
 def scrape_asdf_metadata(label: Union[Path, str]) -> dict:
     """
     grabs all the metadata from an IOF file that asdf cares about.
@@ -182,38 +188,61 @@ def drop_mismatched_versions(sibling_df, base_version):
     return sibling_df
 
 
-def find_iof_siblings(
-    path_to_iof: str, override_names=False, binocular=False
+def find_cam_siblings(
+    path_to_file: str,
+    product_type="IOF",
+    strict_product_type=True,
+    binocular=False,
+    thumbnails=False,
+    scraper=cached_scraper,
 ) -> pd.DataFrame:
+    """
+    try to find all of the files in the same 'pointing' as the passed file.
+    strictly designed for ZCAM IOFs, but has some reasonable chance of working
+    on many other random M20 products.
+    """
     # TODO: make sure RMS propagates into extended even if binocular
-    base_iof = Path(path_to_iof)
-    # don't scrape thumbnails
-    # TODO: scrape thumbnails
-    if "IOF_N" not in base_iof.name:
-        if not override_names:
-            raise ValueError("This filename doesn't look like an IOF file's.")
+    base_file = Path(path_to_file)
+    if thumbnails is False:
+        thumb_suffix = "_N"
+    else:
+        thumb_suffix = ""
+    if strict_product_type and (product_type is not None):
+        type_prefix = product_type
+    else:
+        type_prefix = ""
+    allowed_string = type_prefix + thumb_suffix
+    if allowed_string not in base_file.name:
+        raise ValueError(
+            "This filename doesn't look like the requested product type, "
+            + "or isn't a nominal product."
+        )
     # indices containing unique string for site, drive, seq_id -- we don't
     # care about actually parsing it
     sitedriveseq_ix = (28, 44)
     # this generates an identifier that significantly narrows down
     # potential 'pointings'
-    base_sitedriveseq = base_iof.name[slice(*sitedriveseq_ix)]
+    base_sitedriveseq = base_file.name[slice(*sitedriveseq_ix)]
     # matching version numbers is also desirable
     version_ix = (52, 54)
-    base_version = int(base_iof.name[slice(*version_ix)])
+    base_version = int(base_file.name[slice(*version_ix)])
     # and then to fully specify
-    base_sequence_dict = scrape_sequence_dict(base_iof)
-    if base_sequence_dict.pop("COMPLETION") != "COMPLETE_CHECKSUM_PASS":
+    base_sequence_dict = scraper(base_file)
+    if base_sequence_dict["COMPLETION"] != "COMPLETE_CHECKSUM_PASS":
         raise ValueError(
             "asdf does not currently support partially-received images."
         )
-    base_sequence_dict["PATH"] = str(path_to_iof)
-    base_pointing = parse_pointing(base_sequence_dict)
+    base_sequence_dict["PATH"] = str(path_to_file)
+    base_pointing = parse_pointing(dissoc(base_sequence_dict, "COMPLETION"))
     siblings = [base_sequence_dict]
-    for potential_sibling in base_iof.parent.iterdir():
-        if (potential_sibling.name == base_iof.name) or (
-            "IOF_N" not in potential_sibling.name
-        ):
+    type_thumb = (23, 28)
+    base_type_thumb = base_file.name[slice(*type_thumb)]
+    for potential_sibling in base_file.parent.iterdir():
+        if potential_sibling.name == base_file.name:
+            continue
+        if allowed_string not in potential_sibling.name:
+            continue
+        if potential_sibling.name[slice(*type_thumb)] != base_type_thumb:
             continue
         # does it have the same site, drive, seq?
         if (
@@ -222,10 +251,10 @@ def find_iof_siblings(
         ):
             continue
         # ok then actually look at the label
-        sequence_dict = scrape_sequence_dict(potential_sibling)
-        if sequence_dict.pop("COMPLETION") != "COMPLETE_CHECKSUM_PASS":
+        sequence_dict = scraper(potential_sibling)
+        if sequence_dict["COMPLETION"] != "COMPLETE_CHECKSUM_PASS":
             continue
-        pointing = parse_pointing(sequence_dict)
+        pointing = parse_pointing(dissoc(base_sequence_dict, "COMPLETION"))
         if binocular:
             # permit coregistered binocular observations with different
             # RMS to be defined as a single pointing
@@ -252,7 +281,13 @@ def find_iof_siblings(
             "images you want, try copying the specific files you want "
             "into a separate directory and running asdf on them there."
         )
-        return find_iof_siblings(path_to_iof, override_names, binocular=False)
+        return find_cam_siblings(
+            path_to_file,
+            product_type=product_type,
+            strict_product_type=strict_product_type,
+            thumbnails=thumbnails,
+            binocular=False,
+        )
     else:
         raise ValueError(
             "There are multiple pointings in this directory that, for whatever"

@@ -210,7 +210,7 @@ class ZcamBandSet(BandSet):
 
     def draw_context(self, edgemaps, eye):
         inst = {
-            "operation": "enhanced color",
+            "look": "true color",
             "name": "context image " + eye,
             "no_band_names": True,
             "options": {"special_constants": [0], "normalize": (0, 1, 0, 0.1)},

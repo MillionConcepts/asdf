@@ -1,5 +1,5 @@
 """
-script for asdf pipeline
+high-level handling script for asdf cli workflow
 """
 import os
 import warnings
@@ -14,7 +14,7 @@ import asdf.settings as settings
 from asdf.asdf_utils import catch_interaction, null_marslab_data_section
 from asdf.chatter import get_pointing_wrapper, name_prompt, input_roi_metadata
 from asdf.network import upload_asdf_analysis
-from asdf.pipeline import (
+from asdf.cli_handlers import (
     pretty_plot_bandset,
     make_rapidlook_thumbnails,
     handle_abbreviation,
@@ -96,7 +96,6 @@ def asdf(
     # dial out to other directories / servers for metadata that can't be
     # found in or derived from file headers
     bandset.metadata = collect_dispersed_metadata(bandset.metadata)
-
     # do we have any ROIs? maybe not? there are lots of things we don't
     # do if we haven't been passed an ROI file.
     we_do_not_have_rois = (roi_path is None) and (merspect is None)
