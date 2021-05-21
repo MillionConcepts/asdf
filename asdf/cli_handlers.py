@@ -122,7 +122,12 @@ def save_looks(bandset, outpath, prefix=None, threads=None, verbose=False):
 
 
 def handle_abbreviation(
-    sol, seq_id, root=None, filetype=None, noninteractive=False
+    sol,
+    seq_id,
+    root=None,
+    filetype=None,
+    noninteractive=False,
+    keep_broadband=False,
 ):
     sol_path = format(int(sol), "0>4")
     # default path root and subdirectory, which can be overridden
@@ -130,16 +135,14 @@ def handle_abbreviation(
         try:
             path_root = settings.sources.PATH_ABBREVIATIONS[root]
         except KeyError:
+            source_names = ", ".join(
+                [key for key in settings.sources.PATH_ABBREVIATIONS.keys()]
+            )
             ASDF_CONSOLE.log(
-                "sorry, I don't know the abbreviation "
-                + str(root)
-                + '".  I know '
-                + " ".join(
-                    [
-                        '"' + key + '",'
-                        for key in settings.sources.PATH_ABBREVIATIONS.keys()
-                    ]
-                ), style = "bold red"
+                "sorry, I don't know the abbreviation {}. I know: {}.".format(
+                    root, source_names
+                ),
+                style="bold red",
             )
             return None, False
     else:
@@ -150,9 +153,13 @@ def handle_abbreviation(
         product_subdirectory = settings.sources.DEFAULT_PRODUCT_SUBDIRECTORY
     directory = Path(path_root, sol_path, product_subdirectory)
     if seq_id:
-        seq_id = 'ZCAM' + str(seq_id)
+        seq_id = "ZCAM" + str(seq_id)
     return find_and_offer_observations(
-        None, directory, sol, seq_id
+        explicit_path=None,
+        dir_from_abbrev=directory,
+        sol_from_abbrev=sol,
+        noninteractive=noninteractive,
+        keep_broadband=keep_broadband,
     )
 
 
