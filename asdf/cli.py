@@ -169,10 +169,13 @@ def asdf_body(
     # make context images and write them out
     if bandset.rois:
         ASDF_CONSOLE.print(Rule(" making ROI context images "))
-        save_images = partial(save_images, threads=None)
-        bandset.make_context_images(verbose=True)
-        save_images(prefix=bandset.name + bandset.suffix)
-        thumbnail_staging |= pick_thumbs(bandset.looks)
+        # remove threading b/c max two images and pointless
+        with ASDF_CONSOLE.status("... processing context ...", spinner='star'):
+            bandset.threads = {}
+            bandset.make_context_images(verbose=True)
+            save_images = partial(save_images, threads=None)
+            save_images(prefix=bandset.name + bandset.suffix)
+            thumbnail_staging |= pick_thumbs(bandset.looks)
     bandset.purge()
 
     # handle metadata and thumbnail uploads
