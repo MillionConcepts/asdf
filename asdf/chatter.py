@@ -212,12 +212,12 @@ def extract_scan_constants(observations):
 def reject_scan():
     ASDF_CONSOLE.print(
         "\nhalting due to user rejection of file list. If you passed an "
-        "abbreviated path, try passing a full path instead. If all else fails,"
-        "try copying the files you want to work with into a separate "
+        "abbreviated path, try passing a full path instead. If all else "
+        "fails, try copying the files you want to work with into a separate "
         "directory.",
         style="red bold",
     )
-    raise UserError
+    return None, False
 
 
 def find_and_offer_observations(
@@ -265,7 +265,7 @@ def find_and_offer_observations(
             console=ASDF_CONSOLE,
         )
         if obs_choice == 0:
-            reject_scan()
+            return reject_scan()
         if obs_choice != "a":
             return tuple(scan_results.values())[int(obs_choice) - 1], False
         return tuple(scan_results.values()), True
@@ -273,7 +273,7 @@ def find_and_offer_observations(
         if not Confirm.ask(
             "Does this look ok?", default="Y", console=ASDF_CONSOLE
         ):
-            reject_scan()
+            return reject_scan()
         return tuple(scan_results.values())[0], False
 
 

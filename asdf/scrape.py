@@ -240,16 +240,16 @@ def scan_zcam_dir(
         raise ValueError("no path passed to scan_zcam_dir")
     if explicit_path and not os.path.exists(explicit_path):
         ASDF_CONSOLE.print(
-            explicit_path + " does not exist.", style="bold red"
+            str(explicit_path) + " does not exist.", style="bold red"
         )
-        raise ValueError(explicit_path + " does not exist.")
+        raise ValueError(str(explicit_path) + " does not exist.")
     if explicit_path:
         if Path(explicit_path).is_dir():
             directory = Path(explicit_path)
             target_file = None
         else:
             directory = Path(explicit_path).parent
-            target_file = explicit_path
+            target_file = str(explicit_path)
     else:
         directory = Path(directory)
         target_file = None
@@ -257,7 +257,7 @@ def scan_zcam_dir(
     # TODO, maybe: add handling for edge cases that may someday occur
     #  in which site, drive, or zoom become distinguishing features
     if target_sol:
-        products = products.loc[products["SOL"] == target_sol].copy()
+        products = products.loc[products["SOL"] == int(target_sol)].copy()
     if target_seq_id:
         products = products.loc[products["SEQ_ID"] == target_seq_id].copy()
     # TODO: decide whether to add this functionality back in
@@ -269,7 +269,7 @@ def scan_zcam_dir(
     observations = {}
     parser_warnings = []
     for group_ix, group in groups:
-        if target_file and (str(target_file) not in group["PATH"].values):
+        if target_file and (target_file not in group["PATH"].values):
             continue
         sol, seq_id, product_type, thumb = group_ix
         name = "_".join([format(sol, "0>4"), seq_id, product_type, thumb])
