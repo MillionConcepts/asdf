@@ -311,8 +311,8 @@ def scan_zcam_dir(
                     observations[name + "_RMS" + str(rms)] = rmsgroup
                 else:
                     parser_warnings.append(
-                        "there was an unknown issue when attempting to "
-                        "cluster {}.".format(seq_id)
+                        "warning: there was an unknown issue when attempting "
+                        "to cluster {}.".format(seq_id)
                     )
         elif (group["FRAME_TYPE"] == "MONO").all():
             # handle repointed-stereo-observation case: split by pairs of RMS
@@ -338,17 +338,18 @@ def scan_zcam_dir(
                 "warning: MONO and STEREO mixed in {}; could not be "
                 "clustered.".format(seq_id)
             )
+    hidden_things = []
     if rejected_bb_count > 0:
-        parser_warnings.append(
+        hidden_things.append(
             "({} files from broadband-only sequences hidden)"
                 .format(str(rejected_bb_count))
         )
     if rejected_cal_count > 0:
-        parser_warnings.append(
+        hidden_things.append(
             "({} files from caltarget observations hidden)"
                 .format(str(rejected_cal_count))
         )
-    return observations, parser_warnings
+    return observations, parser_warnings, hidden_things
 
 
 def bulk_scrape_metadata(iof_files: Iterable) -> list[dict]:

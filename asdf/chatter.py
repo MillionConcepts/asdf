@@ -237,7 +237,7 @@ def find_and_offer_observations(
     ask the user to confirm the observation if there is only one.
     """
     # TODO: some kind of exception handling for printing console statements
-    scan_results, scan_warnings = scan_zcam_dir(
+    scan_results, scan_warnings, hidden_things = scan_zcam_dir(
         explicit_path=explicit_path,
         directory=dir_from_abbrev,
         target_sol=sol_from_abbrev,
@@ -251,6 +251,10 @@ def find_and_offer_observations(
     if scan_warnings:
         for problem in scan_warnings:
             ASDF_CONSOLE.print(problem, style="dark_orange bold")
+        ASDF_CONSOLE.print("\n")
+    if hidden_things:
+        for category in hidden_things:
+            ASDF_CONSOLE.print(category, style="purple bold")
         ASDF_CONSOLE.print("\n")
     if len(scan_results) == 0:
         return None, False
