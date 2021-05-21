@@ -236,7 +236,7 @@ def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
             if len(metadata_sheet_values) == 0:
                 ASDF_CONSOLE.print(
                     "note: existing metadata sheet contains no content.",
-                    style="bold orange",
+                    style="bold dark_orange",
                 )
                 new_sheet = (
                     bandset.summary.copy()

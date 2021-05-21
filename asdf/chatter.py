@@ -184,9 +184,9 @@ def format_observation(extracted_observation):
         tailtext.append("repointed stereo")
     # TODO: this colorizing gets overwritten by the default table header style
     if constant_dict.get("COMPLETION") != "COMPLETE_CHECKSUM_PASS":
-        tailtext.append(", contains partials", style="orange")
+        tailtext.append(", contains partials", style="dark_orange")
     if constant_dict.get("THUMBNAIL") == "T":
-        tailtext.append(", thumbnails", style="orange")
+        tailtext.append(", thumbnails", style="dark_orange")
     headline_keys = ["SOL", "SEQ_ID", "SITE", "DRIVE"]
 
     headline = Text(
@@ -242,7 +242,7 @@ def find_and_offer_observations(
     if scan_warnings:
         for seq_id, problem in scan_warnings:
             ASDF_CONSOLE.print(
-                seq_id + " warning: " + problem, style="orange bold"
+                seq_id + " warning: " + problem, style="dark_orange bold"
             )
     if len(scan_results) == 0:
         return None, False
