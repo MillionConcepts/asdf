@@ -30,17 +30,14 @@ def do_pplot(
     non-interactive CLI to pretty-plot. generates .png files
     from pretty-plot's default settings, much like when pretty-plot
     is called by asdf.
-
     all marslab files need SOLAR_ELEVATION, SEQ_ID, and SOL or things
     will not work out.
-
     param path_or_file: marslab file or directory containing marslab files
     param recursive: runs pplot on all marslab files in directory tree,
         regardless of what specific file you passed it
     """
     # TODO, maybe: merge or something with handle_pretty_plot()
     path = Path(path_or_file)
-    plot_files = []
     if recursive:
         tree = OSFS(directory_of(path))
         marslab_files = map(

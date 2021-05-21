@@ -1,7 +1,7 @@
 """
 functions for actively scraping metadata from input files, web sources, etc.
 """
-
+from functools import cache
 import os
 import re
 from ast import literal_eval
@@ -10,13 +10,18 @@ from types import MappingProxyType
 from typing import Union, Mapping, Callable, Iterable
 from urllib.error import URLError
 
+from cytoolz.functoolz import juxt
+from cytoolz.itertoolz import partition
+
+import marslab.parse as mp
+from asdf.console import ASDF_CONSOLE
+from marslab.compat.xcam import piecewise_interpolate_focal_length
 import numpy as np
 import pandas as pd
-from cytoolz.curried import keyfilter
-from marslab.compat.xcam import piecewise_interpolate_focal_length
 
 from asdf.network import get_public_m20_waypoints
 import asdf.settings as settings
+
 
 METADATA_REGEX = MappingProxyType(
     {
@@ -25,16 +30,9 @@ METADATA_REGEX = MappingProxyType(
     }
 )
 
-# fields relevant to discrimination of pointings and enumeration of their
-# primary members
-POINTING_FIELDS = (
-    "MINI_HEADER",
-    "RMC",
-    "SEQ_ID",
-    "SOL",
-    "FILTER",
-    "COMPLETION",
-)
+# metadata necessary for to discrimination of observations and enumeration of
+# their members that cannot be derived from the filename
+AUX_FIELDS = ("MINI_HEADER", "RMC", "COMPLETION", "FRAME_TYPE", "LTST")
 
 # special-case block finder
 SUBFRAME_GROUP = re.compile(r"SUBFRAME.*?END", re.DOTALL)
@@ -42,11 +40,6 @@ SUBFRAME_GROUP = re.compile(r"SUBFRAME.*?END", re.DOTALL)
 # I don't really know if this is fixed, but I doubt we're ever
 # missing anything important if we skim this much off the top
 IOF_LABEL_BYTES = 35592
-
-# note: all these scrape functions could plausibly be sped up a little by
-# iterating line-by-line, applying them en bloc to each line, and popping
-# them out of the bloc once they match -- but this is probably not worth the
-# effort
 
 
 def make_scraper(label_text: str) -> Callable:
@@ -91,24 +84,35 @@ def scrape_subframe(label_text: str) -> tuple:
     )
 
 
-def scrape_sequence_dict(label: Union[Path, str]) -> dict:
+def aux_skim_header(label: Union[Path, str]) -> dict:
     """
-    scrape sequence-relevant information from an IOF file's attached
-    PDS3 header without parsing PVL
+    get auxiliary sequencing metadata from a ZCAM file's attached PDS3 header
     """
     label_text = get_label_text(label)
     # little closure for neatness
     scrape = make_scraper(label_text)
-    return {
+    skim = {
         field: scrape(pattern)
         for field, pattern in METADATA_REGEX.items()
-        if field in POINTING_FIELDS
+        if field in AUX_FIELDS
     }
+    skim["RMS"] = skim["RMC"][6]
+    return skim
+
+
+# cached version for faster operation on networked filesystems.
+cached_aux_skimmer = cache(aux_skim_header)
+
+
+# similar, slightly experimental
+@cache
+def scrape_from_file(label, pattern):
+    return make_scraper(get_label_text(label))(pattern)
 
 
 def scrape_asdf_metadata(label: Union[Path, str]) -> dict:
     """
-    grabs all the metadata from an IOF file that asdf cares about.
+    grabs all the metadata from an IOF header that asdf cares about.
     perhaps a little redundant.
     """
     label_text = get_label_text(label)
@@ -128,11 +132,13 @@ def scrape_asdf_metadata(label: Union[Path, str]) -> dict:
 def parse_pointing(sequence: Union[Mapping, pd.DataFrame]) -> dict:
     """
     basically a parsing rule: grab the subset of pointing-discriminating
-    fields from a dict of metadata. recall: pointings are equivalence
-    relations.
-    every product with these values for these fields is in a pointing. no
-    product that does not have these values for these fields is in that
-    pointing. every product is in the same pointing as itself.
+    fields from a dict of metadata. pointings are basically equivalence
+    relations: every product with these values for these fields
+    is in the same pointing, no product that does not have these
+    values for these fields is in that pointing. the relaxed "binocular"
+    version of this allows RMS to differ for for observations in which
+    the mast moves in the middle of a sequence to coregister eyes on the
+    same target.
     """
     row = sequence
     if isinstance(sequence, pd.DataFrame):
@@ -142,7 +148,7 @@ def parse_pointing(sequence: Union[Mapping, pd.DataFrame]) -> dict:
         "DRIVE": row["RMC"][1],
         "RMS": row["RMC"][6],
         "SOL": row["SOL"],
-        "SEQ_ID": row["SEQ_ID"],
+        "SEQ_ID": row["SEQ_ID"].lower(),  # TODO: does this break anything?
         "ZOOM": piecewise_interpolate_focal_length(row["MINI_HEADER"][2]),
     }
 
@@ -159,97 +165,156 @@ def make_pointing_name(pointing):
     return pointing_name
 
 
-def drop_mismatched_versions(sibling_df, base_version):
-    # these are absolute paths and not base names and we don't translate them
-    # here, so slicing backwards
-    version_ix = (-6, -4)
-    version_series = sibling_df["PATH"].str.slice(*version_ix).astype(int)
-    for filter_name in sibling_df["FILTER"].unique():
-        filter_slice = sibling_df.loc[sibling_df["FILTER"] == filter_name]
-        if len(filter_slice) == 1:
-            continue
-        version_slice = version_series[filter_slice.index]
-        if base_version in version_slice.values:
+def drop_mismatched_versions(siblings, base_version=None):
+    if len(siblings["VERSION"].unique()) == 1:
+        return siblings
+    if base_version is None:
+        base_version = siblings["VERSION"].max()
+    dupes = siblings.loc[siblings["FILTER"].duplicated(keep=False)]
+    for filter_name in dupes["FILTER"].unique():
+        filter_slice = siblings.loc[siblings["FILTER"] == filter_name]
+        if base_version in filter_slice["VERSION"].values:
             target_version = base_version
         else:
-            target_version = version_slice.max()
-        sibling_df.drop(
-            version_slice.loc[version_slice.values != target_version].index,
+            target_version = filter_slice["VERSION"].max()
+        siblings.drop(
+            filter_slice.loc[filter_slice["VERSION"] != target_version].index,
             inplace=True,
         )
-    return sibling_df
+    return siblings
 
 
-def find_iof_siblings(
-    path_to_iof: str, override_names=False, binocular=False
-) -> pd.DataFrame:
-    # TODO: make sure RMS propagates into extended even if binocular
-    base_iof = Path(path_to_iof)
-    # don't scrape thumbnails
-    # TODO: scrape thumbnails
-    if "IOF_N" not in base_iof.name:
-        if not override_names:
-            raise ValueError("This filename doesn't look like an IOF file's.")
-    # indices containing unique string for site, drive, seq_id -- we don't
-    # care about actually parsing it
-    sitedriveseq_ix = (28, 44)
-    # this generates an identifier that significantly narrows down
-    # potential 'pointings'
-    base_sitedriveseq = base_iof.name[slice(*sitedriveseq_ix)]
-    # matching version numbers is also desirable
-    version_ix = (52, 54)
-    base_version = int(base_iof.name[slice(*version_ix)])
-    # and then to fully specify
-    base_sequence_dict = scrape_sequence_dict(base_iof)
-    if base_sequence_dict.pop("COMPLETION") != "COMPLETE_CHECKSUM_PASS":
-        raise ValueError(
-            "asdf does not currently support partially-received images."
+def parse_zcam_fn(filename):
+    """use mp.parse rules to get basic file identifiers"""
+    parsers = {
+        "SOL": mp.sol,
+        "SITE": mp.site,
+        "DRIVE": mp.drive,
+        "SEQ_ID": mp.sequence,
+        "CTIME": mp.secondary_timestamp,
+        "ZOOM": mp.cam_specific,
+        "FILTER": mp.color_filter,
+        "VERSION": mp.version,
+        "PRODUCT_TYPE": mp.product_type,
+        "THUMBNAIL": mp.thumbnail,
+    }
+    values = list(juxt(*parsers.values())(filename))
+    # chop off currently not-used-as-specified stereo counter
+    values[5] = values[5][1:]
+    # just keep filter name, not SIS-nominal wavelength
+    values[6] = values[6][:2]
+    return {field: value for field, value in zip(parsers.keys(), values)}
+
+
+def skim_products(directory, aux_skimmer=cached_aux_skimmer):
+    products = tuple(
+        map(parse_zcam_fn, [path.name for path in directory.iterdir()])
+    )
+    products = pd.DataFrame(products)
+    products["PATH"] = [str(path) for path in directory.iterdir()]
+    products = (
+        pd.DataFrame(products).sort_values(by="CTIME").reset_index(drop=True)
+    )
+    return pd.concat(
+        (
+            products.drop("PATH", axis=1),
+            pd.DataFrame(products["PATH"].map(aux_skimmer).tolist()),
+            products["PATH"],
+        ),
+        axis=1,
+    )
+
+
+def scan_zcam_dir(
+    explicit_path: Union[str, Path] = "",
+    directory: Union[str, Path] = "",
+    target_sol: Union[int, str] = "",
+    target_seq_id: str = "",
+    verbose=True,
+):
+    if not (directory or explicit_path):
+        ASDF_CONSOLE.print(
+            "need an explicitly or implicitly-passed path to find files",
+            style="bold red",
         )
-    base_sequence_dict["PATH"] = str(path_to_iof)
-    base_pointing = parse_pointing(base_sequence_dict)
-    siblings = [base_sequence_dict]
-    for potential_sibling in base_iof.parent.iterdir():
-        if (potential_sibling.name == base_iof.name) or (
-            "IOF_N" not in potential_sibling.name
-        ):
-            continue
-        # does it have the same site, drive, seq?
-        if (
-            potential_sibling.name[slice(*sitedriveseq_ix)]
-            != base_sitedriveseq
-        ):
-            continue
-        # ok then actually look at the label
-        sequence_dict = scrape_sequence_dict(potential_sibling)
-        if sequence_dict.pop("COMPLETION") != "COMPLETE_CHECKSUM_PASS":
-            continue
-        pointing = parse_pointing(sequence_dict)
-        if binocular:
-            # permit co-registered binocular observations with different
-            # RMS to be defined as a single pointing
-            no_rms = keyfilter(lambda key: key != "RMS")
-            pointings_are_equal = no_rms(pointing) == no_rms(base_pointing)
+        raise ValueError("no path passed to scan_zcam_dir")
+    if explicit_path and not os.path.exists(explicit_path):
+        ASDF_CONSOLE.print(
+            explicit_path + " does not exist.", style="bold red"
+        )
+        raise ValueError(explicit_path + " does not exist.")
+    if explicit_path:
+        if Path(explicit_path).is_dir():
+            directory = Path(explicit_path)
+            target_file = None
         else:
-            pointings_are_equal = pointing == base_pointing
-        if pointings_are_equal:
-            # if it's cool save the info
-            sequence_dict["PATH"] = str(potential_sibling)
-            siblings.append(sequence_dict)
-    sibdf = pd.DataFrame(siblings)
-    # rectify version numbers
-    versioned = drop_mismatched_versions(sibdf, base_version)
-    if not any(versioned["FILTER"].duplicated()):
-        return versioned
-    # not a binocular observation after all, or something is wrong!
-    if binocular:
-        return find_iof_siblings(path_to_iof, override_names, binocular=False)
+            directory = Path(explicit_path).parent
+            target_file = explicit_path
     else:
-        raise ValueError(
-            "There are multiple pointings in this directory that, for whatever"
-            " reason, I can't distinguish. Try pulling the files you want to"
-            " use into another directory. If you passed an abbreviated path,"
-            " try passing a full path instead."
-        )
+        directory = Path(directory)
+        target_file = None
+    products = skim_products(directory)
+    # TODO, maybe: add handling for edge cases that may someday occur
+    #  in which site, drive, or zoom become distinguishing features
+    if target_sol:
+        products = products.loc[products["SOL"] == target_sol].copy()
+    if target_seq_id:
+        products = products.loc[products["SEQ_ID"] == target_seq_id].copy()
+    # TODO: decide whether to add this functionality back in
+    # if strict_stereo:
+    #     groups = products.groupby(["SOL", "SEQ_ID", "PRODUCT_TYPE", "RMS"])
+    # else:
+    groups = products.groupby(["SOL", "SEQ_ID", "PRODUCT_TYPE", "THUMBNAIL"])
+    base_version = None
+    observations = {}
+    parser_warnings = []
+    for group_ix, group in groups:
+        if target_file and (str(target_file) not in group["PATH"].values):
+            continue
+        sol, seq_id, product_type, thumb = group_ix
+        name = "_".join([format(sol, "0>4"), seq_id, product_type, thumb])
+        group = drop_mismatched_versions(group, base_version)
+        if not group["FILTER"].duplicated().any():
+            observations[name] = group
+            continue
+        # handle non-repointed-observation case: simply split by RMS
+        if (group["FRAME_TYPE"] == "STEREO").all():
+            rmsgroups = group.groupby(["RMS"])
+            for rms, rmsgroup in rmsgroups:
+                if not rmsgroup["FILTER"].duplicated().any():
+                    observations[name + "_RMS" + str(rms)] = rmsgroup
+                else:
+                    parser_warnings.append(
+                        (group["SEQ_ID"].iloc[0], "unknown issue")
+                    )
+        elif (group["FRAME_TYPE"] == "MONO").all():
+            # handle repointed-stereo-observation case: split by pairs of RMS
+            # TODO: this will currently crash if all filters from a single eye
+            #  are missing
+            if len(group["RMS"].unique()) % 2 != 0:
+                parser_warnings.append(
+                    (
+                        seq_id,
+                        "appears to involve a complex mast movement pattern I "
+                        "cannot interpret.",
+                    )
+                )
+            for repoint in partition(2, group["RMS"].unique()):
+                observation = group.loc[group["RMS"].isin(repoint)]
+                if not observation["FILTER"].duplicated().any():
+                    observations[name + "_RMS" + str(repoint[0])] = observation
+                else:
+                    parser_warnings.append(
+                        (
+                            seq_id,
+                            "unknown RMS windowing issue",
+                        )
+                    )
+        else:
+            parser_warnings.append(
+                (seq_id, "MONO and STEREO mixed in sequence")
+            )
+    return observations, parser_warnings
 
 
 def bulk_scrape_metadata(iof_files: Iterable) -> list[dict]:
@@ -263,22 +328,10 @@ def bulk_scrape_metadata(iof_files: Iterable) -> list[dict]:
     return metaframe
 
 
-def check_and_drop_duplicate_columns(dataframe):
-    extra_columns = dataframe.columns[dataframe.columns.duplicated()]
-    if len(extra_columns) == 0:
-        return dataframe
-    for column in extra_columns:
-        test_equality = (
-            dataframe.loc[:, column] == dataframe.loc[:, column].iloc[0, 0]
-        )
-        assert test_equality.all(axis=None)
-    return dataframe.loc[:, ~dataframe.columns.duplicated()]
-
-
-def melt_metadata(metadata: pd.DataFrame) -> pd.DataFrame:
+def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
     """
-    unpivot a metadata frame by FILTER, for appending per-file metadata to the
-    extended marslab format
+    unpivot a metadata frame by key (default BAND), for appending per-file
+    metadata to the extended marslab format
     """
     unchanging_columns = (
         "SOL",
@@ -293,23 +346,16 @@ def melt_metadata(metadata: pd.DataFrame) -> pd.DataFrame:
     uc_here = [col for col in unchanging_columns if col in metadata.columns]
     unchanging_block = metadata.reindex(columns=uc_here)
     melted = metadata.drop(columns=uc_here)
-    melted = melted.melt("FILTER").T
-    melted.columns = melted.loc["FILTER"] + "_" + melted.loc["variable"]
+    melted = melted.melt(unpivot).T
+    melted.columns = melted.loc[unpivot] + "_" + melted.loc["variable"]
     melted = (
-        melted.drop(["FILTER", "variable"])
+        melted.drop([unpivot, "variable"])
         .reset_index(drop=True)
         .sort_index(axis=1)
     )
     return pd.DataFrame(
         pd.concat([unchanging_block.loc[0], melted.loc[0]], axis=0)
     ).T
-
-
-def dupe_df_block(dataframe, rows_to_repeat):
-    return pd.DataFrame(
-        np.repeat(dataframe.values, rows_to_repeat, axis=0),
-        columns=dataframe.columns,
-    )
 
 
 def matching_waypoints(site, drive, m20_waypoint_dict):
@@ -384,17 +430,13 @@ def add_effective_taus(metadata):
         return metadata
     stringified_taus = []
     for taufile in metadata["TAU_ESTIMATE_FILENAME"]:
-        if not os.path.exists(settings.sources.EFFECTIVE_TAU_PATH + taufile):
+        taupath = settings.sources.EFFECTIVE_TAU_PATH + taufile
+        if not os.path.exists(taupath):
             stringified_taus.append(np.nan)
         else:
             stringified_taus.append(
                 ",".join(
-                    pd.read_csv(
-                        settings.sources.EFFECTIVE_TAU_PATH + taufile,
-                        header=None,
-                    )
-                    .values[0]
-                    .astype(str)
+                    pd.read_csv(taupath, header=None).values[0].astype(str)
                 )
             )
     if len(pd.Series(stringified_taus).dropna()) == 0:

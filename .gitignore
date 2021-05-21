@@ -150,8 +150,8 @@ test_output/
 examples/
 /rapidlooks.ipynb
 /asdf_bulk.py
-/*scratch.ipynb
-/*scratch.py
+*scratch.ipynb
+*scratch.py
+
 # deployment
 vendor/
-env/

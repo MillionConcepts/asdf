@@ -11,19 +11,29 @@ from marslab.compat.xcam import make_xcam_filter_dict
 
 
 # fields we want to ask the user about at each ROI.
-ROI_METADATA_FIELDS = ("FLOAT", "FEATURE", "FORMATION", "MEMBER")
+ROI_METADATA_FIELDS = (
+    "FLOAT",
+    "FEATURE",
+    "MORPHOLOGY",
+    "SCAM",
+    "TARGET",
+    "DISTANCE",
+    "LOCATION",
+    "WORKSPACE",
+)
 
 # fields we put in the 'compact' marslab file. metadata fields are
 # explicitly listed for easy modification; the *list(chain.from_iterable(...
-# statement at the bottom adds the data fields based on our ZCAM instrument
+# statement near the bottom adds the data fields based on our ZCAM instrument
 # definition in marslab.compat.xcam.
 COMPACT_ZCAM_MARSLAB_FIELDS = (
     "NAME",
     "COLOR",
     "SOL",
+    "SEQ_ID",
+    *ROI_METADATA_FIELDS,
     "SITE",
     "DRIVE",
-    "SEQ_ID",
     "RMS",
     "ZOOM",
     "L_S",
@@ -51,34 +61,34 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     ),
 )
 
-# metadata fields we want in the summary spreadsheet.
-# TODO: this is somewhat redundant with column-checking in the upload
-#  functions. assess.
-SUMMARY_COLUMNS = (
-    "NAME",
-    "SOL",
-    "SEQ_ID",
-    "SCLK",
-    "LMST",
-    "LTST",
-    "SOLAR_ELEVATION",
-    "INCIDENCE_ANGLE",
-    "INCIDENCE_AZIMUTH",
-    "EMISSION_ANGLE",
-    "EMISSION_AZIMUTH",
-    "PHASE_ANGLE",
-    "L_S",
-    "SITE",
-    "DRIVE",
-    "LAT",
-    "LON",
-    "ROVER_ELEVATION",
-    "ODOMETRY",
-    "ZOOM",
-    "CREATOR",
-    "FILE_TIMESTAMP",
-    "COMPRESSION",
-)
+# # metadata fields we want in the summary spreadsheet.
+# # TODO: this is somewhat redundant with column-checking in the upload
+# #  functions. assess.
+# SUMMARY_COLUMNS = (
+#     "NAME",
+#     "SOL",
+#     "SEQ_ID",
+#     "SCLK",
+#     "LMST",
+#     "LTST",
+#     "SOLAR_ELEVATION",
+#     "INCIDENCE_ANGLE",
+#     "INCIDENCE_AZIMUTH",
+#     "EMISSION_ANGLE",
+#     "EMISSION_AZIMUTH",
+#     "PHASE_ANGLE",
+#     "L_S",
+#     "SITE",
+#     "DRIVE",
+#     "LAT",
+#     "LON",
+#     "ROVER_ELEVATION",
+#     "ODOMETRY",
+#     "ZOOM",
+#     "CREATOR",
+#     "FILE_TIMESTAMP",
+#     "COMPRESSION",
+# )
 
 
 # regexes for yoinking label data from attached file headers without parsing
@@ -88,6 +98,7 @@ IOF_METADATA_REGEX_STRINGS = MappingProxyType(
         # the zoom motor count seems to be given several places in the label --
         # but the malin mini header line has other interesting contents
         "MINI_HEADER": r"(?<=ARTICULATION_DEV_POSITION ).*(\(.*\))",
+        "FRAME_TYPE": r"(?<=FRAME_TYPE ).*?(\w+)",
         "RMC": r"(?<=ROVER_MOTION_COUNTER ).*(\(.*\))",
         "SEQ_ID": r"(?<=SEQUENCE_ID).*(zcam\d+)",
         "SOL": r"(?<=PLANET_DAY_NUMBER).*?(\d+)",
@@ -111,3 +122,15 @@ IOF_METADATA_REGEX_STRINGS = MappingProxyType(
         "INSTRUMENT_AZIMUTH": r"(?<=INSTRUMENT_AZIMUTH ).*?([\d\.]+)",
     }
 )
+
+metadata_dtypes = {
+    "SOL": "int16",
+    "WAVELENGTH": "float16",
+    "IX": "uint8",
+    "SOLAR_ELEVATION": "float32",
+    "INSTRUMENT_ELEVATION": "float32",
+    "L_S": "float32",
+    "INSTRUMENT_AZIMUTH": "float32",
+    "SOLAR_AZIMUTH": "float32",
+    "SCLK": "float64",
+}
