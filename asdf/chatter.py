@@ -213,10 +213,10 @@ def extract_scan_constants(observations):
 
 def reject_scan():
     ASDF_CONSOLE.print(
-        "\nhalting due to user rejection of file list. If you passed an "
-        "abbreviated path, try passing a full path instead. If all else "
-        "fails, try copying the files you want to work with into a separate "
-        "directory.",
+        "\nhalting due to user rejection of file list. If you didn't see the"
+        "products you wanted and you passed an abbreviated path, try passing "
+        "a full path instead. If all else fails, try copying the files you "
+        "want to work with into a separate directory.",
         style="red bold",
     )
     return None, False
