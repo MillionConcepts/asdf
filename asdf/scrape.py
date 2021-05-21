@@ -207,6 +207,7 @@ def parse_zcam_fn(filename):
 
 
 def skim_products(directory, aux_skimmer=cached_aux_skimmer):
+
     products = tuple(
         map(parse_zcam_fn, [path.name for path in directory.iterdir()])
     )
@@ -240,9 +241,9 @@ def scan_zcam_dir(
         raise ValueError("no path passed to scan_zcam_dir")
     if explicit_path and not os.path.exists(explicit_path):
         ASDF_CONSOLE.print(
-            str(explicit_path) + " does not exist.", style="bold red"
+            "sorry, " + str(explicit_path) + " does not exist.", style="bold red"
         )
-        raise ValueError(str(explicit_path) + " does not exist.")
+        return None, None
     if explicit_path:
         if Path(explicit_path).is_dir():
             directory = Path(explicit_path)
@@ -253,6 +254,11 @@ def scan_zcam_dir(
     else:
         directory = Path(directory)
         target_file = None
+    if not directory.exists():
+        ASDF_CONSOLE.print(
+            "sorry, " + str(directory) + " does not exist.", style="bold red"
+        )
+        return None, None
     products = skim_products(directory)
     # TODO, maybe: add handling for edge cases that may someday occur
     #  in which site, drive, or zoom become distinguishing features

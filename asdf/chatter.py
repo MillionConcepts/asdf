@@ -232,9 +232,12 @@ def find_and_offer_observations(
     console; ask the user to select a observation if there is more than one;
     ask the user to confirm the observation if there is only one.
     """
+    # TODO: some kind of exception handling for printing console statements
     scan_results, scan_warnings = scan_zcam_dir(
         explicit_path, dir_from_abbrev, sol_from_abbrev, seq_id_from_abbrev
     )
+    if scan_results is None:
+        return None, False
     print_scan(scan_results)
     if scan_warnings:
         for seq_id, problem in scan_warnings:
