@@ -9,8 +9,8 @@ from pathlib import Path
 
 from cytoolz.curried import keyfilter
 import matplotlib as mpl
-
 from marslab.compat.mertools import merspect_to_marslab
+from rich.rule import Rule
 
 import asdf.settings as settings
 from asdf.asdf_utils import catch_interaction, null_marslab_data_section
@@ -50,7 +50,8 @@ def asdf_body(
     else:
         roi_path = None
     # ok? great. initialize BandSet object from these paths
-    console.print("... scraping default metadata ...")
+    console.print(Rule(" gathering metadata "))
+    console.print("... scraping file headers ...")
     bandset = ZcamBandSet(
         observation, roi_path, suffix, threads=settings.process.THREADS
     )
@@ -77,7 +78,7 @@ def asdf_body(
     # otherwise, preload images to share I/O and for convenience.
     # this is wasteful in the case if are images that are used
     # by no rapidlook or ROI (but not very wasteful, and this is rare).
-    console.print("... loading images ...")
+    console.print(Rule(" loading images "))
     if (we_do_not_have_rois is False) or (not skip_rapidlooks):
         with console.status("", spinner="star"):
             with warnings.catch_warnings():
@@ -90,11 +91,13 @@ def asdf_body(
     # .fits, load it; if it's already FITS, load it
     roi_fits_fn = None
     if we_do_not_have_rois is False:
+        console.print(Rule(" gathering ROI data "))
         # suffix goes on this filename as it is 'analysis' - specific
         roi_fits_fn = bandset.load_rois(
             bandset.name + bandset.suffix, outpath, convert=True
         )
         if merspect is None:
+            console.print("... counting ROIs ...")
             marslab_data = bandset.count_rois()
             marslab_data["ROI_SOURCE"] = Path(roi_fits_fn).name
         else:
@@ -110,9 +113,12 @@ def asdf_body(
         # prompt users for info on each ROI
         marslab_data = input_roi_metadata(marslab_data, ci)
     else:
-        console.print("No ROI file passed; using null values for data.")
+        console.print(
+            "No ROI file passed; using null values for data.",
+            style="dark_orange"
+        )
         marslab_data = null_marslab_data_section()
-    console.print("... writing data files ...")
+    console.print(Rule(" writing data files "))
     bandset.counts = marslab_data
     # glom all the data and metadata together into our three output formats;
     bandset.format_metadata()
@@ -134,7 +140,7 @@ def asdf_body(
     )
     # generate rapidlooks
     if not skip_rapidlooks:
-        console.print("... generating rapidlooks ...")
+        console.print(Rule(" generating rapidlooks "))
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task(
                 "",
@@ -147,7 +153,7 @@ def asdf_body(
                 bandset.make_look_set(settings.rapidlooks.DEFAULT_RAPIDLOOKS)
             prog.remove_task(ASDF_RPH.task_id)
 
-        console.print("... saving rapidlooks ...")
+        console.print(Rule(" saving rapidlooks "))
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task(
                 "",
@@ -169,6 +175,7 @@ def asdf_body(
 
     # handle metadata and thumbnail uploads
     if upload is True:
+        ASDF_CONSOLE.print(Rule(" uploading asdf outputs "))
         thumbnails = make_rapidlook_thumbnails(
             thumbnail_staging, settings.rapidlooks.THUMBNAIL_SIZE
         )
@@ -176,12 +183,12 @@ def asdf_body(
 
     # pretty-plot data if we've got it; just quit if we don't
     if we_do_not_have_rois:
-        console.print("... all done ... :star:", style="bold orchid1")
+        console.print(":star: ... all done ... :star:", style="bold orchid1")
         return
 
     pretty_plot_bandset(bandset, outpath)
 
-    console.print("... all done ... :star:", style="bold orchid1")
+    console.print(":star: ... all done ... :star:", style="bold orchid1")
 
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
@@ -225,8 +232,6 @@ def asdf_hello(
 
     """
     # find all associated files and ask the user about them
-    # find all associated files and ask the user about them
-
     console = ASDF_CONSOLE
 
     if abbreviate:

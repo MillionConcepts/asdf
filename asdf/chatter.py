@@ -72,7 +72,7 @@ def print_scan(scan):
         is_multiple = True
         ASDF_CONSOLE.print(
             "found {} observations (ordered by seq_id / "
-            "chronologically within seq_ids):".format(len(scan))
+            "chronologically within seq_ids):".format(len(scan)),
         )
     else:
         is_multiple = False

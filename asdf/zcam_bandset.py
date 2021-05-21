@@ -205,13 +205,13 @@ class ZcamBandSet(BandSet):
         dashify(self.extended).to_csv(extended_file, index=False)
         if verbose and (in_memory is False):
             ASDF_CONSOLE.print(
-                "Wrote extended-format marslab file: " + extended_file
+                "wrote extended-format marslab file: " + extended_file
             )
 
         dashify(self.compact).to_csv(metadata_file, index=False)
         if verbose and (in_memory is False):
             ASDF_CONSOLE.print(
-                "Wrote compact-format marslab file: " + metadata_file
+                "wrote compact-format marslab file: " + metadata_file
             )
         return metadata_file, extended_file
 

@@ -17,6 +17,7 @@ from botocore.exceptions import ClientError
 import gspread
 import io
 import pandas as pd
+from rich.rule import Rule
 
 from asdf.asdf_utils import itemize_numpy, obfuscated_name
 from asdf.console import ASDF_CONSOLE
@@ -218,7 +219,7 @@ def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
         "... backing up marslab & ROI files ...", spinner="star"
     ):
         backup_marslab_files(bandset, roi_fits_fn, s3_debug_prefix)
-    ASDF_CONSOLE.print("... marslab and ROI backup complete ...")
+    ASDF_CONSOLE.print("completed marslab and ROI backup")
     with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
         try:
             thumbnail_links = upload_thumbnails(
@@ -260,6 +261,7 @@ def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
                     row_df.apply(itemize_numpy).tolist(),
                     value_input_option="USER_ENTERED",
                 )
+            ASDF_CONSOLE.print("completed metadata sheet update")
         except gspread.exceptions.APIError as api_error:
             ASDF_CONSOLE.print(
                 "Sorry, couldn't update online metadata: " + str(api_error),

@@ -5,10 +5,9 @@ import logging
 
 from rich.highlighter import RegexHighlighter
 from rich.theme import Theme
-
-from marslab.imgops.bandset import log as bandlog
 from rich.console import Console
 from rich.progress import Progress
+from rich.spinner import Spinner
 
 
 class RichProgressHandler(logging.Handler):
@@ -40,7 +39,7 @@ class ASDFGH(RegexHighlighter):
     base_style = "ASDF."
     highlights = [
         r"(?P<prep>(loaded|generated))",
-        r"(?P<output>(wrote))",
+        r"(?P<output>(wrote|completed))",
         r"(?<=[Z _])(?P<id>[R|L]\d[RGB]?)",
         r"(?P<id>(zcam|ZCAM)\d\d\d\d\d)",
     ]
@@ -59,6 +58,3 @@ ASDF_CONSOLE = Console(highlighter=ASDFGH(), theme=ASDFTH)
 ASDF_PROGRESS = Progress(console=ASDF_CONSOLE)
 ASDF_RPH = RichProgressHandler(prog=ASDF_PROGRESS)
 ASDFLOG = logging.getLogger(__name__)
-for log in (bandlog, ASDFLOG):
-    log.setLevel(logging.INFO)
-    log.addHandler(ASDF_RPH)

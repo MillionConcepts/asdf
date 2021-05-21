@@ -11,6 +11,7 @@ from pathos.multiprocessing import ProcessingPool
 import matplotlib.figure
 from clize import UserError
 from cytoolz import valfilter
+from rich.rule import Rule
 
 import asdf.settings as settings
 import pplot
@@ -173,11 +174,10 @@ def make_rapidlook_thumbnails(rapidlooks, size):
 
 
 def pretty_plot_bandset(bandset, outpath):
-    ASDF_CONSOLE.print("... pretty-plotting data ...")
+    ASDF_CONSOLE.print(Rule(" pretty-plotting data "))
     plot_fn = str(
         Path(outpath, bandset.name + bandset.suffix + "-pretty-plot.png")
     )
-    ASDF_CONSOLE.print("Writing " + plot_fn)
     from pplot.convert import scale_eyes
 
     target_name = ""
@@ -195,3 +195,5 @@ def pretty_plot_bandset(bandset, outpath):
             plot_fn=plot_fn,
             underplot=None,
         )
+    ASDF_CONSOLE.print("wrote " + Path(plot_fn).name)
+
