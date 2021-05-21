@@ -128,6 +128,7 @@ def handle_abbreviation(
     filetype=None,
     noninteractive=False,
     keep_broadband=False,
+        debug=False
 ):
     sol_path = format(int(sol), "0>4")
     # default path root and subdirectory, which can be overridden
