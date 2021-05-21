@@ -53,7 +53,7 @@ class M20CameraHighlighter(Highlighter):
             if section in ("sol", "stime"):
                 text.stylize("green", *slice_ix)
             elif section in ("sequence", "filter"):
-                text.stylize("bold turquoise2", *slice_ix)
+                text.stylize("bold dark_turquoise", *slice_ix)
             elif section == "thumbnail":
                 text.stylize("yellow", *slice_ix)
             elif section == "ptype":

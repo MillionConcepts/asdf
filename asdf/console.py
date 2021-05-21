@@ -42,7 +42,7 @@ class ASDFGH(RegexHighlighter):
         r"(?<=[Z _])(?P<id>[R|L]\d[RGB]?)", r"(?P<id>(zcam|ZCAM)\d\d\d\d\d)"
     ]
 
-ASDFTH = Theme({"ASDF.good": "sea_green2", "ASDF.id": "turquoise2"})
+ASDFTH = Theme({"ASDF.good": "green1", "ASDF.id": "dark_turquoise"})
 
 # set up ```rich``` objects for formatting
 ASDF_CONSOLE = Console(highlighter=ASDFGH(), theme=ASDFTH)
