@@ -1,4 +1,5 @@
 from copy import deepcopy
+from itertools import chain
 
 import cv2
 import matplotlib.font_manager as mplf
@@ -289,10 +290,17 @@ DEFAULT_CROP = {
 for look in DEFAULT_RAPIDLOOKS:
     DEFAULT_RAPIDLOOKS[look] |= DEFAULT_CROP
 
+# interleaving the hard parts for more efficient loading
+# TODO: maybe don't do this
+drk = list(DEFAULT_RAPIDLOOKS.keys())
+onetwothree = (drk[0:-1:3], drk[1:-1:3], drk[2:-1:3])
+DEFAULT_RAPIDLOOKS = {
+    key: DEFAULT_RAPIDLOOKS[key] for key in chain.from_iterable(onetwothree)
+}
 
 CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
 
-THUMBNAIL_THESE_RAPIDLOOKS = (
+THUMBNAIL_THESE = (
     "enhanced color L2_L5_L6",
     "dcs L2_L5_L6",
     "enhanced color R0R_R0G_R0B",
@@ -301,3 +309,4 @@ THUMBNAIL_THESE_RAPIDLOOKS = (
     "dcs R0R_R0G_R0B",
 )
 THUMBNAIL_SIZE = (240, 330)
+

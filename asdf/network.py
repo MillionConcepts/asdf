@@ -19,6 +19,7 @@ import io
 import pandas as pd
 
 from asdf.asdf_utils import itemize_numpy, obfuscated_name
+from asdf.console import ASDF_CONSOLE
 import asdf.settings as settings
 
 
@@ -150,7 +151,6 @@ def bind_asdf_bucket() -> Callable[Any, str]:
 
 
 def backup_marslab_files(bandset, roi_fits_fn, debug_prefix=""):
-    print("backing up marslab & ROI files.")
     upload = bind_asdf_bucket()
     epoch = str(round(time.time()))
     s3_prefix = "marslab/" + debug_prefix + epoch + "_" + os.getlogin() + "_"
@@ -173,13 +173,16 @@ def backup_marslab_files(bandset, roi_fits_fn, debug_prefix=""):
         try:
             upload(obj, key)
         except ClientError as error:
-            print("sorry, couldn't upload a backup file: " + str(error))
+            ASDF_CONSOLE.print(
+                "sorry, couldn't upload a backup file: " + str(error),
+                style="bold red",
+            )
 
 
 def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
     if not thumbnails:
         return {}
-    print("uploading thumbnails.")
+    ASDF_CONSOLE.print("... uploading thumbnails ...")
     upload = bind_asdf_bucket()
     bucket_url = (
         "https://" + settings.sources.BACKUP_BUCKET + ".s3.amazonaws.com/"
@@ -195,7 +198,10 @@ def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
             upload(image_buffer, key)
             links[name] = bucket_url + key
         except ClientError as error:
-            print("sorry, couldn't upload thumb " + name + " " + str(error))
+            ASDF_CONSOLE.print(
+                "sorry, couldn't upload thumb " + name + " " + str(error),
+                style="bold red",
+            )
     return links
 
 
@@ -208,39 +214,54 @@ def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
         sheet_id = settings.sources.GOOGLE_SHEET_ID
         folder_id = settings.sources.METADATA_BACKUP_FOLDER_ID
         s3_debug_prefix = ""
-    backup_marslab_files(bandset, roi_fits_fn, s3_debug_prefix)
-    try:
-        thumbnail_links = upload_thumbnails(
-            thumbnails, bandset.name, s3_debug_prefix
-        )
-        if thumbnail_links:
-            for name, link in thumbnail_links.items():
-                bandset.summary[name] = '=IMAGE("' + link + '")'
-        sheetbot = gspread.service_account(
-            settings.sources.GOOGLE_CLIENT_SECRETS_FILE
-        )
-        metadata_sheet = sheetbot.open_by_key(sheet_id).worksheets()[0]
-        metadata_sheet_values = metadata_sheet.get_all_values()
-        if len(metadata_sheet_values) == 0:
-            print("note: existing metadata sheet contains no content")
-            new_sheet = (
-                bandset.summary.copy().T.applymap(itemize_numpy).fillna("-")
+    with ASDF_CONSOLE.status(
+        "... backing up marslab & ROI files ...", spinner="star"
+    ):
+        backup_marslab_files(bandset, roi_fits_fn, s3_debug_prefix)
+    ASDF_CONSOLE.print("... marslab and ROI backup complete ...")
+    with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
+        try:
+            thumbnail_links = upload_thumbnails(
+                thumbnails, bandset.name, s3_debug_prefix
             )
-            post_google_sheet(new_sheet, sheet_id, sheetbot)
-        else:
-            print("saving backup sheet")
-            # TODO: when gspread implements this, replace it with .copy()
-            backup = sheetbot.create(
-                title="metadata backup " + dt.datetime.utcnow().isoformat(),
-                folder_id=folder_id,
+            if thumbnail_links:
+                for name, link in thumbnail_links.items():
+                    bandset.summary[name] = '=IMAGE("' + link + '")'
+            sheetbot = gspread.service_account(
+                settings.sources.GOOGLE_CLIENT_SECRETS_FILE
             )
-            backup.worksheets()[0].update(metadata_sheet_values)
-            print("posting new metadata")
-            columns = metadata_sheet_values[0]
-            row_df = bandset.summary.reindex(columns).fillna("-")
-            metadata_sheet.append_row(
-                row_df.apply(itemize_numpy).tolist(),
-                value_input_option="USER_ENTERED",
+            ASDF_CONSOLE.print("... opening metadata sheet ...")
+            metadata_sheet = sheetbot.open_by_key(sheet_id).worksheets()[0]
+            metadata_sheet_values = metadata_sheet.get_all_values()
+            if len(metadata_sheet_values) == 0:
+                ASDF_CONSOLE.print(
+                    "note: existing metadata sheet contains no content.",
+                    style="bold orange",
+                )
+                new_sheet = (
+                    bandset.summary.copy()
+                    .T.applymap(itemize_numpy)
+                    .fillna("-")
+                )
+                post_google_sheet(new_sheet, sheet_id, sheetbot)
+            else:
+                ASDF_CONSOLE.print("... backing up metadata sheet ...")
+                # TODO: when gspread implements this, replace it with .copy()
+                backup = sheetbot.create(
+                    title="metadata backup "
+                    + dt.datetime.utcnow().isoformat(),
+                    folder_id=folder_id,
+                )
+                backup.worksheets()[0].update(metadata_sheet_values)
+                ASDF_CONSOLE.print("... posting new metadata ...")
+                columns = metadata_sheet_values[0]
+                row_df = bandset.summary.reindex(columns).fillna("-")
+                metadata_sheet.append_row(
+                    row_df.apply(itemize_numpy).tolist(),
+                    value_input_option="USER_ENTERED",
+                )
+        except gspread.exceptions.APIError as api_error:
+            ASDF_CONSOLE.print(
+                "Sorry, couldn't update online metadata: " + str(api_error),
+                color="bold red",
             )
-    except gspread.exceptions.APIError as api_error:
-        print("Couldn't update online metadata: " + str(api_error))

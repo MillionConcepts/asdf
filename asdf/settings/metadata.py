@@ -30,9 +30,10 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "NAME",
     "COLOR",
     "SOL",
+    "SEQ_ID",
+    *ROI_METADATA_FIELDS,
     "SITE",
     "DRIVE",
-    "SEQ_ID",
     "RMS",
     "ZOOM",
     "L_S",
@@ -58,7 +59,6 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
             ]
         )
     ),
-    *ROI_METADATA_FIELDS,
 )
 
 # # metadata fields we want in the summary spreadsheet.
@@ -98,6 +98,7 @@ IOF_METADATA_REGEX_STRINGS = MappingProxyType(
         # the zoom motor count seems to be given several places in the label --
         # but the malin mini header line has other interesting contents
         "MINI_HEADER": r"(?<=ARTICULATION_DEV_POSITION ).*(\(.*\))",
+        "FRAME_TYPE": r"(?<=FRAME_TYPE ).*?(\w+)",
         "RMC": r"(?<=ROVER_MOTION_COUNTER ).*(\(.*\))",
         "SEQ_ID": r"(?<=SEQUENCE_ID).*(zcam\d+)",
         "SOL": r"(?<=PLANET_DAY_NUMBER).*?(\d+)",

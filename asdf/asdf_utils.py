@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from astropy.io import fits
 
-from marslab.compat.mertools import is_sel_file, sel_to_roi
+from marslab.compat.sel_to_roi import is_sel_file, sel_to_roi
 
 
 def dashify(df):
@@ -54,8 +54,7 @@ def add_ref_to_roi(pointing_name, roi_fits):
 
 
 def load_roi_file(
-        roi_path, title="", outpath=None, extension="-roi.fits",
-        convert=True
+    roi_path, title="", outpath=None, extension="-roi.fits", convert=True
 ):
     # if passed ROI file is a SEL, convert to marslab FITS
     if is_sel_file(roi_path):
@@ -90,3 +89,12 @@ def check_and_drop_duplicate_columns(dataframe):
         )
         assert test_equality.all(axis=None)
     return dataframe.loc[:, ~dataframe.columns.duplicated()]
+
+
+def extract_constants(df, to_dict=True):
+    constant_columns = df.nunique() == 1
+    constants = df.loc[:, constant_columns]
+    variables = df.loc[:, ~constant_columns]
+    if to_dict:
+        return constants.iloc[0].to_dict(), variables
+    return constants, variables

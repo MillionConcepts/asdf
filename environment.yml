@@ -22,6 +22,7 @@ dependencies:
   - gspread
   - boto3
   - pathos
+  - rich
   - pip:
       - git+https://github.com/MillionConcepts/pdr.git
       - git+https://github.com/MillionConcepts/marslab.git

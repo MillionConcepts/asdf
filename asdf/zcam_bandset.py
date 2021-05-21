@@ -4,9 +4,12 @@ from functools import partial
 from pathlib import Path
 
 from cytoolz import keyfilter
+
+from asdf.console import ASDF_CONSOLE
 from marslab.imgops.bandset import BandSet
 from marslab.imgops.debayer import RGGB_PATTERN
-from marslab.imgops.loaders import rasterio_load_scaled
+from marslab.imgops.imgutils import normalize_range
+from marslab.imgops.loaders import rasterio_load
 from marslab.imgops.regions import make_roi_edgemaps, draw_edgemaps_on_image
 
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
@@ -80,9 +83,9 @@ def setup_zcam_bandset_metadata(metadata):
 class ZcamBandSet(BandSet):
     def __init__(self, pointing, rois, suffix="", threads=None):
         files = setup_zcam_bandset_metadata(pointing)
-        load_method = partial(rasterio_load_scaled, preserve_constants=[0])
+        load_method = partial(rasterio_load, preserve_constants=[0])
         bayer_info = {"pattern": RGGB_PATTERN}
-        super(ZcamBandSet, self).__init__(
+        super().__init__(
             metadata=files,
             load_method=load_method,
             bayer_info=bayer_info,
@@ -133,7 +136,7 @@ class ZcamBandSet(BandSet):
 
     def load_rois(self, title=None, outpath=None, convert=False):
         if self.rois is None:
-            print("No ROI data loaded.")
+            ASDF_CONSOLE.print("No ROI data loaded.")
             return ""
         if title is None:
             title = self.name
@@ -145,7 +148,7 @@ class ZcamBandSet(BandSet):
 
     def count_rois(self):
         if self.rois is None:
-            print("No ROI data loaded.")
+            ASDF_CONSOLE.print("No ROI data loaded.")
             return ""
         if isinstance(self.rois, (str, Path)):
             self.load_rois()
@@ -200,20 +203,28 @@ class ZcamBandSet(BandSet):
             metadata_file = io.BytesIO()
             extended_file = io.BytesIO()
         if verbose and (in_memory is not False):
-            print("Writing extended-format marslab file: " + extended_file)
+            ASDF_CONSOLE.print(
+                "Writing extended-format marslab file: " + extended_file
+            )
 
         dashify(self.extended).to_csv(extended_file, index=False)
         if verbose and (in_memory is not False):
-            print("Writing compact-format marslab file: " + metadata_file)
+            ASDF_CONSOLE.print(
+                "Writing compact-format marslab file: " + metadata_file
+            )
         dashify(self.compact).to_csv(metadata_file, index=False)
         return metadata_file, extended_file
 
     def draw_context(self, edgemaps, eye):
         inst = {
-            "look": "true color",
             "name": "context image " + eye,
             "no_band_names": True,
-            "options": {"special_constants": [0], "normalize": (0, 1, 0, 0.1)},
+            "look": "composite",
+            "params": {"special_constants": [0]},
+            "limiter": {
+                "function": normalize_range,
+                "params": {"stretch": 0.1},
+            },
         }
         initial = eye[0].upper()
         if initial + "0R" in self.metadata["BAND"].values:
@@ -234,7 +245,7 @@ class ZcamBandSet(BandSet):
     def make_context_images(self, verbose=False):
         # TODO: automatically try to count ROIs and stuff
         if verbose:
-            print("... making ROI context images ...")
+            ASDF_CONSOLE.print("... making ROI context images ...")
         edgemaps = make_roi_edgemaps(self.rois, calculate_centers=False)
         edgemaps = add_merspect_colors_to_edgemaps(edgemaps)
         for eye in ("left", "right"):

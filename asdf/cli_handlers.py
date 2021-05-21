@@ -2,12 +2,12 @@
 inline handling functions for runtime asdf workflow
 """
 import os
+
 import warnings
 from pathlib import Path
 
 import PIL.Image
 from pathos.multiprocessing import ProcessingPool
-
 import matplotlib.figure
 from clize import UserError
 from cytoolz import valfilter
@@ -15,13 +15,15 @@ from cytoolz import valfilter
 import asdf.settings as settings
 import pplot
 from asdf.asdf_utils import dashify
-from asdf.chatter import get_and_offer_pointing
+from asdf.chatter import find_and_offer_observations
+from asdf.console import ASDF_CONSOLE, ASDFLOG
 from asdf.scrape import (
     parse_pointing,
     add_effective_taus,
     add_public_waypoints_to_metadata,
 )
 from marslab.imgops.pltutils import get_mpl_image, set_label
+from marslab.imgops.poolutils import wait_for_it
 from marslab.imgops.render import make_thumbnail, simple_mpl_figure
 from marslab.imgops.imgutils import absolutely_destroy, eightbit
 
@@ -31,8 +33,9 @@ def collect_dispersed_metadata(metadata):
     handler function for asdf.cli that runs around to several distinct
     sources asking them for additional info prior to ROI evaluation
     """
+
     if settings.sources.USE_PUBLIC_WAYPOINTS:
-        print(
+        ASDF_CONSOLE.print(
             "... scraping localization information from public "
             "waypoints file ..."
         )
@@ -75,16 +78,15 @@ def save_plainly(_, look, filename, outpath):
     image.save(Path(outpath, filename))
 
 
-def annotate_and_save(annotation, look, filename, outpath, verbose):
+def annotate_and_save(annotation, look, filename, outpath):
     # TODO: decide if these annotation things should live on zcambandset --
     #  this is not urgent. I think _maybe_ they should be separate.
     if not isinstance(look, matplotlib.figure.Figure):
         look = simple_mpl_figure(look)
     set_label(look, annotation, fontproperties=settings.rapidlooks.TITLE_FONT)
-    if verbose:
-        print("writing " + filename)
     look.savefig(Path(outpath, filename), dpi=275)
     absolutely_destroy(look)
+    return 0
 
 
 def save_looks(bandset, outpath, prefix=None, threads=None, verbose=False):
@@ -93,8 +95,9 @@ def save_looks(bandset, outpath, prefix=None, threads=None, verbose=False):
     if prefix is None:
         prefix = bandset.name
     pool = None
+    results = {}
+    # TODO: dispatch these cases
     if threads is not None:
-        # pool = Pool(threads)
         pool = ProcessingPool(threads)
         pool.restart()
     for look_name, look in bandset.looks.items():
@@ -107,28 +110,27 @@ def save_looks(bandset, outpath, prefix=None, threads=None, verbose=False):
             )
         )
         if pool is None:
-            annotate_and_save(annotation, look, filename, outpath, verbose)
+            annotate_and_save(annotation, look, filename, outpath)
+            ASDFLOG.info("wrote " + filename)
             # TODO: add option to _not_ wrap in figures
         else:
-            pool.apipe(
-                annotate_and_save, annotation, look, filename, outpath, verbose
+            results[filename] = pool.apipe(
+                annotate_and_save, annotation, look, filename, outpath
             )
     if pool is not None:
-        pool.close()
-        pool.join()
+        wait_for_it(pool, results, ASDFLOG, "wrote ")
 
 
 def handle_abbreviation(
-    sol, seq_id, root=None, filetype=None, noninteractive=False, binocular=True
+    sol, seq_id, root=None, filetype=None, noninteractive=False
 ):
-    # TODO: clean this up and document it
     sol_path = format(int(sol), "0>4")
     # default path root and subdirectory, which can be overridden
     if root:
         try:
             path_root = settings.sources.PATH_ABBREVIATIONS[root]
         except KeyError:
-            raise UserError(
+            ASDF_CONSOLE.log(
                 "sorry, I don't know the abbreviation \""
                 + root
                 + '".  I know '
@@ -137,59 +139,23 @@ def handle_abbreviation(
                         '"' + key + '",'
                         for key in settings.sources.PATH_ABBREVIATIONS.keys()
                     ]
-                )
+                ), style = "bold red"
             )
+            return None, False
     else:
         path_root = list(settings.sources.PATH_ABBREVIATIONS.values())[0]
     if filetype:
         product_subdirectory = filetype
     else:
         product_subdirectory = settings.sources.DEFAULT_PRODUCT_SUBDIRECTORY
-    iof_search_path = Path(path_root, sol_path, product_subdirectory)
-    candidates = [
-        path for path in iof_search_path.iterdir() if seq_id in path.name
-    ]
-    if len(candidates) == 0:
-        raise UserError(
-            "Sorry, couldn't find a file with seq_id "
-            + seq_id
-            + " in "
-            + str(iof_search_path)
-        )
-    version_slice = slice(-6, -4)
-    versions = {path: int(path.name[version_slice]) for path in candidates}
-    latest_version = max(versions.values())
-    good_input = False
-    pointing = None
-    latest_candidates = iter(
-        valfilter(lambda key: int(key) == latest_version, versions)
+    directory = Path(path_root, sol_path, product_subdirectory)
+    return find_and_offer_observations(
+        None, directory, sol, seq_id
     )
-    while good_input is not True:
-        try:
-            iof_path = Path(next(latest_candidates))
-        except StopIteration:
-            latest_version -= 1
-            if latest_version <= 0:
-                raise UserError(
-                    "No pointings in this directory matching the requested "
-                    "seq_id appear usable."
-                )
-            latest_candidates = iter(
-                valfilter(lambda key: int(key) == latest_version, versions)
-            )
-            continue
-        try:
-            pointing = get_and_offer_pointing(
-                iof_path, noninteractive, binocular
-            )
-        except (UserError, ValueError):
-            continue
-        good_input = True
-    return pointing
 
 
 def make_rapidlook_thumbnails(rapidlooks, size):
-    print("making thumbnails (if necessary).")
+    ASDF_CONSOLE.print("... making thumbnails (if necessary) ...")
     thumbnails = {}
     for name, image in rapidlooks.items():
         thumbnails[name] = make_thumbnail(image, size)
@@ -197,11 +163,11 @@ def make_rapidlook_thumbnails(rapidlooks, size):
 
 
 def pretty_plot_bandset(bandset, outpath):
-    print("pretty-plotting data")
+    ASDF_CONSOLE.print("... pretty-plotting data ...")
     plot_fn = str(
         Path(outpath, bandset.name + bandset.suffix + "-pretty-plot.png")
     )
-    print("Writing " + plot_fn)
+    ASDF_CONSOLE.print("Writing " + plot_fn)
     from pplot.convert import scale_eyes
 
     target_name = ""
