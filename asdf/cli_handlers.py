@@ -149,6 +149,7 @@ def handle_abbreviation(
     else:
         product_subdirectory = settings.sources.DEFAULT_PRODUCT_SUBDIRECTORY
     directory = Path(path_root, sol_path, product_subdirectory)
+    seq_id = 'zcam' + str(seq_id)
     return find_and_offer_observations(
         None, directory, sol, seq_id
     )

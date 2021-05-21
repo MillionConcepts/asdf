@@ -242,9 +242,6 @@ def find_and_offer_observations(
                 seq_id + " warning: " + problem, style="orange bold"
             )
     if len(scan_results) == 0:
-        ASDF_CONSOLE.print(
-            "\nno usable observations found.\n", style="red bold"
-        )
         return None, False
     if noninteractive:
         if (len(scan_results) > 1) and (noninteractive != "a"):
