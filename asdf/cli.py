@@ -231,7 +231,10 @@ def asdf_hello(
 
     if abbreviate:
         observation, is_multiple = handle_abbreviation(
-            *path.split(","), noninteractive, keep_broadband
+            *path.split(","),
+            noninteractive=noninteractive,
+            debug=debug,
+            keep_broadband=keep_broadband
         )
     else:
         observation, is_multiple = wrapped_obs_get(
@@ -260,7 +263,7 @@ def asdf_hello(
             + str(len(observation))
             + " ... ",
             style="bold cyan1",
-            )
+        )
         asdf_body(
             obs,
             roi_path,
