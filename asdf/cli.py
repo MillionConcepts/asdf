@@ -168,6 +168,7 @@ def asdf_body(
 
     # make context images and write them out
     if bandset.rois:
+        ASDF_CONSOLE.print(Rule(" making ROI context images "))
         bandset.make_context_images(verbose=True)
         save_images(prefix=bandset.name + bandset.suffix)
         thumbnail_staging |= pick_thumbs(bandset.looks)
