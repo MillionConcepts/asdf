@@ -233,6 +233,7 @@ def scan_zcam_dir(
     target_seq_id: str = "",
     verbose=True,
     keep_broadband=False,
+    keep_caltarget=False
 ):
     if not (directory or explicit_path):
         ASDF_CONSOLE.print(
@@ -277,14 +278,26 @@ def scan_zcam_dir(
     observations = {}
     parser_warnings = []
     rejected_bb_count = 0
+    rejected_cal_count = 0
     for group_ix, group in groups:
+        sol, seq_id, product_type, thumb = group_ix
+
         if target_file and (target_file not in group["PATH"].values):
             continue
         if keep_broadband is False:
-            if group["FILTER"].isin(("L0", "R0")).all():
+            # TODO: this sequence id heuristic might be crappy
+            if (
+                    group["FILTER"].isin(("L0", "R0")).all() or
+                    (int(seq_id[4:]) > 5000)
+            ):
                 rejected_bb_count += len(group)
                 continue
-        sol, seq_id, product_type, thumb = group_ix
+
+        if keep_caltarget is False:
+            # TODO: this sequence id heuristic might be crappy
+            if int(seq_id[4:]) < 3100:
+                rejected_cal_count += len(group)
+                continue
         name = "_".join([format(sol, "0>4"), seq_id, product_type, thumb])
         group = drop_mismatched_versions(group, base_version)
         if not group["FILTER"].duplicated().any():
@@ -329,6 +342,11 @@ def scan_zcam_dir(
         parser_warnings.append(
             "({} files from broadband-only sequences hidden)"
                 .format(str(rejected_bb_count))
+        )
+    if rejected_cal_count > 0:
+        parser_warnings.append(
+            "({} files from caltarget observations hidden)"
+                .format(str(rejected_cal_count))
         )
     return observations, parser_warnings
 

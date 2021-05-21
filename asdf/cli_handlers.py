@@ -129,7 +129,8 @@ def handle_abbreviation(
     filetype=None,
     noninteractive=False,
     keep_broadband=False,
-        debug=False
+    keep_caltarget=False,
+    debug=False
 ):
     sol_path = format(int(sol), "0>4")
     # default path root and subdirectory, which can be overridden
@@ -162,6 +163,7 @@ def handle_abbreviation(
         sol_from_abbrev=sol,
         noninteractive=noninteractive,
         keep_broadband=keep_broadband,
+        keep_caltarget=keep_caltarget
     )
 
 

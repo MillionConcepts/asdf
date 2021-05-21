@@ -208,7 +208,8 @@ def asdf_hello(
     merspect: "m" = None,
     noninteractive: "n" = False,
     debug: "d" = False,
-    keep_broadband: "b" = False
+    keep_broadband: "b" = False,
+    keep_caltarget: "g" = False
 ):
     """
     processes and archives everything
@@ -230,6 +231,8 @@ def asdf_hello(
     :param debug: turn debug mode on
     :param keep_broadband: include frames from broadband-only sequences in
         searches
+    :param keep_caltarget: include frames from apparent caltarget observations
+        in searches
 
     """
     # find all associated files and ask the user about them
@@ -240,11 +243,12 @@ def asdf_hello(
             *path.split(","),
             noninteractive=noninteractive,
             debug=debug,
-            keep_broadband=keep_broadband
+            keep_broadband=keep_broadband,
+            keep_caltarget=keep_caltarget
         )
     else:
         observation, is_multiple = wrapped_obs_get(
-            Path(path), noninteractive, debug, keep_broadband
+            Path(path), noninteractive, debug, keep_broadband, keep_caltarget=keep_caltarget
         )
     if observation is None:
         return
