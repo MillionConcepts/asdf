@@ -175,12 +175,12 @@ def asdf_body(
 
     # pretty-plot data if we've got it; just quit if we don't
     if we_do_not_have_rois:
-        console.print("... all done ...", style="orchid1")
+        console.print("... all done ...", style="bold orchid1")
         return
 
     pretty_plot_bandset(bandset, outpath)
 
-    console.print("... all done ...", style="orchid1")
+    console.print("... all done ...", style="bold orchid1")
 
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
