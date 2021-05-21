@@ -99,8 +99,10 @@ def save_looks(bandset, outpath, prefix=None, threads=None, verbose=False):
     results = {}
     # TODO: dispatch these cases
     if threads is not None:
+        ASDFLOG.info('... initializing worker pool ...')
         pool = ProcessingPool(threads)
         pool.restart()
+        ASDFLOG.info("... serializing images ...")
     for look_name, look in bandset.looks.items():
         filename = prefix + " " + look_name + ".png"
         annotation = "\n".join(
