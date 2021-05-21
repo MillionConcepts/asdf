@@ -131,8 +131,8 @@ def handle_abbreviation(
             path_root = settings.sources.PATH_ABBREVIATIONS[root]
         except KeyError:
             ASDF_CONSOLE.log(
-                "sorry, I don't know the abbreviation \""
-                + root
+                "sorry, I don't know the abbreviation "
+                + str(root)
                 + '".  I know '
                 + " ".join(
                     [
@@ -149,7 +149,8 @@ def handle_abbreviation(
     else:
         product_subdirectory = settings.sources.DEFAULT_PRODUCT_SUBDIRECTORY
     directory = Path(path_root, sol_path, product_subdirectory)
-    seq_id = 'ZCAM' + str(seq_id)
+    if seq_id:
+        seq_id = 'ZCAM' + str(seq_id)
     return find_and_offer_observations(
         None, directory, sol, seq_id
     )

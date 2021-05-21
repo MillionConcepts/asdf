@@ -7,6 +7,7 @@ EFFECTIVE_TAU_PATH = "/project/m2020/gds/radcal/effective_taus/"
 
 # abbreviated path settings
 PATH_ABBREVIATIONS = {
+    'here': '/home/michael/Desktop/zcam_data/products/',
     'scratch': "/scratch/cal_wg/flight/products/",
     "proj": "/project/m2020/mastcamz/surface/flight/products",
 }
