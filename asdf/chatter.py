@@ -269,7 +269,7 @@ def find_and_offer_observations(
             default="1",
             console=ASDF_CONSOLE,
         )
-        if obs_choice == 0:
+        if obs_choice == "0":
             return reject_scan()
         if obs_choice != "a":
             return tuple(scan_results.values())[int(obs_choice) - 1], False
