@@ -232,6 +232,7 @@ def scan_zcam_dir(
     target_sol: Union[int, str] = "",
     target_seq_id: str = "",
     verbose=True,
+    keep_broadband=False,
 ):
     if not (directory or explicit_path):
         ASDF_CONSOLE.print(
@@ -241,7 +242,8 @@ def scan_zcam_dir(
         raise ValueError("no path passed to scan_zcam_dir")
     if explicit_path and not os.path.exists(explicit_path):
         ASDF_CONSOLE.print(
-            "sorry, " + str(explicit_path) + " does not exist.", style="bold red"
+            "sorry, " + str(explicit_path) + " does not exist.",
+            style="bold red",
         )
         return None, None
     if explicit_path:
@@ -274,9 +276,14 @@ def scan_zcam_dir(
     base_version = None
     observations = {}
     parser_warnings = []
+    rejected_bb_count = 0
     for group_ix, group in groups:
         if target_file and (target_file not in group["PATH"].values):
             continue
+        if keep_broadband is False:
+            if group["FILTER"].isin(("L0", "R0")).all():
+                rejected_bb_count += len(group)
+                continue
         sol, seq_id, product_type, thumb = group_ix
         name = "_".join([format(sol, "0>4"), seq_id, product_type, thumb])
         group = drop_mismatched_versions(group, base_version)
@@ -291,19 +298,18 @@ def scan_zcam_dir(
                     observations[name + "_RMS" + str(rms)] = rmsgroup
                 else:
                     parser_warnings.append(
-                        (group["SEQ_ID"].iloc[0], "unknown issue")
+                        "there was an unknown issue when attempting to "
+                        "cluster {}.".format(seq_id)
                     )
         elif (group["FRAME_TYPE"] == "MONO").all():
             # handle repointed-stereo-observation case: split by pairs of RMS
-            # TODO: this will currently crash if all filters from a single eye
+            # TODO: this will currently fail if all filters from a single eye
             #  are missing
             if len(group["RMS"].unique()) % 2 != 0:
                 parser_warnings.append(
-                    (
-                        seq_id,
-                        "appears to involve a complex mast movement pattern I "
-                        "cannot interpret.",
-                    )
+                    "warning: {} has a mast movement pattern I cannot "
+                    "interpret. files may not have been chunked "
+                    "correctly.".format(seq_id)
                 )
             for repoint in partition(2, group["RMS"].unique()):
                 observation = group.loc[group["RMS"].isin(repoint)]
@@ -311,15 +317,19 @@ def scan_zcam_dir(
                     observations[name + "_RMS" + str(repoint[0])] = observation
                 else:
                     parser_warnings.append(
-                        (
-                            seq_id,
-                            "unknown RMS windowing issue",
-                        )
+                        "warning: an unknown windowing issue prevented me from"
+                        "clustering {}.".format(seq_id)
                     )
         else:
             parser_warnings.append(
-                (seq_id, "MONO and STEREO mixed in sequence")
+                "warning: MONO and STEREO mixed in {}; could not be "
+                "clustered.".format(seq_id)
             )
+    if rejected_bb_count > 0:
+        parser_warnings.append(
+            "({} files from broadband-only sequences hidden)"
+                .format(str(rejected_bb_count))
+        )
     return observations, parser_warnings
 
 

@@ -3,7 +3,7 @@ shared objects for formatting output to terminal
 """
 import logging
 
-from rich.highlighter import Highlighter, RegexHighlighter
+from rich.highlighter import RegexHighlighter
 from rich.theme import Theme
 
 from marslab.imgops.bandset import log as bandlog
@@ -13,6 +13,7 @@ from rich.progress import Progress
 
 class RichProgressHandler(logging.Handler):
     """blunt instrument to treat log messages as progress callbacks"""
+
     def __init__(self, *args, prog=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.prog = prog
@@ -38,11 +39,20 @@ class EmailHighlighter(RegexHighlighter):
 class ASDFGH(RegexHighlighter):
     base_style = "ASDF."
     highlights = [
-        r"(?P<good>(loaded|generated|wrote|writing))",
-        r"(?<=[Z _])(?P<id>[R|L]\d[RGB]?)", r"(?P<id>(zcam|ZCAM)\d\d\d\d\d)"
+        r"(?P<prep>(loaded|generated))",
+        r"(?P<output>(wrote))",
+        r"(?<=[Z _])(?P<id>[R|L]\d[RGB]?)",
+        r"(?P<id>(zcam|ZCAM)\d\d\d\d\d)",
     ]
 
-ASDFTH = Theme({"ASDF.good": "green1", "ASDF.id": "dark_turquoise"})
+
+ASDFTH = Theme(
+    {
+        "ASDF.output": "green1",
+        "ASDF.prep": "aquamarine3",
+        "ASDF.id": "dark_turquoise",
+    }
+)
 
 # set up ```rich``` objects for formatting
 ASDF_CONSOLE = Console(highlighter=ASDFGH(), theme=ASDFTH)

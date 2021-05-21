@@ -202,17 +202,17 @@ class ZcamBandSet(BandSet):
         else:
             metadata_file = io.BytesIO()
             extended_file = io.BytesIO()
-        if verbose and (in_memory is not False):
+        dashify(self.extended).to_csv(extended_file, index=False)
+        if verbose and (in_memory is False):
             ASDF_CONSOLE.print(
-                "Writing extended-format marslab file: " + extended_file
+                "Wrote extended-format marslab file: " + extended_file
             )
 
-        dashify(self.extended).to_csv(extended_file, index=False)
-        if verbose and (in_memory is not False):
-            ASDF_CONSOLE.print(
-                "Writing compact-format marslab file: " + metadata_file
-            )
         dashify(self.compact).to_csv(metadata_file, index=False)
+        if verbose and (in_memory is False):
+            ASDF_CONSOLE.print(
+                "Wrote compact-format marslab file: " + metadata_file
+            )
         return metadata_file, extended_file
 
     def draw_context(self, edgemaps, eye):

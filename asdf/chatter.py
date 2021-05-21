@@ -223,11 +223,12 @@ def reject_scan():
 
 
 def find_and_offer_observations(
-    explicit_path = None,
+    explicit_path=None,
     dir_from_abbrev=None,
     sol_from_abbrev=None,
     seq_id_from_abbrev=None,
     noninteractive=False,
+    keep_broadband=False,
 ):
     """
     process a request for ZCAM files; print the results of the request to
@@ -236,16 +237,18 @@ def find_and_offer_observations(
     """
     # TODO: some kind of exception handling for printing console statements
     scan_results, scan_warnings = scan_zcam_dir(
-        explicit_path, dir_from_abbrev, sol_from_abbrev, seq_id_from_abbrev
+        explicit_path=explicit_path,
+        directory=dir_from_abbrev,
+        target_sol=sol_from_abbrev,
+        target_seq_id=seq_id_from_abbrev,
+        keep_broadband=keep_broadband,
     )
     if scan_results is None:
         return None, False
     print_scan(scan_results)
     if scan_warnings:
-        for seq_id, problem in scan_warnings:
-            ASDF_CONSOLE.print(
-                seq_id + " warning: " + problem, style="dark_orange bold"
-            )
+        for problem in scan_warnings:
+            ASDF_CONSOLE.print(problem + "\n", style="dark_orange bold")
     if len(scan_results) == 0:
         return None, False
     if noninteractive:
@@ -282,16 +285,20 @@ def find_and_offer_observations(
         return tuple(scan_results.values())[0], False
 
 
-def wrapped_obs_get(path, noninteractive, debug=False):
+def wrapped_obs_get(path, noninteractive, debug=False, keep_broadband=False):
     """
     debug wrapper for find_and_offer_observations
     TODO: probably a cleaner way to do this, like actually swapping out the
       function? maybe not. cost in verbosity.
     """
     if debug:
-        return find_and_offer_observations(path, noninteractive)
+        return find_and_offer_observations(
+            path, noninteractive, keep_broadband=keep_broadband
+        )
     try:
-        return find_and_offer_observations(path, noninteractive)
+        return find_and_offer_observations(
+            path, noninteractive, keep_broadband=keep_broadband
+        )
     except (ValueError, FileNotFoundError) as err:
         raise UserError(err)
     except UserError:

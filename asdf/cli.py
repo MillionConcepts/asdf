@@ -146,7 +146,6 @@ def asdf_body(
                 warnings.simplefilter("ignore")
                 bandset.make_look_set(settings.rapidlooks.DEFAULT_RAPIDLOOKS)
             prog.remove_task(ASDF_RPH.task_id)
-        import time
 
         console.print("... saving rapidlooks ...")
         with ASDF_PROGRESS as prog:
@@ -160,12 +159,14 @@ def asdf_body(
         # that are not; waste not memory, want not memory
         thumbnail_staging |= pick_thumbs(bandset.looks)
         bandset.purge("looks")
+
     # make context images and write them out
     if bandset.rois:
         bandset.make_context_images(verbose=True)
         save_images(prefix=bandset.name + bandset.suffix)
         thumbnail_staging |= pick_thumbs(bandset.looks)
     bandset.purge()
+
     # handle metadata and thumbnail uploads
     if upload is True:
         thumbnails = make_rapidlook_thumbnails(
@@ -175,12 +176,12 @@ def asdf_body(
 
     # pretty-plot data if we've got it; just quit if we don't
     if we_do_not_have_rois:
-        console.print("... all done ...", style="bold orchid1")
+        console.print("... all done ... :star:", style="bold orchid1")
         return
 
     pretty_plot_bandset(bandset, outpath)
 
-    console.print("... all done ...", style="bold orchid1")
+    console.print("... all done ... :star:", style="bold orchid1")
 
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
@@ -198,7 +199,8 @@ def asdf_hello(
     suffix: "s" = "",
     merspect: "m" = None,
     noninteractive: "n" = False,
-    debug: "d" = False
+    debug: "d" = False,
+    keep_broadband: "b" = False
 ):
     """
     processes and archives everything
@@ -218,6 +220,9 @@ def asdf_hello(
     :param merspect: take data from passed merspect file
     :param noninteractive: run automatically; collect nothing from user
     :param debug: turn debug mode on
+    :param keep_broadband: include frames from broadband-only sequences in
+        searches
+
     """
     # find all associated files and ask the user about them
     # find all associated files and ask the user about them
@@ -226,11 +231,11 @@ def asdf_hello(
 
     if abbreviate:
         observation, is_multiple = handle_abbreviation(
-            *path.split(","), noninteractive, debug
+            *path.split(","), noninteractive, keep_broadband
         )
     else:
         observation, is_multiple = wrapped_obs_get(
-            Path(path), noninteractive, debug
+            Path(path), noninteractive, debug, keep_broadband
         )
     if observation is None:
         return
