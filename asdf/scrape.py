@@ -212,7 +212,10 @@ def parse_zcam_fn(filename):
 def skim_products(directory, aux_skimmer=cached_aux_skimmer):
 
     products = tuple(
-        filter(map(parse_zcam_fn, [path.name for path in directory.iterdir()]))
+        filter(
+            None,
+            map(parse_zcam_fn, [path.name for path in directory.iterdir()]),
+        )
     )
     products = pd.DataFrame(products)
     products["PATH"] = [str(path) for path in directory.iterdir()]
@@ -236,7 +239,7 @@ def scan_zcam_dir(
     target_seq_id: str = "",
     verbose=True,
     keep_broadband=False,
-    keep_caltarget=False
+    keep_caltarget=False,
 ):
     if not (directory or explicit_path):
         ASDF_CONSOLE.print(
@@ -289,9 +292,8 @@ def scan_zcam_dir(
             continue
         if keep_broadband is False:
             # TODO: this sequence id heuristic might be crappy
-            if (
-                    group["FILTER"].isin(("L0", "R0")).all() or
-                    (int(seq_id[4:]) > 5000)
+            if group["FILTER"].isin(("L0", "R0")).all() or (
+                int(seq_id[4:]) > 5000
             ):
                 rejected_bb_count += len(group)
                 continue
@@ -344,13 +346,15 @@ def scan_zcam_dir(
     hidden_things = []
     if rejected_bb_count > 0:
         hidden_things.append(
-            "({} files from broadband-only sequences hidden)"
-                .format(str(rejected_bb_count))
+            "({} files from broadband-only sequences hidden)".format(
+                str(rejected_bb_count)
+            )
         )
     if rejected_cal_count > 0:
         hidden_things.append(
-            "({} files from caltarget observations hidden)"
-                .format(str(rejected_cal_count))
+            "({} files from caltarget observations hidden)".format(
+                str(rejected_cal_count)
+            )
         )
     return observations, parser_warnings, hidden_things
 
