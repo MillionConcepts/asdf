@@ -184,8 +184,9 @@ def drop_mismatched_versions(siblings, base_version=None):
     return siblings
 
 
-def parse_zcam_fn(filename):
+def parse_zcam_fn(path):
     """use mp.parse rules to get basic file identifiers"""
+    filename = Path(path).name
     parsers = {
         "SOL": mp.sol,
         "SITE": mp.site,
@@ -204,7 +205,9 @@ def parse_zcam_fn(filename):
         values[5] = values[5][1:]
         # just keep filter name, not SIS-nominal wavelength
         values[6] = values[6][:2]
-        return {field: value for field, value in zip(parsers.keys(), values)}
+        parsed = {field: value for field, value in zip(parsers.keys(), values)}
+        parsed["PATH"] = str(path)
+        return parsed
     except (KeyError, ValueError):
         return None
 
@@ -214,11 +217,10 @@ def skim_products(directory, aux_skimmer=cached_aux_skimmer):
     products = tuple(
         filter(
             None,
-            map(parse_zcam_fn, [path.name for path in directory.iterdir()]),
+            map(parse_zcam_fn, [path for path in directory.iterdir()]),
         )
     )
     products = pd.DataFrame(products)
-    products["PATH"] = [str(path) for path in directory.iterdir()]
     products = (
         pd.DataFrame(products).sort_values(by="CTIME").reset_index(drop=True)
     )
