@@ -10,15 +10,60 @@ from typing import Callable
 from clize import UserError
 
 from asdf.console import ASDF_CONSOLE
+from asdf.settings.metadata import (
+    ROI_METADATA_FIELD_CHOICES,
+    ROI_METADATA_FIELDS,
+    LITHOLOGICAL_ROI_FIELDS, ROI_METADATA_FIELD_PROMPTS,
+)
 from marslab.compat.mertools import MERSPECT_M20_COLOR_MAPPINGS
 from rich.highlighter import Highlighter
-from rich.prompt import Prompt, Confirm
+from rich.prompt import (
+    Prompt,
+    PromptBase,
+    Confirm,
+    PromptType,
+    InvalidResponse,
+)
 from rich.table import Table
 from rich.text import Text
 
 import asdf.settings as settings
 from asdf.asdf_utils import pass_parameters, extract_constants
 from asdf.scrape import scan_zcam_dir
+
+
+class NumberedChoicePrompt(PromptBase):
+    def __init__(self, *args, skippable=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        choices = kwargs.get("choices")
+        if choices is None:
+            raise ValueError(
+                "A NumberedChoicePrompt must be initialized with at least one "
+                "choice."
+            )
+        self.choices = [str(ix + 1) for ix in range(len(choices))]
+        self.choice_lookup = choices
+        self.skippable = skippable
+
+    show_choices = False
+
+    def make_prompt(self, default):
+        numbered_choices = []
+        for ix, choice in enumerate(self.choice_lookup):
+            # convert to 1-indexing for readability
+            numbered_choices.append("({}) {}".format(str(ix + 1), choice))
+        prompt = self.prompt.copy()
+        prompt_choices = " " + ", ".join(numbered_choices)
+        if self.skippable is True:
+            prompt_choices += " (press Enter to skip)"
+        return prompt + prompt_choices
+
+    def process_response(self, value: str):
+        if (value.strip()) == "" and (self.skippable is True):
+            return ""
+        value = super().process_response(value)
+        # convert back to 0-indexing
+        return self.choice_lookup[int(value) - 1]
 
 
 # TODO: this isn't spanning across instruments, should fold into
@@ -124,21 +169,7 @@ def y_n_prompt(prompt_text, title=None):
     if value is True:
         return "Y"
     return "N"
-
-
-def scam_prompt(title=None) -> str:
-    """is this a SCAM target? tell me."""
-    prompt_text = Text("Is the feature associated with {title} ROI a ")
-    prompt_text.append_text(Text("SCAM target", style="bold"))
-    return y_n_prompt(prompt_text, title)
-
-
-def float_prompt(title=None) -> str:
-    """is this a float? tell me."""
-    prompt_text = Text("Is the feature associated with {title} ROI a ")
-    prompt_text.append_text(Text("float", style="bold"))
-    return y_n_prompt(prompt_text, title)
-
+    
 
 def colorize_merspect_roi_name(roi_color_name=None):
     roi_color_hex = MERSPECT_M20_COLOR_MAPPINGS.get(roi_color_name)
@@ -147,27 +178,48 @@ def colorize_merspect_roi_name(roi_color_name=None):
     return Text(roi_color_name, style="bold " + roi_color_hex)
 
 
-def generic_metadata_prompt(field_name, title=None) -> str:
-    """extremely generic metadata input with no error checking or anything"""
-    prompt_text = Text("Please enter the name of the ")
-    prompt_text.append(field_name, style="bold")
-    prompt_text.append(" associated with ")
+def generic_metadata_prompt_text(field, title):
+    prompt_text = Text("Please enter the ")
+    prompt_text.append(field, style="bold")
+    prompt_text.append(" value of ")
     prompt_text.append(format_roi_title(title))
-    prompt_text.append(" image sequence or ROI. (press Enter to skip)")
-    return Prompt.ask(prompt_text, console=ASDF_CONSOLE)
+    prompt_text.append(" ROI.")
+    return prompt_text
+
+def format_metadata_prompt(text, field, title):
+    text = Text(text).split("{title}")
+    text = text[0].append_text(format_roi_title(title)).append_text(text[1])
+    text = text.split("{field}")
+    return text[0].append_text(Text(field, style="bold")).append_text(text[1])
+
+def metadata_choice_prompt(text, choices) -> str:
+    """metadata input with numerically-keyed choices"""
+    return NumberedChoicePrompt.ask(
+        text, choices=choices, console=ASDF_CONSOLE
+    )
 
 
-def dispatched_metadata_prompt(field_name: str, title: str = None) -> str:
+def metadata_open_prompt(text) -> str:
+    """free metadata input with no error checking or anything"""
+    return Prompt.ask(text, console=ASDF_CONSOLE)
+
+
+def dispatched_metadata_prompt(field: str, title: str = None) -> str:
     """
     ask user for the value of a metadata field. calls specific functions as
     necessary to provide sensical and grammatically correct prompts
     """
-    if field_name.lower() == "float":
-        return float_prompt(title)
-    if field_name.lower() == "scam":
-        return scam_prompt(title)
-    # etc., etc., etc.
-    return generic_metadata_prompt(field_name, title)
+    if field.upper() in ROI_METADATA_FIELD_PROMPTS.keys():
+        text = format_metadata_prompt(
+            ROI_METADATA_FIELD_PROMPTS[field.upper()], field, title
+        )
+    else:
+        text = generic_metadata_prompt_text(field, title)
+    if field.upper() in ROI_METADATA_FIELD_CHOICES.keys():
+        return metadata_choice_prompt(
+            text, ROI_METADATA_FIELD_CHOICES[field.upper()]
+        )
+    return metadata_open_prompt(text)
 
 
 def format_observation(extracted_observation):
@@ -229,7 +281,7 @@ def find_and_offer_observations(
     seq_id_from_abbrev=None,
     noninteractive=False,
     keep_broadband=False,
-    keep_caltarget=False
+    keep_caltarget=False,
 ):
     """
     process a request for ZCAM files; print the results of the request to
@@ -243,7 +295,7 @@ def find_and_offer_observations(
         target_sol=sol_from_abbrev,
         target_seq_id=seq_id_from_abbrev,
         keep_broadband=keep_broadband,
-        keep_caltarget=keep_caltarget
+        keep_caltarget=keep_caltarget,
     )
     if scan_results is None:
         return None, False
@@ -292,7 +344,13 @@ def find_and_offer_observations(
         return tuple(scan_results.values())[0], False
 
 
-def wrapped_obs_get(path, noninteractive, debug=False, keep_broadband=False, keep_caltarget=False):
+def wrapped_obs_get(
+    path,
+    noninteractive,
+    debug=False,
+    keep_broadband=False,
+    keep_caltarget=False,
+):
     """
     debug wrapper for find_and_offer_observations
     TODO: probably a cleaner way to do this, like actually swapping out the
@@ -300,11 +358,17 @@ def wrapped_obs_get(path, noninteractive, debug=False, keep_broadband=False, kee
     """
     if debug:
         return find_and_offer_observations(
-            path, noninteractive, keep_broadband=keep_broadband, keep_caltarget=keep_caltarget
+            path,
+            noninteractive,
+            keep_broadband=keep_broadband,
+            keep_caltarget=keep_caltarget,
         )
     try:
         return find_and_offer_observations(
-            path, noninteractive, keep_broadband=keep_broadband, keep_caltarget=keep_caltarget
+            path,
+            noninteractive,
+            keep_broadband=keep_broadband,
+            keep_caltarget=keep_caltarget,
         )
     except (ValueError, FileNotFoundError) as err:
         raise UserError(err)
@@ -324,8 +388,13 @@ def ask_user_about_roi(roi_title=None, ci: Callable = pass_parameters) -> dict:
         input. for noninteractive mode.
     """
     roi_metadata = {}
-    metadata_fields = list(settings.metadata.ROI_METADATA_FIELDS)
+    metadata_fields = list(ROI_METADATA_FIELDS)
     for field in metadata_fields:
+        # don't ask people rock feature questions about non-rocks
+        if (field.upper() in LITHOLOGICAL_ROI_FIELDS) and (
+            roi_metadata.get("FEATURE") != "rock"
+        ):
+            continue
         roi_metadata[field] = ci(dispatched_metadata_prompt, field, roi_title)
     return roi_metadata
 

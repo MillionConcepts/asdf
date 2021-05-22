@@ -7,7 +7,6 @@ from rich.highlighter import RegexHighlighter
 from rich.theme import Theme
 from rich.console import Console
 from rich.progress import Progress
-from rich.spinner import Spinner
 
 
 class RichProgressHandler(logging.Handler):
@@ -42,6 +41,7 @@ class ASDFGH(RegexHighlighter):
         r"(?P<output>(wrote|completed))",
         r"(?<=[Z _])(?P<id>[R|L]\d[RGB]?)",
         r"(?P<id>(zcam|ZCAM)\d\d\d\d\d)",
+        r"(?P<selection>\(\d{1,3}\))"
     ]
 
 
@@ -50,6 +50,7 @@ ASDFTH = Theme(
         "ASDF.output": "green1",
         "ASDF.prep": "aquamarine3",
         "ASDF.id": "dark_turquoise",
+        "ASDF.selection": "bold"
     }
 )
 

@@ -18,9 +18,45 @@ ROI_METADATA_FIELDS = (
     "SCAM",
     "TARGET",
     "DISTANCE",
-    "LOCATION",
     "WORKSPACE",
 )
+# special prompt text for these
+ROI_METADATA_FIELD_PROMPTS = {
+    "FLOAT": "Is the feature associated with {title} ROI a {field}?",
+    "FEATURE": "What category of {field} in {title} ROI?",
+    "MORPHOLOGY": "Which named {field} type does the rock in {title} "
+    "ROI belong to?",
+    "SCAM": "Is the area in {title} ROI also a {field} target?",
+    "TARGET": "What named {field} does {title} ROI cover? "
+              "(press Enter to skip)",
+    "DISTANCE": "What {field} category does {title} ROI fall into?",
+    "WORKSPACE": "What {field} is {title} ROI in?  (press Enter to skip)",
+}
+# restrictions, if any, on value choices for these ROIs.
+ROI_METADATA_FIELD_CHOICES = {
+    "FEATURE": [
+        "rock",
+        "soil",
+        "pebble",
+        "remnant",
+        "delta",
+        "hardware",
+        "crater rim",
+        "wheel track",
+    ],
+    "MORPHOLOGY": ["pitted", "paver", "massive"],
+    "DISTANCE": ["nearfield", "midfield", "farfield"],
+    "SCAM": ["Y", "N"],
+    "FLOAT": ["Y", "N"]
+}
+
+# fields relevant only to rocks.
+LITHOLOGICAL_ROI_FIELDS = ["MORPHOLOGY"]
+
+# TODO...implement lookup table for location by sol.
+# right now just has the one.
+# LOCATION_SOL_TABLE = {(0, None): "Octavia E. Butler Landing"}
+
 
 # fields we put in the 'compact' marslab file. metadata fields are
 # explicitly listed for easy modification; the *list(chain.from_iterable(...

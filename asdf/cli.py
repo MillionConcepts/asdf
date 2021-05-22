@@ -118,6 +118,8 @@ def asdf_body(
             style="dark_orange"
         )
         marslab_data = null_marslab_data_section()
+    # add location -- TODO: lookup table once we have more
+    marslab_data["LOCATION"] = "Octavia E. Butler Landing"
     console.print(Rule(" writing data files "))
     bandset.counts = marslab_data
     # glom all the data and metadata together into our three output formats;
