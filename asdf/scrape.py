@@ -198,18 +198,21 @@ def parse_zcam_fn(filename):
         "PRODUCT_TYPE": mp.product_type,
         "THUMBNAIL": mp.thumbnail,
     }
-    values = list(juxt(*parsers.values())(filename))
-    # chop off currently not-used-as-specified stereo counter
-    values[5] = values[5][1:]
-    # just keep filter name, not SIS-nominal wavelength
-    values[6] = values[6][:2]
-    return {field: value for field, value in zip(parsers.keys(), values)}
+    try:
+        values = list(juxt(*parsers.values())(filename))
+        # chop off currently not-used-as-specified stereo counter
+        values[5] = values[5][1:]
+        # just keep filter name, not SIS-nominal wavelength
+        values[6] = values[6][:2]
+        return {field: value for field, value in zip(parsers.keys(), values)}
+    except (KeyError, ValueError):
+        return None
 
 
 def skim_products(directory, aux_skimmer=cached_aux_skimmer):
 
     products = tuple(
-        map(parse_zcam_fn, [path.name for path in directory.iterdir()])
+        filter(map(parse_zcam_fn, [path.name for path in directory.iterdir()]))
     )
     products = pd.DataFrame(products)
     products["PATH"] = [str(path) for path in directory.iterdir()]
@@ -246,7 +249,7 @@ def scan_zcam_dir(
             "sorry, " + str(explicit_path) + " does not exist.",
             style="bold red",
         )
-        return None, None
+        return None, None, None
     if explicit_path:
         if Path(explicit_path).is_dir():
             directory = Path(explicit_path)
@@ -261,7 +264,7 @@ def scan_zcam_dir(
         ASDF_CONSOLE.print(
             "sorry, " + str(directory) + " does not exist.", style="bold red"
         )
-        return None, None
+        return None, None, None
     products = skim_products(directory)
     # TODO, maybe: add handling for edge cases that may someday occur
     #  in which site, drive, or zoom become distinguishing features
