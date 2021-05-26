@@ -4,6 +4,7 @@ of products
 """
 import os
 import re
+from functools import cache
 from pathlib import Path
 from typing import Union
 from urllib.error import URLError
@@ -324,6 +325,7 @@ def find_matching_pixmap(product_path):
     return pixmap, match_warnings
 
 
+@cache
 def match_in_dirs(search_dirs, product_path, predicate=None):
     possible_matches = []
     for search_dir in search_dirs:

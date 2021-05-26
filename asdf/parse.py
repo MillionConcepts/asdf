@@ -1,6 +1,7 @@
 """functions that essentially instantiate parsing rules"""
 
 import re
+from functools import cache
 from pathlib import Path
 from typing import Union, Mapping
 
@@ -123,6 +124,7 @@ def pix_reference(thing):
         return None
 
 
+@cache
 def is_pixel_map(putative_pixmap_path):
     """TODO: do they remain the only ones that mention it? might be weak!"""
     return "PIXEL_MAP" in get_label_text(putative_pixmap_path)
