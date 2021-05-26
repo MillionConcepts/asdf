@@ -12,8 +12,8 @@ from marslab.compat.xcam import make_xcam_filter_dict
 
 # fields we want to ask the user about at each ROI.
 ROI_METADATA_FIELDS = (
-    "FLOAT",
     "FEATURE",
+    "FLOAT",
     "MORPHOLOGY",
     "SCAM",
     "TARGET",
