@@ -22,7 +22,8 @@ from asdf.console import (
     ASDF_PROGRESS_SPIN,
     ASDF_RPH_SPIN,
     aprint,
-    ASDFLOG, ASDF_PROGRESS,
+    ASDFLOG,
+    ASDF_PROGRESS,
 )
 from asdf.format import (
     preprocess_scan_path,
@@ -218,6 +219,12 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     )
     marslab_files, roi_files, other_files = fetch_analysis_files(path)
     reject_count = len(other_files)
+    if (len(marslab_files) == 0) or (len(roi_files) == 0):
+        aprint(
+            "[italic dark_turquoise]found[bright_green] {} ROI and {} "
+            "marslab files".format(len(roi_files), len(marslab_files))
+        )
+        return sorry_analysis()
     marslab = make_marslab_metadata_df(marslab_files)
     roi = make_marslab_metadata_df(roi_files)
     reject_count += len(marslab_files) - len(marslab)
