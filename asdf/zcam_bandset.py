@@ -260,7 +260,8 @@ class ZcamBandSet(BandSet):
             self.looks["context image " + eye], eye_edgemaps, width=0.1
         )
 
-    def draw_pixmap_context(self, edgemaps, eye):
+    def draw_pixmap_context(self, edgemaps, eye, verbose=False):
+        # TODO: consider reorganizing this whole situation
         flat_pixmap = self.get_flattened_pixmap(eye)
         perfectly_black_rectangular_solid = np.zeros(
             (flat_pixmap.shape[0], flat_pixmap.shape[1], 3)
@@ -295,6 +296,8 @@ class ZcamBandSet(BandSet):
         remove_ticks(ax)
         despine(ax)
         self.looks["pixmap context image " + eye] = context
+        if verbose:
+            aprint("generated context pixmap " + eye)
 
     def get_flattened_pixmap(self, eye):
         eye_pixmaps = self.get_pixmap_dict(eye)
@@ -343,7 +346,7 @@ class ZcamBandSet(BandSet):
         if verbose:
             aprint("... making pixmap context images ...")
         for eye in ("left", "right"):
-            self.draw_pixmap_context(edgemaps, eye)
+            self.draw_pixmap_context(edgemaps, eye, verbose)
 
     def titular_target(self):
         """
