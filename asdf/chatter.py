@@ -22,7 +22,7 @@ from asdf.console import (
     ASDF_PROGRESS_SPIN,
     ASDF_RPH_SPIN,
     aprint,
-    ASDFLOG,
+    ASDFLOG, ASDF_PROGRESS,
 )
 from asdf.format import (
     preprocess_scan_path,
@@ -75,13 +75,14 @@ def find_and_offer_observations(
     ask the user to confirm the observation if there is only one.
     """
     with ASDF_PROGRESS_SPIN as prog:
-        ASDF_RPH_SPIN.task_id = prog.add_task(".. scanning files ...")
+        ASDF_RPH_SPIN.task_id = prog.add_task(" ... scanning files ...")
+        style_prog(prog, "green")
         try:
             root_dir, target_file = preprocess_scan_path(
                 root_dir, explicit_path
             )
             products = scan_zcam_files(root_dir, **scan_kwargs)
-            aprint("... chunking products into observations ...")
+            aprint(" ... chunking products into observations ...")
             results, problems, hidden_things = cluster_observations(
                 products, target_file, keep_broadband, keep_caltarget
             )

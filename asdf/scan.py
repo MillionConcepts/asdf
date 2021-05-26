@@ -184,7 +184,9 @@ def cluster_observations(
             if int(seq_id[4:]) < 3100:
                 rejected_cal_count += len(group)
                 continue
-        name = "_".join([format(sol, "0>4"), seq_id, product_type, thumb])
+        name = "_".join([
+            format(sol, "0>4"), seq_id, product_type, thumb, producer
+        ])
         versioned = drop_mismatched_versions(group, base_version)
         if len(versioned) != len(group):
             rejected_version_count += len(group) - len(versioned)
