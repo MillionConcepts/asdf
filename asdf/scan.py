@@ -4,7 +4,6 @@ of products
 """
 import os
 import re
-from functools import cache
 from pathlib import Path
 from typing import Union
 from urllib.error import URLError
@@ -288,7 +287,7 @@ def find_matching_pixmap(product_path):
         Path(root, sol_dir.name, "pix_map")
         for root in settings.sources.PIX_ROOTS
     ]
-    search_dirs = list(set(search_dirs))
+    search_dirs = set(search_dirs)
     # get all the files in these directories
     # (functions are cached so we don't care about calling ls for every file)
     # and do filter step 1:
@@ -325,7 +324,6 @@ def find_matching_pixmap(product_path):
     return pixmap, match_warnings
 
 
-@cache
 def match_in_dirs(search_dirs, product_path, predicate=None):
     possible_matches = []
     for search_dir in search_dirs:
