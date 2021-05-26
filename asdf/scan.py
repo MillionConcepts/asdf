@@ -288,7 +288,7 @@ def find_matching_pixmap(product_path):
         Path(root, sol_dir.name, "pix_map")
         for root in settings.sources.PIX_ROOTS
     ]
-    search_dirs = set(search_dirs)
+    search_dirs = list(set(search_dirs))
     # get all the files in these directories
     # (functions are cached so we don't care about calling ls for every file)
     # and do filter step 1:
