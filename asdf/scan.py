@@ -11,6 +11,7 @@ from urllib.error import URLError
 import numpy as np
 import pandas as pd
 from cytoolz.dicttoolz import valfilter
+from cytoolz.functoolz import curry
 from cytoolz.itertoolz import partition
 from fs.osfs import OSFS
 
@@ -59,7 +60,9 @@ def skim_products(
     files, field_filters=None, file_regex=None, aux_skimmer=cached_aux_skimmer
 ):
     if file_regex:
-        matches = tuple(filter(re.str.match(file_regex, flags=re.I)))
+        matches = tuple(
+            filter(curry(re.match, file_regex, flags=re.I), files)
+        )
         if len(matches) != len(files):
             ASDFLOG.info(
                 "... {} / {} matching regex {} ...".format(
