@@ -289,6 +289,7 @@ def find_matching_pixmap(product_path):
     ]
     search_dirs = set(search_dirs)
     # get all the files in these directories
+    # TODO: i think we do care, actually
     # (functions are cached so we don't care about calling ls for every file)
     # and do filter step 1:
     # do they match timestamp, filter, seq_id, thumb?
