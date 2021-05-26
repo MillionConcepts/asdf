@@ -97,13 +97,14 @@ def asdf_body(
             + prototype["NAME"].iloc[0]
         )
         bandset.metadata["NAME"] = prototype["NAME"].iloc[0]
-        if prototype["ANALYSIS_NAME"].iloc[0] != "-":
-            aprint(
-                "[hot_pink italic]fdsa: ROI set / analysis name is "
-                + prototype["ANALYSIS_NAME"].iloc[0]
-            )
-            bandset.suffix = "-" + prototype["ANALYSIS_NAME"].iloc[0]
-            bandset.metadata["ANALYSIS_NAME"] = prototype["ANALYSIS_NAME"]
+        if "ANALYSIS_NAME" in prototype.columns:
+            if prototype["ANALYSIS_NAME"].iloc[0] != "-":
+                aprint(
+                    "[hot_pink italic]fdsa: ROI set / analysis name is "
+                    + prototype["ANALYSIS_NAME"].iloc[0]
+                )
+                bandset.suffix = "-" + prototype["ANALYSIS_NAME"].iloc[0]
+                bandset.metadata["ANALYSIS_NAME"] = prototype["ANALYSIS_NAME"]
     else:
         bandset.metadata["NAME"] = ci(name_prompt)
 
