@@ -282,7 +282,7 @@ def find_matching_pixmap(product_path):
     product_path = Path(product_path)
     product_dir = product_path.parent
     sol_dir = product_dir.parent
-    search_dirs = [product_dir, Path(sol_dir, "pix_map")]
+    search_dirs = [Path(sol_dir, "pix_map")]
     search_dirs += [
         Path(root, sol_dir.name, "pix_map")
         for root in settings.sources.PIX_ROOTS

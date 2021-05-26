@@ -7,7 +7,6 @@ EFFECTIVE_TAU_PATH = "/project/m2020/gds/radcal/effective_taus/"
 
 PIX_ROOTS = [
     "/scratch/cal_wg/flight/products/",
-    # "/home/michael/is_sshfs/scratch/cal_wg/flight/products/"  # TEST
 ]
 
 # abbreviated path settings
