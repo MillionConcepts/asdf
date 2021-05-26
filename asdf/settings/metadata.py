@@ -22,7 +22,7 @@ ROI_METADATA_FIELDS = (
 )
 # special prompt text for these
 ROI_METADATA_FIELD_PROMPTS = {
-    "FLOAT": "Is the feature associated with {title} ROI a {field}?",
+    "FLOAT": "Is the rock associated with {title} ROI a {field}?",
     "FEATURE": "What category of {field} is {title} ROI?",
     "MORPHOLOGY": "Which named {field} type does the rock in {title} "
     "ROI belong to?",
