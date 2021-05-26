@@ -88,7 +88,7 @@ def asdf_body(
 
     # tell user where we're putting stuff
     console.print(
-        "[bold white]NOTE: files will be written to {}".format(str(outpath))
+        "[bold green]NOTE: files will be written to {}".format(str(outpath))
     )
     # get observation name
     if prototype is not None:

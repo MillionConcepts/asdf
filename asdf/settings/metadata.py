@@ -51,7 +51,7 @@ ROI_METADATA_FIELD_CHOICES = {
 }
 
 # fields relevant only to rocks.
-LITHOLOGICAL_ROI_FIELDS = ["MORPHOLOGY"]
+LITHOLOGICAL_ROI_FIELDS = ["MORPHOLOGY", "FLOAT"]
 
 # TODO...implement lookup table for location by sol.
 # right now just has the one.

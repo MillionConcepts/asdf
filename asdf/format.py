@@ -1,4 +1,5 @@
 """
+formatting and output helper functions for other asdf modules.
 """
 import os
 from pathlib import Path
@@ -10,9 +11,7 @@ import asdf.settings as settings
 from asdf.console import ASDF_CONSOLE, aprint
 from asdf.parse import parse_pointing
 from marslab.imgops.imgutils import absolutely_destroy
-from marslab.imgops.pltutils import (
-    set_label,
-)
+from marslab.imgops.pltutils import set_label
 from marslab.imgops.render import make_thumbnail, simple_mpl_figure
 
 
@@ -47,12 +46,9 @@ def save_plainly(look, filename, outpath):
                 axis.remove()
             else:
                 axis.axis("off")
-        # fig.axis("off")
         look.savefig(
             Path(outpath, filename), dpi=275, bbox_inches="tight", pad_inches=0
         )
-        # TODO: broken
-        # look = get_mpl_image(look, dpi=275)
     else:
         look.save(Path(outpath, filename))
 
@@ -66,7 +62,6 @@ def annotate_and_save(annotation, look, filename, outpath):
     look.savefig(
         Path(outpath, filename), dpi=275, bbox_inches="tight", pad_inches=0
     )
-
     absolutely_destroy(look)
     return 0
 
@@ -106,7 +101,6 @@ def handle_abbreviation(
 
 
 def make_rapidlook_thumbnails(rapidlooks, size):
-    # sourcery skip: dict-comprehension, inline-immediately-returned-variable
     aprint("... making thumbnails (if necessary) ...")
     thumbnails = {}
     for name, image in rapidlooks.items():
