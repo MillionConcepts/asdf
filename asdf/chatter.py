@@ -269,7 +269,7 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     if len(analyses) == 0:
         return sorry_analysis()
     ok_analyses, bad_analyses = compare_roi_colors(analyses)
-    if len(bad_analyses > 0):
+    if len(bad_analyses) > 0:
         ASDF_CONSOLE.style = "FDSA.warning"
         aprint(
             "the following pairs of ROI/marslab files did not have "
