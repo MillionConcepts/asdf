@@ -55,7 +55,18 @@ def drop_mismatched_versions(siblings, base_version=None):
     return versioned
 
 
-def skim_products(files, file_filters=None, aux_skimmer=cached_aux_skimmer):
+def skim_products(
+    files, field_filters=None, file_regex=None, aux_skimmer=cached_aux_skimmer
+):
+    if file_regex:
+        matches = tuple(filter(re.str.match(file_regex, flags=re.I)))
+        if len(matches) != len(files):
+            ASDFLOG.info(
+                "... {} / {} matching regex {} ...".format(
+                    str(len(matches)), str(len(files)), file_regex
+                )
+            )
+        files = matches
     products = tuple(filter(None, map(parse_zcam_fn, files)))
     if not products:
         return None
@@ -68,18 +79,11 @@ def skim_products(files, file_filters=None, aux_skimmer=cached_aux_skimmer):
     # TODO: merge these with other prefilters below?
     # prefilters that don't require dipping into the header,
     #  for speed on networked filesystems
-    if file_filters:
-        for field, value in file_filters.items():
-            if field == "regex":
-                filtered_products = products.loc[
-                    products["PATH"].str.match(value, flags=re.I)
-                ].copy()
-            else:
-                if products[field].dtype.char in np.typecodes["AllInteger"]:
-                    value = int(value)
-                filtered_products = products.loc[
-                    products[field] == value
-                ].copy()
+    if field_filters:
+        for field, value in field_filters.items():
+            if products[field].dtype.char in np.typecodes["AllInteger"]:
+                value = int(value)
+            filtered_products = products.loc[products[field] == value].copy()
             # TODO: shift these down to hidden...
             ASDFLOG.info(
                 "... {} / {} matching {} criterion ...".format(
@@ -117,16 +121,14 @@ def scan_zcam_files(
     )
     # TODO, maybe: add handling for edge cases that may someday occur
     #  in which site, drive, or zoom become distinguishing features
-    filters = {}
+    field_filters = {}
     if target_sol:
-        filters["SOL"] = target_sol
+        field_filters["SOL"] = target_sol
     if target_seq_id:
-        filters["SEQ_ID"] = target_seq_id
+        field_filters["SEQ_ID"] = target_seq_id
     if keep_thumbnails is False:
-        filters["THUMBNAIL"] = "N"
-    if regex_filter:
-        filters["regex"] = regex_filter
-    products = skim_products(files, filters)
+        field_filters["THUMBNAIL"] = "N"
+    products = skim_products(files, regex_filter, field_filters)
     if products is None:
         raise ValueError(
             "sorry, no files in " + str(root_dir) + " have parsable"
@@ -184,9 +186,9 @@ def cluster_observations(
             if int(seq_id[4:]) < 3100:
                 rejected_cal_count += len(group)
                 continue
-        name = "_".join([
-            format(sol, "0>4"), seq_id, product_type, thumb, producer
-        ])
+        name = "_".join(
+            [format(sol, "0>4"), seq_id, product_type, thumb, producer]
+        )
         versioned = drop_mismatched_versions(group, base_version)
         if len(versioned) != len(group):
             rejected_version_count += len(group) - len(versioned)
