@@ -228,6 +228,9 @@ class ZcamBandSet(BandSet):
         dashify(self.compact).to_csv(metadata_file, index=False)
         if verbose and (in_memory is False):
             aprint("wrote compact-format marslab file: " + metadata_file)
+        if in_memory is True:
+            metadata_file.seek(0)
+            extended_file.seek(0)
         return metadata_file, extended_file
 
     def draw_context(self, edgemaps, eye):
