@@ -101,8 +101,7 @@ def find_and_offer_observations(
         aprint("\n")
     if len(results) == 0:
         aprint(
-            "Sorry, no usable observations found. :confused_face:",
-            style="bold red",
+            "[bold red]Sorry, no usable observations found. :confused_face:"
         )
         return None, False
     if noninteractive:
@@ -356,8 +355,8 @@ def setup_reprocess(
 
 def sorry_analysis():
     aprint(
-        "sorry, no usable analyses found for recreation. " ":confused_face:",
-        style="bold red",
+        "[bold red]sorry, no usable analyses found for recreation."
+        " :confused_face:"
     )
     return None
 

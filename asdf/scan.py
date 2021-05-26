@@ -65,7 +65,7 @@ def skim_products(files, file_filters=None, aux_skimmer=cached_aux_skimmer):
         )
     )
     products = pd.DataFrame(products)
-    # TODO: merge these with other prefilters below
+    # TODO: merge these with other prefilters below?
     # prefilters that don't require dipping into the header,
     #  for speed on networked filesystems
     if file_filters:
