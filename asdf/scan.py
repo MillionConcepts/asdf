@@ -95,6 +95,9 @@ def skim_products(
             )
             products = filtered_products
     products = products.sort_values(by="CTIME").reset_index(drop=True)
+    ASDFLOG.info(
+        "... skimming headers for grouping information ..."
+    )
     return pd.concat(
         (
             products.drop("PATH", axis=1),
@@ -131,7 +134,7 @@ def scan_zcam_files(
         field_filters["SEQ_ID"] = target_seq_id
     if keep_thumbnails is False:
         field_filters["THUMBNAIL"] = "N"
-    products = skim_products(files, regex_filter, field_filters)
+    products = skim_products(files, field_filters, regex_filter)
     if products is None:
         raise ValueError(
             "sorry, no files in " + str(root_dir) + " have parsable"
