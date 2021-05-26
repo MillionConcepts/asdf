@@ -10,9 +10,7 @@ from pplot.convert import convert_for_plot
 
 
 def looks_like_marslab(fn):
-    if str(fn).endswith('-marslab.csv'):
-        return True
-    return False
+    return bool(str(fn).endswith('-marslab.csv'))
 
 
 def directory_of(path):
@@ -32,8 +30,8 @@ def do_pplot(
     is called by asdf.
     all marslab files need SOLAR_ELEVATION, SEQ_ID, and SOL or things
     will not work out.
-    param path_or_file: marslab file or directory containing marslab files
-    param recursive: runs pplot on all marslab files in directory tree,
+    param path_or_file: marslab file or root_dir containing marslab files
+    param recursive: runs pplot on all marslab files in root_dir tree,
         regardless of what specific file you passed it
     """
     # TODO, maybe: merge or something with handle_pretty_plot()
@@ -56,7 +54,9 @@ def do_pplot(
                 names = marslab["NAME"].dropna().unique()
                 if len(names) > 0:
                     titular_plot_target = names[0]
-            plot_fn = str(marslab_file).replace("-marslab.csv", "-pretty-plot.png")
+            plot_fn = str(marslab_file).replace(
+                "-marslab.csv", "-pretty-plot.png"
+            )
             print("Writing " + plot_fn)
             marslab_spectra = convert_for_plot(str(marslab_file)).replace(
                 "-", np.nan

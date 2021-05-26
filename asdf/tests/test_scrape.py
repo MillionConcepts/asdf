@@ -1,11 +1,12 @@
-from asdf import scrape
+import asdf.physics
+from asdf import scan
 
 class TestAddDerivedIlluminationGeometry():
 
     def test_add_derived_illumination_geometry_1(self):
         metadata = {"SOLAR_ELEVATION":5,"SOLAR_AZIMUTH":10,
                     "INSTRUMENT_ELEVATION":15,"INSTRUMENT_AZIMUTH":20}
-        metadata = scrape.add_derived_illumination_geometry(metadata)
+        metadata = asdf.physics.add_derived_illumination_geometry(metadata)
         assert metadata['SOLAR_ELEVATION']==5
         assert metadata['SOLAR_AZIMUTH']==10
         assert metadata['INSTRUMENT_ELEVATION']==15

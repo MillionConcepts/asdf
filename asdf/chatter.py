@@ -1,379 +1,145 @@
 """
-functionality for directly addressing and listening to the user from the
-command line goes in this module, including interactive wrappers for scraping
-functions, etc.
+secondary-level handlers & wrappers for asdf workflow
 """
-import os.path
-from types import MappingProxyType
+import warnings
+from pathlib import Path
 from typing import Callable
 
-from clize import UserError
-
-from asdf.console import ASDF_CONSOLE
-from asdf.settings.metadata import (
-    ROI_METADATA_FIELD_CHOICES,
-    ROI_METADATA_FIELDS,
-    LITHOLOGICAL_ROI_FIELDS, ROI_METADATA_FIELD_PROMPTS,
-)
-from marslab.compat.mertools import MERSPECT_M20_COLOR_MAPPINGS
-from rich.highlighter import Highlighter
+from cytoolz.dicttoolz import valfilter
+from pathos.multiprocessing import ProcessPool
 from rich.prompt import (
     Prompt,
-    PromptBase,
     Confirm,
-    PromptType,
-    InvalidResponse,
 )
-from rich.table import Table
+from rich.rule import Rule
 from rich.text import Text
 
-import asdf.settings as settings
-from asdf.asdf_utils import pass_parameters, extract_constants
-from asdf.scrape import scan_zcam_dir
-
-
-class NumberedChoicePrompt(PromptBase):
-    def __init__(self, *args, skippable=True, **kwargs):
-        super().__init__(*args, **kwargs)
-        choices = kwargs.get("choices")
-        if choices is None:
-            raise ValueError(
-                "A NumberedChoicePrompt must be initialized with at least one "
-                "choice."
-            )
-        self.choices = [str(ix + 1) for ix in range(len(choices))]
-        self.choice_lookup = choices
-        self.skippable = skippable
-
-    show_choices = False
-
-    def make_prompt(self, default):
-        numbered_choices = []
-        for ix, choice in enumerate(self.choice_lookup):
-            # convert to 1-indexing for readability
-            numbered_choices.append("({}) {}".format(str(ix + 1), choice))
-        prompt = self.prompt.copy()
-        prompt_choices = " " + ", ".join(numbered_choices)
-        if self.skippable is True:
-            prompt_choices += " (press Enter to skip)"
-        return prompt + prompt_choices
-
-    def process_response(self, value: str):
-        if (value.strip()) == "" and (self.skippable is True):
-            return ""
-        value = super().process_response(value)
-        # convert back to 0-indexing
-        return self.choice_lookup[int(value) - 1]
-
-
-# TODO: this isn't spanning across instruments, should fold into
-#   marslab.parse, blah blah
-CAM_IMAGE_SLICES = MappingProxyType(
-    {
-        "instrument": (0, 1),
-        "filter": (1, 3),
-        "sol": (4, 8),
-        "venue": (8, 9),
-        "stime": (9, 19),
-        "ttime": (20, 23),
-        "ptype": (23, 26),
-        "geometry": (26, 27),
-        "thumbnail": (27, 28),
-        "site": (28, 31),
-        "drive": (31, 35),
-        "sequence": (35, 44),
-        "cam_specific": (44, 48),
-        "downsample": (48, 49),
-        "compression": (49, 51),
-        "producer": (51, 52),
-        "version": (52, 54),
-        "ext": (54, 58),
-    }
+import pplot
+from asdf import settings as settings
+from asdf.asdf_utils import pass_parameters, dashify
+from asdf.console import (
+    ASDF_CONSOLE,
+    ASDF_PROGRESS_SPIN,
+    ASDF_RPH_SPIN,
+    aprint,
+    ASDFLOG,
+)
+from asdf.format import (
+    preprocess_scan_path,
+    make_pointing_annotation,
+    annotate_and_save,
+    save_plainly,
+)
+from asdf.pretty import (
+    print_scan_results,
+    colorize_merspect_roi_name,
+    dispatched_metadata_prompt,
+    style_prog,
+    print_observation,
+)
+from asdf.scan import (
+    scan_zcam_files,
+    cluster_analyses,
+    find_obs_pixmaps,
+    compare_roi_colors,
+    fetch_analysis_files,
+    make_marslab_metadata_df,
+    prune_analysis_df,
+    add_public_waypoints_to_metadata,
+    add_effective_taus,
+    cluster_observations,
+    find_matching_observations,
+)
+from asdf.scrape import cached_exists
+from asdf.settings.metadata import (
+    ROI_METADATA_FIELDS,
+    LITHOLOGICAL_ROI_FIELDS,
 )
 
-
-class M20CameraHighlighter(Highlighter):
-    def highlight(self, text):
-        for section, slice_ix in CAM_IMAGE_SLICES.items():
-            if section in ("sol", "stime"):
-                text.stylize("green", *slice_ix)
-            elif section in ("sequence", "filter"):
-                text.stylize("bold dark_turquoise", *slice_ix)
-            elif section == "thumbnail":
-                text.stylize("yellow", *slice_ix)
-            elif section == "ptype":
-                text.stylize("red", *slice_ix)
-
-
-def print_scan(scan):
-    ASDF_CONSOLE.print("\n")
-    if len(scan) == 0:
-        ASDF_CONSOLE.print(
-            "Sorry, no usable observations found. :confused_face:",
-            style="red bold",
-        )
-        return
-    if len(scan) > 1:
-        is_multiple = True
-        ASDF_CONSOLE.print(
-            "found {} observations (ordered by seq_id / "
-            "chronologically within seq_ids):".format(len(scan)),
-        )
-    else:
-        is_multiple = False
-        ASDF_CONSOLE.print("found 1 observation:")
-    ASDF_CONSOLE.print("\n")
-    for ix, extracted_observation in enumerate(extract_scan_constants(scan)):
-
-        headline, tailtext, printframe = format_observation(
-            extracted_observation
-        )
-        table = Table(padding=(0, 3, 0, 1), show_edge=False)
-        if is_multiple:
-            table.add_column(str(ix + 1) + ":", style="bold turquoise2")
-        else:
-            table.add_column("")
-        headline.append_text(Text("\n")).append_text(tailtext)
-        table.add_column(headline)
-
-        camhighlight = M20CameraHighlighter()
-        for row in printframe.to_records(index=False):
-            table.add_row(row[0], camhighlight(row[1]))
-        ASDF_CONSOLE.print(table)
-        ASDF_CONSOLE.print("\n")
-
-
-def format_roi_title(roi_title):
-    prompt_text = Text()
-    if roi_title is not None:
-        prompt_text.append("the ")
-        prompt_text.append(colorize_merspect_roi_name(roi_title))
-    else:
-        prompt_text.append("this")
-    return prompt_text
-
-
-def name_prompt() -> str:
-    """what is the overall name of this observation? tell me."""
-    prompt_text = Text("Please enter the ")
-    prompt_text.append_text(Text("name ", style="bold orchid1"))
-    prompt_text.append_text(Text("of this observation."))
-    return Prompt.ask(prompt_text, console=ASDF_CONSOLE)
-
-
-def y_n_prompt(prompt_text, title=None):
-    texts = prompt_text.split("{title}")
-    title = format_roi_title(title)
-    formatted_text = texts[0].append_text(title).append_text(texts[1])
-    value = Confirm.ask(formatted_text, default=False, console=ASDF_CONSOLE)
-    if value is True:
-        return "Y"
-    return "N"
-    
-
-def colorize_merspect_roi_name(roi_color_name=None):
-    roi_color_hex = MERSPECT_M20_COLOR_MAPPINGS.get(roi_color_name)
-    if roi_color_hex is None:
-        return Text(roi_color_name, style="bold white")
-    return Text(roi_color_name, style="bold " + roi_color_hex)
-
-
-def generic_metadata_prompt_text(field, title):
-    prompt_text = Text("Please enter the ")
-    prompt_text.append(field, style="bold")
-    prompt_text.append(" value of ")
-    prompt_text.append(format_roi_title(title))
-    prompt_text.append(" ROI.")
-    return prompt_text
-
-def format_metadata_prompt(text, field, title):
-    text = Text(text).split("{title}")
-    text = text[0].append_text(format_roi_title(title)).append_text(text[1])
-    text = text.split("{field}")
-    return text[0].append_text(Text(field, style="bold")).append_text(text[1])
-
-def metadata_choice_prompt(text, choices) -> str:
-    """metadata input with numerically-keyed choices"""
-    return NumberedChoicePrompt.ask(
-        text, choices=choices, console=ASDF_CONSOLE
-    )
-
-
-def metadata_open_prompt(text) -> str:
-    """free metadata input with no error checking or anything"""
-    return Prompt.ask(text, console=ASDF_CONSOLE)
-
-
-def dispatched_metadata_prompt(field: str, title: str = None) -> str:
-    """
-    ask user for the value of a metadata field. calls specific functions as
-    necessary to provide sensical and grammatically correct prompts
-    """
-    if field.upper() in ROI_METADATA_FIELD_PROMPTS.keys():
-        text = format_metadata_prompt(
-            ROI_METADATA_FIELD_PROMPTS[field.upper()], field, title
-        )
-    else:
-        text = generic_metadata_prompt_text(field, title)
-    if field.upper() in ROI_METADATA_FIELD_CHOICES.keys():
-        return metadata_choice_prompt(
-            text, ROI_METADATA_FIELD_CHOICES[field.upper()]
-        )
-    return metadata_open_prompt(text)
-
-
-def format_observation(extracted_observation):
-    constant_dict, filterframe = extracted_observation
-    printframe = filterframe[["FILTER", "PATH"]].copy()
-    printframe = printframe.sort_values(by="FILTER")
-    printframe["PATH"] = [
-        os.path.split(path)[-1] for path in printframe["PATH"]
-    ]
-    tailtext = Text()
-    if constant_dict.get("FRAME_TYPE") == "STEREO":
-        tailtext.append("eyes simultaneous")
-    elif constant_dict.get("FRAME_TYPE") == "MONO":
-        tailtext.append("repointed stereo")
-    # TODO: this colorizing gets overwritten by the default table header style
-    if constant_dict.get("COMPLETION") != "COMPLETE_CHECKSUM_PASS":
-        tailtext.append(", ")
-        tailtext.append("contains partials", style="dark_orange")
-    if constant_dict.get("THUMBNAIL") == "T":
-        tailtext.append(", ")
-        tailtext.append("thumbnails", style="dark_orange")
-    headline_keys = ["SOL", "SEQ_ID", "SITE", "DRIVE"]
-
-    headline = Text(
-        ", ".join(
-            [key + " " + str(constant_dict.get(key)) for key in headline_keys]
-        )
-    )
-    if constant_dict.get("LTST"):  # single simultaneous stereo pair case
-        starting_ltst = constant_dict["LTST"]
-    else:
-        starting_ltst = filterframe["LTST"].iloc[0]
-    tailtext.append(", starting LTST " + str(starting_ltst))
-    return headline, tailtext, printframe
-
-
-def extract_scan_constants(observations):
-    scan = []
-    for observation in observations.values():
-        scan.append(extract_constants(observation))
-    return scan
-
-
-def reject_scan():
-    ASDF_CONSOLE.print(
-        "\nhalting due to user rejection of file list. If you didn't see the"
-        "products you wanted and you passed an abbreviated path, try passing "
-        "a full path instead. If all else fails, try copying the files you "
-        "want to work with into a separate directory.",
-        style="red bold",
-    )
-    return None, False
+# TODO: rewrite with markup
+from marslab.compat.xcam import DERIVED_CAM_DICT
+from marslab.imgops.poolutils import wait_for_it
 
 
 def find_and_offer_observations(
-    explicit_path=None,
-    dir_from_abbrev=None,
-    sol_from_abbrev=None,
-    seq_id_from_abbrev=None,
-    noninteractive=False,
-    keep_broadband=False,
-    keep_caltarget=False,
+    root_dir,
+    explicit_path,
+    noninteractive,
+    keep_broadband,
+    keep_caltarget,
+    **scan_kwargs
 ):
     """
     process a request for ZCAM files; print the results of the request to
     console; ask the user to select a observation if there is more than one;
     ask the user to confirm the observation if there is only one.
     """
-    # TODO: some kind of exception handling for printing console statements
-    scan_results, scan_warnings, hidden_things = scan_zcam_dir(
-        explicit_path=explicit_path,
-        directory=dir_from_abbrev,
-        target_sol=sol_from_abbrev,
-        target_seq_id=seq_id_from_abbrev,
-        keep_broadband=keep_broadband,
-        keep_caltarget=keep_caltarget,
-    )
-    if scan_results is None:
-        return None, False
-    print_scan(scan_results)
-    if scan_warnings:
-        for problem in scan_warnings:
-            ASDF_CONSOLE.print(problem, style="dark_orange bold")
-        ASDF_CONSOLE.print("\n")
+    with ASDF_PROGRESS_SPIN as prog:
+        ASDF_RPH_SPIN.task_id = prog.add_task(".. scanning files ...")
+        try:
+            root_dir, target_file = preprocess_scan_path(
+                root_dir, explicit_path
+            )
+            products = scan_zcam_files(root_dir, **scan_kwargs)
+            aprint("... chunking products into observations ...")
+            results, problems, hidden_things = cluster_observations(
+                products, target_file, keep_broadband, keep_caltarget
+            )
+        except (ValueError, FileNotFoundError) as err:
+            prog.remove_task(ASDF_RPH_SPIN.task_id)
+            aprint(str(err) + " :confused_face:", style="bold red")
+            return None, False
+        prog.remove_task(ASDF_RPH_SPIN.task_id)
+    print_scan_results(results)
+    if problems:
+        for problem in problems:
+            aprint(problem, style="dark_orange bold")
+        aprint("\n")
     if hidden_things:
         for category in hidden_things:
-            ASDF_CONSOLE.print(category, style="purple bold")
-        ASDF_CONSOLE.print("\n")
-    if len(scan_results) == 0:
+            aprint(category, style="purple bold")
+        aprint("\n")
+    if len(results) == 0:
+        aprint(
+            "Sorry, no usable observations found. :confused_face:",
+            style="bold red",
+        )
         return None, False
     if noninteractive:
-        if (len(scan_results) > 1) and (noninteractive != "a"):
-            ASDF_CONSOLE.print(
+        if (len(results) > 1) and (noninteractive != "all"):
+            aprint(
                 "noninteractive mode; using #1. If this isn't the one you "
                 "wanted, please run asdf again and explicitly pass a file "
                 "from the observation you want."
             )
-            return tuple(scan_results.values())[0], False
-        if (len(scan_results) > 1) and (noninteractive == "a"):
-            ASDF_CONSOLE.print("noninteractive mode; processing all scans.")
-            return scan_results, True
-        return scan_results, False
+            return tuple(results.values())[0], False
+        if (len(results) > 1) and (noninteractive == "all"):
+            aprint(
+                "noninteractive-all mode; processing all observations.",
+                style="dark_orange bold",
+            )
+            return tuple(results.values()), True
+        return tuple(results.values())[0], False
 
-    if len(scan_results) > 1:
+    if len(results) > 1:
         obs_choice = Prompt.ask(
             "Please select an observation (0 to exit, a for all)",
             # 1-index for kindness
-            choices=[str(ix) for ix in range(len(scan_results) + 1)] + ["a"],
+            choices=[str(ix) for ix in range(len(results) + 1)] + ["a"],
             default="1",
             console=ASDF_CONSOLE,
         )
         if obs_choice == "0":
             return reject_scan()
         if obs_choice != "a":
-            return tuple(scan_results.values())[int(obs_choice) - 1], False
-        return tuple(scan_results.values()), True
+            return tuple(results.values())[int(obs_choice) - 1], False
+        return tuple(results.values()), True
     else:
         if not Confirm.ask(
             "Does this look ok?", default="Y", console=ASDF_CONSOLE
         ):
             return reject_scan()
-        return tuple(scan_results.values())[0], False
-
-
-def wrapped_obs_get(
-    path,
-    noninteractive,
-    debug=False,
-    keep_broadband=False,
-    keep_caltarget=False,
-):
-    """
-    debug wrapper for find_and_offer_observations
-    TODO: probably a cleaner way to do this, like actually swapping out the
-      function? maybe not. cost in verbosity.
-    """
-    if debug:
-        return find_and_offer_observations(
-            path,
-            noninteractive,
-            keep_broadband=keep_broadband,
-            keep_caltarget=keep_caltarget,
-        )
-    try:
-        return find_and_offer_observations(
-            path,
-            noninteractive,
-            keep_broadband=keep_broadband,
-            keep_caltarget=keep_caltarget,
-        )
-    except (ValueError, FileNotFoundError) as err:
-        raise UserError(err)
-    except UserError:
-        raise
+        return tuple(results.values())[0], False
 
 
 def ask_user_about_roi(roi_title=None, ci: Callable = pass_parameters) -> dict:
@@ -390,7 +156,7 @@ def ask_user_about_roi(roi_title=None, ci: Callable = pass_parameters) -> dict:
     roi_metadata = {}
     metadata_fields = list(ROI_METADATA_FIELDS)
     for field in metadata_fields:
-        # don't ask people rock feature questions about non-rocks
+        # don't ask people rock questions about non-rocks
         if (field.upper() in LITHOLOGICAL_ROI_FIELDS) and (
             roi_metadata.get("FEATURE") != "rock"
         ):
@@ -402,7 +168,7 @@ def ask_user_about_roi(roi_title=None, ci: Callable = pass_parameters) -> dict:
 def input_roi_metadata(marslab_data, ci):
     for region in marslab_data["COLOR"]:
         ci(
-            ASDF_CONSOLE.print,
+            aprint,
             Text("Please enter information about the ")
             .append_text(colorize_merspect_roi_name(region))
             .append_text(Text(" ROI.")),
@@ -410,4 +176,342 @@ def input_roi_metadata(marslab_data, ci):
         user_provided_roi_metadata = ask_user_about_roi(region, ci)
         for field, value in user_provided_roi_metadata.items():
             marslab_data.loc[marslab_data["COLOR"] == region, field] = value
+    return marslab_data
+
+
+def handle_map_checks(bandset):
+    pixmaps, match_warnings = find_obs_pixmaps(
+        bandset.metadata["PATH"].unique()
+    )
+    if match_warnings:
+        for warning in match_warnings:
+            aprint("[bold purple]" + warning)
+    pixmaps = valfilter(lambda x: x is not None, pixmaps)
+    if not pixmaps:
+        aprint(
+            "[bold dark_orange]no matching pixmaps found; "
+            "cancelling pixmap processing."
+        )
+        return
+    if len(pixmaps) != len(bandset.metadata["PATH"].unique()):
+        aprint(
+            "[bold dark_orange] some data products missing pixmaps; "
+            "cancelling pixmap processing."
+        )
+        return
+    aprint("... found matching pixmaps for all images ...")
+    bandset.metadata["PIXMAP_PATH"] = ""
+    for path in bandset.metadata["PATH"].unique():
+        bandset.metadata.loc[
+            bandset.metadata["PATH"] == path, "PIXMAP_PATH"
+        ] = str(pixmaps[path])
+    bandset.load_pixmaps(verbose=True)
+
+
+def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
+    ASDF_CONSOLE.style = "FDSA"
+    if not cached_exists(path):
+        aprint("[hot_pink bold]sorry, {} does not exist.".format(str(path)))
+        return
+    aprint(
+        "[hot_pink italic bold underline]... finding ROI and marslab files ..."
+    )
+    marslab_files, roi_files, other_files = fetch_analysis_files(path)
+    reject_count = len(other_files)
+    marslab = make_marslab_metadata_df(marslab_files)
+    roi = make_marslab_metadata_df(roi_files)
+    reject_count += len(marslab_files) - len(marslab)
+    reject_count += len(roi_files) - len(roi)
+    aprint(
+        "[italic dark_turquoise]found[bright_green] {} ROI and {} "
+        "marslab files; [slate_blue1]ignoring {} other files of other "
+        "types".format(len(roi), len(marslab), reject_count)
+    )
+    if (len(roi) == 0) or (len(marslab) == 0):
+        return sorry_analysis()
+    marslab = prune_analysis_df(marslab, sol, seq_id, file_regex)
+    roi = prune_analysis_df(roi, sol, seq_id, file_regex)
+    aprint(
+        "[italic bright_green]{} ROI and {} marslab files in path "
+        "[dark_turquoise]matched[/dark_turquoise] sol, "
+        "seq_id, and regex filters".format(len(roi), len(marslab))
+    )
+    if (len(roi) == 0) or (len(marslab) == 0):
+        return sorry_analysis()
+    aprint(
+        "\n[hot_pink italic bold underline]... "
+        "clustering ROI and metadata files ..."
+    )
+    analyses, lonely_marslab, lonely_roi = cluster_analyses(marslab, roi)
+    if len(lonely_marslab) > 0:
+        ASDF_CONSOLE.style = "FDSA.warning"
+        aprint(
+            "[bold]warning: these -marslab.csv files had no matching "
+            "-roi.fits:\n\n[/bold]" + "\n".join(lonely_marslab["PATH"]) + "\n"
+        )
+    if len(lonely_roi) > 0:
+        ASDF_CONSOLE.style = "FDSA.warning"
+        aprint(
+            (
+                "[bold]warning: these -roi.fits files had no matching "
+                "-marslab.csv:\n\n[/bold] " + "\n".join(lonely_roi["PATH"])
+            ),
+            style="slate_blue1",
+        )
+
+    if len(analyses) == 0:
+        return sorry_analysis()
+    ok_analyses, bad_analyses = compare_roi_colors(analyses)
+    if len(bad_analyses > 0):
+        ASDF_CONSOLE.style = "FDSA.warning"
+        aprint(
+            "the following pairs of ROI/marslab files did not have "
+            "matching colors: ",
+        )
+        for badmars, badroi in bad_analyses[["MARSLAB", "ROI"]].values:
+            aprint(badmars + ", " + badroi)
+    ASDF_CONSOLE.style = "FDSA"
+    if len(ok_analyses) == 0:
+        return sorry_analysis()
+    aprint(
+        "\n[bold white] found {} usable ROI/marslab pairs:\n".format(
+            len(ok_analyses)
+        )
+    )
+    for _, row in ok_analyses.iterrows():
+        aprint("* " + row["MARSLAB"] + "\n" + "* " + row["ROI"] + "\n")
+    if not Confirm.ask(
+        Text(
+            "Look for images to reprocess from metadata in these files?",
+            style="bold white on black",
+        ),
+        default="Y",
+        console=ASDF_CONSOLE,
+    ):
+        aprint(
+            "[deep_pink2 bold]\nHalting. If you didn't see the marslab/ROI "
+            "files you wanted to, "
+            " check to make sure they're actually in the search tree and have "
+            "matching names. If they are, try using different search "
+            "parameters or copying the files interest into separate "
+            "directories.",
+        )
+        return None
+
+    return ok_analyses.reset_index(drop=True)
+
+
+def setup_reprocess(
+    marslab_path=".",
+    image_path=".",
+    sol=None,
+    seq_id=None,
+    marslab_regex=None,
+    image_regex=None,
+):
+    analyses = loudly_ingest_analyses(marslab_path, sol, seq_id, marslab_regex)
+    if analyses is None:
+        return None, None
+    aprint(Rule(" finding observational data ", style="deep_pink2 blink"))
+    with ASDF_PROGRESS_SPIN as prog:
+        style_prog(prog, "hot_pink on black")
+        ASDF_RPH_SPIN.task_id = prog.add_task(" ... scanning files ...")
+        reprocess_pairs, parser_warnings, misses = find_matching_observations(
+            analyses, image_path, image_regex
+        )
+        prog.remove_task(ASDF_RPH_SPIN.task_id)
+    if parser_warnings:
+        for pw in parser_warnings:
+            aprint(pw, style="purple bold")
+    if misses:
+        for miss_path in misses:
+            aprint(
+                "[slate_blue1]no matching observations in path for "
+                "{}".format(miss_path),
+            )
+    if len(reprocess_pairs) == 0:
+        sorry_analysis()
+    aprint(
+        "[bold white]found {} observation-metadata pair(s) for "
+        "reprocessing.\n".format(str(len(reprocess_pairs)))
+    )
+
+    for marslab, obs in reprocess_pairs.items():
+        aprint("[white bold]" + marslab)
+        print_observation(obs)
+    if not Confirm.ask(
+        "Proceed with reprocessing these observations?",
+        default="Y",
+        console=ASDF_CONSOLE,
+    ):
+        aprint(
+            "\nHalting. If you didn't see the products you wanted, check to "
+            "make sure they're actually in the file system; if they are, try "
+            "using different search parameters or copying the image files "
+            "of interest into separate directories.",
+            style="deep_pink2 italic",
+        )
+    return reprocess_pairs, analyses
+
+
+def sorry_analysis():
+    aprint(
+        "sorry, no usable analyses found for recreation. " ":confused_face:",
+        style="bold red",
+    )
+    return None
+
+
+def reject_scan():
+    aprint(
+        "\nhalting due to user rejection of file list. If you didn't see the "
+        "products you wanted and you passed an abbreviated path, try passing "
+        "a full path instead. If all else fails, try copying the files you "
+        "want to work with into a separate root_dir.",
+        style="red bold",
+    )
+    return None, False
+
+
+def collect_dispersed_metadata(metadata):
+    """
+    handler function for asdf.cli that runs around to several distinct
+    sources asking them for additional info prior to ROI evaluation
+    """
+
+    if settings.sources.USE_PUBLIC_WAYPOINTS:
+        aprint(
+            "... scraping localization information from public "
+            "waypoints file ..."
+        )
+        metadata = add_public_waypoints_to_metadata(metadata)
+    if settings.sources.FIND_EFFECTIVE_TAUS:
+        metadata = add_effective_taus(metadata)
+    return metadata
+
+
+def save_looks(bandset, outpath, prefix=None, threads=None, plain=False):
+    # TODO: decide if this and annotate_and_save_rapidlook() should live on
+    #  zcambandset -- this is not urgent.
+    if prefix is None:
+        prefix = bandset.name
+    pool = None
+    results = {}
+    # TODO: dispatch these cases
+    if threads is not None:
+        ASDFLOG.info("... initializing worker pool ...")
+        pool = ProcessPool(threads)
+        pool.restart()
+        ASDFLOG.info("... serializing images ...")
+    for look_name, look in bandset.looks.items():
+        # TODO: ugh.
+        if plain is True:
+            write_plain_image(look, look_name, outpath, pool, prefix, results)
+        else:
+            write_annotated_image(
+                bandset, look, look_name, outpath, pool, prefix, results
+            )
+    if pool is not None:
+        # TODO: extend this, generally speaking, to give useful messages about
+        #  failure
+        wait_for_it(pool, results, ASDFLOG, "wrote ")
+
+
+def write_plain_image(look, look_name, outpath, pool, prefix, results):
+    filename = prefix + " " + look_name + "-plain.png"
+    if pool is None:
+        save_plainly(look, filename, outpath)
+        ASDFLOG.info("wrote " + filename)
+    else:
+        results[filename] = pool.apipe(save_plainly, look, filename, outpath)
+
+
+def write_annotated_image(
+    bandset, look, look_name, outpath, pool, prefix, results
+):
+    filename = prefix + " " + look_name + ".png"
+    annotation = "\n".join(
+        (
+            look_name,
+            make_pointing_annotation(bandset.metadata),
+            settings.rapidlooks.CREDIT_TEXT,
+        )
+    )
+    if pool is None:
+        annotate_and_save(annotation, look, filename, outpath)
+        ASDFLOG.info("wrote " + filename)
+    else:
+        results[filename] = pool.apipe(
+            annotate_and_save, annotation, look, filename, outpath
+        )
+
+
+def pretty_plot_bandset(bandset, outpath):
+    aprint(Rule(" pretty-plotting data "))
+    plot_fn = str(
+        Path(outpath, bandset.name + bandset.suffix + "-pretty-plot.png")
+    )
+    from pplot.convert import scale_eyes
+
+    target_name = ""
+    if bandset.compact["NAME"].iloc[0]:
+        target_name = bandset.compact["NAME"].iloc[0]
+    plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
+    for band in DERIVED_CAM_DICT["ZCAM"]["filters"].keys():
+        if plot_data[band].isna().any():
+            plot_data.drop(columns=[band, band + "_ERR"], inplace=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pplot.pplot_utils.pretty_plot(
+            dashify(plot_data),
+            target_name=target_name,
+            sol=bandset.compact["SOL"].iloc[0],
+            solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
+            seq_id=bandset.compact["SEQ_ID"].iloc[0],
+            plot_fn=plot_fn,
+            underplot=None,
+        )
+    aprint("wrote " + Path(plot_fn).name)
+
+
+def fdsa_insert(marslab_data, prototype):
+    def tw(text):
+        return Text(text, style="bold dark_orange")
+
+    for color in prototype["COLOR"].unique():
+        proto_slice = prototype.loc[prototype["COLOR"] == color]
+        if len(proto_slice) > 1:
+            aprint(
+                tw("this marslab file has multiple rows for ")
+                .append_text(colorize_merspect_roi_name(color))
+                .append_text(tw("... skipping."))
+            )
+            continue
+        if len(proto_slice) == 0:
+            aprint(
+                tw("this marslab file is missing a row for ")
+                + colorize_merspect_roi_name(color)
+                + tw(". Something is wrong in fdsa's matching... skipping.")
+            )
+            continue
+        fields_used = Text("")
+        fields_skipped = Text("")
+        for field in ROI_METADATA_FIELDS:
+            if field not in prototype.columns:
+                fields_skipped.append(
+                    "note: no {} field in this marslab file, probably from an "
+                    "earlier asdf version\n".format(field)
+                )
+                continue
+            proto_value = proto_slice[field].iloc[0]
+            fields_used.append_text(
+                Text(" " + field + " ", style="default bold")
+            ).append_text(Text(str(proto_value), style="bold hot_pink"))
+
+            marslab_data.loc[
+                marslab_data["COLOR"] == color, field
+            ] = proto_value
+        aprint(colorize_merspect_roi_name(color).append_text(fields_used))
+        if fields_skipped:
+            aprint(fields_skipped)
     return marslab_data

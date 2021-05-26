@@ -65,6 +65,7 @@ LITHOLOGICAL_ROI_FIELDS = ["MORPHOLOGY"]
 COMPACT_ZCAM_MARSLAB_FIELDS = (
     "NAME",
     "COLOR",
+    "ANALYSIS_NAME",
     "SOL",
     "SEQ_ID",
     *ROI_METADATA_FIELDS,
@@ -158,6 +159,8 @@ IOF_METADATA_REGEX_STRINGS = MappingProxyType(
         "INSTRUMENT_AZIMUTH": r"(?<=INSTRUMENT_AZIMUTH ).*?([\d\.]+)",
     }
 )
+
+
 
 metadata_dtypes = {
     "SOL": "int16",

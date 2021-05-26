@@ -2,26 +2,25 @@
 functions for uploading, downloading, querying, fetching, etc.
 """
 import datetime as dt
+import io
 import json
 import os
-from collections.abc import Callable
-from pathlib import Path
+import tarfile
 import time
 import urllib.request
-import tarfile
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import boto3
 import botocore.config
-from botocore.exceptions import ClientError
 import gspread
-import io
 import pandas as pd
-from rich.rule import Rule
+from botocore.exceptions import ClientError
 
-from asdf.asdf_utils import itemize_numpy, obfuscated_name
-from asdf.console import ASDF_CONSOLE
 import asdf.settings as settings
+from asdf.asdf_utils import itemize_numpy, obfuscated_name
+from asdf.console import ASDF_CONSOLE, aprint
 
 
 def get_public_m20_waypoints():
@@ -91,10 +90,8 @@ def upload_s3(
     :param upload_object: String, pathlike, or filelike object to upload
     :param bucket: Bucket to upload to
     :param object_name: S3 object name. If not specified then str(
-    file_or_buffer) is
-        used -- will most likely look bad if it's a buffer
-    :param client: botocore.client.S3 instance; makes a default s3 client if
-    None
+        file_or_buffer) is used -- will most likely look bad if it's a buffer
+    :param client: botocore.client.S3 instance; makes a default client if None
     :param pass_string -- write passed string directly to file instead of
         interpreting as a path
     :return: ClientError if file was not uploaded, True if it was
@@ -113,9 +110,8 @@ def upload_s3(
 
     # encode string to bytes if we're writing it to S3 object instead
     # of interpreting it as a path
-    if isinstance(upload_object, str):
-        if pass_string:
-            upload_object = io.BytesIO(upload_object.encode("utf-8"))
+    if isinstance(upload_object, str) and pass_string:
+        upload_object = io.BytesIO(upload_object.encode("utf-8"))
     # Upload the file
     try:
         if isinstance(upload_object, (Path, str)):
@@ -132,13 +128,12 @@ def make_asdf_s3_client():
         region_name=settings.sources.AWS_REGION
     )
     secrets = pd.read_csv(settings.sources.AWS_IAM_SECRETS_FILE).iloc[0]
-    client = boto3.client(
+    return boto3.client(
         "s3",
         aws_access_key_id=secrets["Access key ID"],
         aws_secret_access_key=secrets["Secret access key"],
         config=aws_config,
     )
-    return client
 
 
 def bind_asdf_bucket() -> Callable[Any, str]:
@@ -161,29 +156,30 @@ def backup_marslab_files(bandset, roi_fits_fn, debug_prefix=""):
     marslab, extended = bandset.write_data_files(in_memory=True)
     upload_hopper = [(marslab, marslab_key), (extended, extended_key)]
     if roi_fits_fn is not None:
-        fits_tar_key = s3_prefix + os.path.split(roi_fits_fn)[-1].replace(
-            "fits", "tar.gz"
-        )
-        tarbuffer = io.BytesIO()
-        fits_tar = tarfile.open(fileobj=tarbuffer, mode="w:gz")
-        fits_tar.add(roi_fits_fn, os.path.split(roi_fits_fn)[-1])
-        fits_tar.close()
-        tarbuffer.seek(0)
-        upload_hopper.append((tarbuffer, fits_tar_key))
+        feed_into_hopper(roi_fits_fn, s3_prefix, upload_hopper)
     for obj, key in upload_hopper:
         try:
             upload(obj, key)
         except ClientError as error:
-            ASDF_CONSOLE.print(
-                "sorry, couldn't upload a backup file: " + str(error),
-                style="bold red",
+            aprint(
+                "[bold red]sorry, couldn't upload a backup file: " + str(error)
             )
+
+
+def feed_into_hopper(roi_fits_fn, s3_prefix, upload_hopper):
+    fits_tar_key = s3_prefix + Path(roi_fits_fn).name.replace("fits", "tar.gz")
+    tarbuffer = io.BytesIO()
+    fits_tar = tarfile.open(fileobj=tarbuffer, mode="w:gz")
+    fits_tar.add(roi_fits_fn, Path(roi_fits_fn).name)
+    fits_tar.close()
+    tarbuffer.seek(0)
+    upload_hopper.append((tarbuffer, fits_tar_key))
 
 
 def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
     if not thumbnails:
         return {}
-    ASDF_CONSOLE.print("... uploading thumbnails ...")
+    aprint("... uploading thumbnails ...")
     upload = bind_asdf_bucket()
     bucket_url = (
         "https://" + settings.sources.BACKUP_BUCKET + ".s3.amazonaws.com/"
@@ -199,7 +195,7 @@ def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
             upload(image_buffer, key)
             links[name] = bucket_url + key
         except ClientError as error:
-            ASDF_CONSOLE.print(
+            aprint(
                 "sorry, couldn't upload thumb " + name + " " + str(error),
                 style="bold red",
             )
@@ -219,7 +215,7 @@ def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
         "... backing up marslab & ROI files ...", spinner="star"
     ):
         backup_marslab_files(bandset, roi_fits_fn, s3_debug_prefix)
-    ASDF_CONSOLE.print("completed marslab and ROI backup")
+    aprint("completed marslab and ROI backup")
     with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
         try:
             thumbnail_links = upload_thumbnails(
@@ -231,11 +227,11 @@ def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
             sheetbot = gspread.service_account(
                 settings.sources.GOOGLE_CLIENT_SECRETS_FILE
             )
-            ASDF_CONSOLE.print("... opening metadata sheet ...")
+            aprint("... opening metadata sheet ...")
             metadata_sheet = sheetbot.open_by_key(sheet_id).worksheets()[0]
             metadata_sheet_values = metadata_sheet.get_all_values()
             if len(metadata_sheet_values) == 0:
-                ASDF_CONSOLE.print(
+                aprint(
                     "note: existing metadata sheet contains no content.",
                     style="bold dark_orange",
                 )
@@ -246,7 +242,7 @@ def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
                 )
                 post_google_sheet(new_sheet, sheet_id, sheetbot)
             else:
-                ASDF_CONSOLE.print("... backing up metadata sheet ...")
+                aprint("... backing up metadata sheet ...")
                 # TODO: when gspread implements this, replace it with .copy()
                 backup = sheetbot.create(
                     title="metadata backup "
@@ -254,16 +250,16 @@ def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
                     folder_id=folder_id,
                 )
                 backup.worksheets()[0].update(metadata_sheet_values)
-                ASDF_CONSOLE.print("... posting new metadata ...")
+                aprint("... posting new metadata ...")
                 columns = metadata_sheet_values[0]
                 row_df = bandset.summary.reindex(columns).fillna("-")
                 metadata_sheet.append_row(
                     row_df.apply(itemize_numpy).tolist(),
                     value_input_option="USER_ENTERED",
                 )
-            ASDF_CONSOLE.print("completed metadata sheet update")
+            aprint("completed metadata sheet update")
         except gspread.exceptions.APIError as api_error:
-            ASDF_CONSOLE.print(
+            aprint(
                 "Sorry, couldn't update online metadata: " + str(api_error),
                 color="bold red",
             )

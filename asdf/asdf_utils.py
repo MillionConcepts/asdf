@@ -7,7 +7,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from astropy.io import fits
+from fs.osfs import OSFS
 
+from asdf.console import aprint
 from marslab.compat.sel_to_roi import is_sel_file, sel_to_roi
 
 
@@ -54,24 +56,36 @@ def add_ref_to_roi(pointing_name, roi_fits):
 
 
 def load_roi_file(
-    roi_path, title="", outpath=None, extension="-roi.fits", convert=True
+    roi_path, title="", outpath=".", extension="-roi.fits", convert=False,
+    verbose=True
 ):
+    # TODO: move this chatter elsewhere
     # if passed ROI file is a SEL, convert to marslab FITS
     if is_sel_file(roi_path):
         roi_fits = sel_to_roi(roi_path, "ZCAM")
+        if verbose:
+            aprint("loaded MERspect .sel file")
     # if it's FITS, just load it
     else:
         roi_fits = fits.open(roi_path)
+        if verbose:
+            aprint("loaded marslab ROI FITS file")
     # add optional reference (like pointing name)
     roi_fits = add_ref_to_roi(title, roi_fits)
     # optionally resave
     # TODO: should we actually add feature names to the ROI files?
     #  so therefore wait to save until after grilling the user?
+    # TODO: this whole convert-while-loading logic is convoluted and needs
+    #  to be extracted from the loading loop. save and load functions should
+    #  be distinct.
     if convert:
         roi_fits_fn = Path(outpath, title + extension)
         roi_fits.writeto(roi_fits_fn, overwrite=True)
+        if verbose:
+            aprint("wrote " + str(roi_fits_fn))
     else:
         roi_fits_fn = None
+    # TODO: returning the filename like this is sort of clumsy
     return roi_fits, str(roi_fits_fn)
 
 
@@ -91,10 +105,25 @@ def check_and_drop_duplicate_columns(dataframe):
     return dataframe.loc[:, ~dataframe.columns.duplicated()]
 
 
-def extract_constants(df, to_dict=True):
+def extract_constants(df, to_dict=True, drop_constants=False):
     constant_columns = df.nunique() == 1
     constants = df.loc[:, constant_columns]
     variables = df.loc[:, ~constant_columns]
     if to_dict:
-        return constants.iloc[0].to_dict(), variables
-    return constants, variables
+        constants = constants.iloc[0].to_dict()
+    if drop_constants:
+        return constants, variables
+    return constants, df
+
+
+def split_on(
+        df: pd.DataFrame, predicate: pd.Series
+) -> [pd.DataFrame, pd.DataFrame]:
+    return df.loc[predicate], df.loc[~predicate]
+
+
+def dir_fs(path):
+    path = Path(path)
+    if not path.is_dir:
+        path = path.parent
+    return OSFS(str(path))

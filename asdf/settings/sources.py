@@ -5,10 +5,17 @@ PUBLIC_WAYPOINTS_URL = (
 FIND_EFFECTIVE_TAUS = True
 EFFECTIVE_TAU_PATH = "/project/m2020/gds/radcal/effective_taus/"
 
+PIX_ROOTS = [
+    "/scratch/cal_wg/flight/products/",
+    # "/home/michael/is_sshfs/scratch/cal_wg/flight/products/"  # TEST
+]
+
 # abbreviated path settings
 PATH_ABBREVIATIONS = {
     'scratch': "/scratch/cal_wg/flight/products/",
     "proj": "/project/m2020/mastcamz/surface/flight/products",
+    "test": "/home/michael/is_sshfs/scratch/cal_wg/flight/products/",
+    "test2": "/home/michael/Desktop/zcam_data/products/",
 }
 DEFAULT_PRODUCT_SUBDIRECTORY = 'iof'
 

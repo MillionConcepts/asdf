@@ -66,7 +66,7 @@ SPECTRAL_DEFAULTS = {
 }
 
 STRETCHY_DEFAULTS = {
-    "params": {"special_constants": [0], "contrast_stretch": 1},
+    "params": {"special_constants": [0], "contrast_stretch": 1, "sigma": 0.95},
     "plotter": {"function": simple_mpl_figure},
 }
 ENHANCED_DEFAULTS = {
@@ -146,53 +146,20 @@ DEFAULT_RAPIDLOOKS = {
 
 GENERATED_LOOKS = {}
 
-normed_dcs_looks = {}
+invariant_dcs_looks = {}
 for look_name, look in DEFAULT_RAPIDLOOKS.items():
     if look["look"] != "dcs":
         continue
     if "R6" in look["bands"]:
         continue
-    normed_look = deepcopy(look)
-    normed_look["name"] = "normed " + look["name"]
+    invariant_look = deepcopy(look)
+    invariant_look["name"] = "invariant " + look["name"]
+    invariant_look["params"] = (
+        {"special_constants": [0], "contrast_stretch": 1}
+    )
     # noinspection PyTypeChecker
-    normed_look["prefilter"] = {
-        "function": normalize_range,
-        "params": {"stretch": 1},
-    }
-    normed_dcs_looks["normed " + look_name] = normed_look
-GENERATED_LOOKS |= normed_dcs_looks
-
-sigma_dcs_looks = {}
-for look_name, look in DEFAULT_RAPIDLOOKS.items():
-    if look["look"] != "dcs":
-        continue
-    if "R6" in look["bands"]:
-        continue
-    sigma_look = deepcopy(look)
-    sigma_look["name"] = "fixed sigma " + look_name
-    sigma_look["params"] = {
-        "special_constants": [0],
-        "contrast_stretch": 1,
-        "sigma": 0.95,
-    }
-    sigma_dcs_looks["fixed sigma " + look_name] = sigma_look
-GENERATED_LOOKS |= sigma_dcs_looks
-
-
-# smooth_dcs_looks = {}
-# smoother = make_multi_channel_filter(curry(gaussian_filter))
-# # we're applying these to the procgen dcs also
-# for look_name, look in (DEFAULT_RAPIDLOOKS | GENERATED_LOOKS).items():
-#     if look["look"] != "dcs":
-#         continue
-#     smooth_look = deepcopy(look)
-#     smooth_look["name"] = "smoothed " + look["name"]
-#     # noinspection PyTypeChecker
-#     smooth_look["postfilter"] = {
-#         "function": smoother, "params": {"sigma": 0.8}
-#     }
-#     smooth_dcs_looks["smoothed " + look["name"]] = smooth_look
-# GENERATED_LOOKS |= smooth_dcs_looks
+    invariant_dcs_looks["invariant " + look_name] = invariant_look
+GENERATED_LOOKS |= invariant_dcs_looks
 
 
 cubehelix_looks = {}
@@ -291,7 +258,6 @@ for look in DEFAULT_RAPIDLOOKS:
     DEFAULT_RAPIDLOOKS[look] |= DEFAULT_CROP
 
 # interleaving the hard parts for more efficient loading
-# TODO: maybe don't do this
 drk = list(DEFAULT_RAPIDLOOKS.keys())
 onetwothree = (drk[0:-1:3], drk[1:-1:3], drk[2:-1:3])
 DEFAULT_RAPIDLOOKS = {
@@ -309,4 +275,3 @@ THUMBNAIL_THESE = (
     "dcs R0R_R0G_R0B",
 )
 THUMBNAIL_SIZE = (240, 330)
-
