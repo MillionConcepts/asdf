@@ -273,8 +273,6 @@ def asdf_hello(
     keep_thumbnails: "kt" = False,
     recursive=False,
     product_type: "t" = "",
-    seq_id: "i" = "",
-    sol: "l" = "",
     dump_paths: "dp" = "",
     save_plain_images = False,
     image_regex: "ir" = None,
@@ -308,8 +306,6 @@ def asdf_hello(
     :param product_type: filter files for a particular product type
     :param dump_paths: dump paths and quit after producing file list
     :param keep_thumbnails: include thumbnails in searches
-    :param sol: target sol for search (useful for recursive search)
-    :param seq_id: target seq_id for search (useful for recursive search)
     :param save_plain_images: save images without labels or borders
 
     """
@@ -319,18 +315,15 @@ def asdf_hello(
     if noninteractive_all:
         noninteractive = "all"
     if abbreviate:
-        directory, sol, seq_id = handle_abbreviation(*path.split(","))
+        directory, seq_id = handle_abbreviation(*path.split(","))
         explicit_path = None
     else:
         directory = None
-        sol = sol
-        if seq_id:
-            seq_id = "ZCAM" + str(seq_id)
+        seq_id = None
         explicit_path = path
     observation, is_multiple = find_and_offer_observations(
         root_dir=directory,
         explicit_path=explicit_path,
-        target_sol=sol,
         target_seq_id=seq_id,
         noninteractive=noninteractive,
         keep_broadband=keep_broadband,

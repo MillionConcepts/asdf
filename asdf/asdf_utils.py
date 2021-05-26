@@ -1,5 +1,6 @@
 """generic utility-type functions for asdf"""
 
+from collections.abc import Collection
 import random
 import string
 from pathlib import Path
@@ -127,3 +128,11 @@ def dir_fs(path):
     if not path.is_dir:
         path = path.parent
     return OSFS(str(path))
+
+
+def listify(thing):
+    """Always a list, for things that want lists"""
+    if isinstance(thing, Collection):
+        if not isinstance(thing, str):
+            return list(thing)
+    return [thing]

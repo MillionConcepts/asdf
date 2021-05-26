@@ -16,7 +16,7 @@ from cytoolz.itertoolz import partition
 from fs.osfs import OSFS
 
 import asdf.settings as settings
-from asdf.asdf_utils import load_roi_file, split_on, dir_fs
+from asdf.asdf_utils import load_roi_file, split_on, dir_fs, listify
 from asdf.console import ASDFLOG
 from asdf.network import get_public_m20_waypoints
 from asdf.parse import (
@@ -57,36 +57,18 @@ def drop_mismatched_versions(siblings, base_version=None):
 
 
 def skim_products(
-    files, field_filters=None, file_regex=None, aux_skimmer=cached_aux_skimmer
+    products, field_filters=None, aux_skimmer=cached_aux_skimmer
 ):
-    if file_regex:
-        matches = tuple(
-            filter(curry(re.match, file_regex, flags=re.I), files)
-        )
-        if len(matches) != len(files):
-            ASDFLOG.info(
-                "... {} / {} matching regex {} ...".format(
-                    str(len(matches)), str(len(files)), file_regex
-                )
-            )
-        files = matches
-    products = tuple(filter(None, map(parse_zcam_fn, files)))
-    if not products:
-        return None
-    ASDFLOG.info(
-        "... {} / {} have parsable ZCAM filenames ...".format(
-            str(len(products)), str(len(files))
-        )
-    )
-    products = pd.DataFrame(products)
-    # TODO: merge these with other prefilters below?
     # prefilters that don't require dipping into the header,
-    #  for speed on networked filesystems
+    #  for speed and stability on networked filesystems
     if field_filters:
         for field, value in field_filters.items():
+            target_values = listify(value)
             if products[field].dtype.char in np.typecodes["AllInteger"]:
-                value = int(value)
-            filtered_products = products.loc[products[field] == value].copy()
+                target_values = [int(value) for value in target_values]
+            filtered_products = products.loc[
+                products[field].isin(target_values)
+            ].copy()
             # TODO: shift these down to hidden...
             ASDFLOG.info(
                 "... {} / {} matching {} criterion ...".format(
@@ -94,10 +76,8 @@ def skim_products(
                 )
             )
             products = filtered_products
+    ASDFLOG.info("... skimming headers for grouping information ...")
     products = products.sort_values(by="CTIME").reset_index(drop=True)
-    ASDFLOG.info(
-        "... skimming headers for grouping information ..."
-    )
     return pd.concat(
         (
             products.drop("PATH", axis=1),
@@ -108,15 +88,7 @@ def skim_products(
     )
 
 
-def scan_zcam_files(
-    root_dir: Union[str, Path] = "",
-    target_sol: Union[int, str] = "",
-    target_seq_id: str = "",
-    regex_filter=None,
-    keep_thumbnails=False,
-    recursive=False,
-    target_product_type=None,
-):
+def ls_zcam(root_dir, recursive, file_regex):
     if recursive is True:
         scan_fs = OSFS(str(root_dir))
         files = [scan_fs.getsyspath(file) for file in scan_fs.walk.files()]
@@ -125,21 +97,58 @@ def scan_zcam_files(
     ASDFLOG.info(
         "... {} files found in search path ...".format(str(len(files)))
     )
-    # TODO, maybe: add handling for edge cases that may someday occur
-    #  in which site, drive, or zoom become distinguishing features
-    field_filters = {}
-    if target_sol:
-        field_filters["SOL"] = target_sol
-    if target_seq_id:
-        field_filters["SEQ_ID"] = target_seq_id
-    if keep_thumbnails is False:
-        field_filters["THUMBNAIL"] = "N"
-    products = skim_products(files, field_filters, regex_filter)
+    if file_regex:
+        matches = tuple(filter(curry(re.match, file_regex, flags=re.I), files))
+        if len(matches) != len(files):
+            ASDFLOG.info(
+                "... {} / {} matching regex {} ...".format(
+                    str(len(matches)), str(len(files)), file_regex
+                )
+            )
+        files = matches
+    products = tuple(filter(None, map(parse_zcam_fn, files)))
+    if products:
+        products = pd.DataFrame(products)
+        ASDFLOG.info(
+            "... {} / {} have parsable ZCAM filenames ...".format(
+                str(len(products)), str(len(files))
+            )
+        )
+        return products.sort_values(by="CTIME").reset_index(drop=True)
+    return None
+
+
+def scan_zcam_files(
+    root_dir: Union[str, Path] = "",
+    target_sol: Union[int, str, pd.Series] = None,
+    target_seq_id: Union[str, pd.Series] = None,
+    regex_filter=None,
+    keep_thumbnails=False,
+    recursive=False,
+    target_product_type=None,
+):
+
+    products = ls_zcam(root_dir, recursive, regex_filter)
     if products is None:
         raise ValueError(
             "sorry, no files in " + str(root_dir) + " have parsable"
             " ZCAM filenames."
         )
+    # TODO, maybe: add handling for edge cases that may someday occur
+    #  in which site, drive, or zoom become distinguishing features
+    field_filters = {}
+    if isinstance(target_sol, (pd.Series, np.ndarray)):
+        field_filters["SOL"] = target_sol
+    elif target_sol:
+        field_filters["SOL"] = target_sol
+    if isinstance(target_seq_id, (pd.Series, np.ndarray)):
+        field_filters["SEQ_ID"] = target_seq_id
+    elif target_seq_id:
+        field_filters["SEQ_ID"] = target_seq_id
+    if keep_thumbnails is False:
+        field_filters["THUMBNAIL"] = "N"
+    products = skim_products(products, field_filters)
+
     if target_product_type:
         target_product_type = target_product_type.upper()
         if target_product_type in ("IOF", "IOF_EST"):
@@ -529,17 +538,19 @@ def compare_roi_colors(analyses):
 def find_matching_observations(analyses, search_dir, search_regex):
     # This does not presently support thumbnails; we may need to collect
     # more metadata
+
+    # prefilters for efficiency and reduced chance
+    # of bizarre permissions errors on networked
+    # filesystems
+    target_sols = analyses["SOL"].unique()
+    target_seq_ids = analyses["SEQ_ID"].unique()
     available_files = scan_zcam_files(
         search_dir,
         recursive=True,
         regex_filter=search_regex,
+        target_sol=target_sols,
+        target_seq_id=target_seq_ids,
     )
-    # prefilter df for efficiency
-    for field in ["SOL", "SEQ_ID"]:
-        relevant_values = analyses[field].unique()
-        available_files = available_files.loc[
-            available_files[field].isin(relevant_values)
-        ].copy()
     parser_warnings = []
     misses = []
     reprocess_pairs = {}

@@ -323,9 +323,14 @@ def setup_reprocess(
     with ASDF_PROGRESS_SPIN as prog:
         style_prog(prog, "hot_pink on black")
         ASDF_RPH_SPIN.task_id = prog.add_task(" ... scanning files ...")
-        reprocess_pairs, parser_warnings, misses = find_matching_observations(
-            analyses, image_path, image_regex
-        )
+        try:
+            reprocess_pairs, parser_warnings, misses = find_matching_observations(
+                analyses, image_path, image_regex
+            )
+        except (PermissionError, FileNotFoundError, ValueError) as err:
+            prog.remove_task(ASDF_RPH_SPIN.task_id)
+            aprint(str(err) + " :confused_face:", style="bold red")
+            return None, None
         prog.remove_task(ASDF_RPH_SPIN.task_id)
     if parser_warnings:
         for pw in parser_warnings:

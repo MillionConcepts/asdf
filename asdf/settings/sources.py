@@ -14,7 +14,6 @@ PIX_ROOTS = [
 PATH_ABBREVIATIONS = {
     'scratch': "/scratch/cal_wg/flight/products/",
     "proj": "/project/m2020/mastcamz/surface/flight/products",
-    "test": "/home/michael/is_sshfs/scratch/cal_wg/flight/products/",
     "test2": "/home/michael/Desktop/zcam_data/products/",
 }
 DEFAULT_PRODUCT_SUBDIRECTORY = 'iof'

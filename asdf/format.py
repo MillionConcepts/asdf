@@ -87,7 +87,7 @@ def handle_abbreviation(
                 ),
                 style="bold red",
             )
-            return None, None, None
+            return None, None
     else:
         path_root = list(settings.sources.PATH_ABBREVIATIONS.values())[0]
     if filetype:
@@ -97,7 +97,7 @@ def handle_abbreviation(
     directory = Path(path_root, sol_path, product_subdirectory)
     if seq_id:
         seq_id = "ZCAM" + str(seq_id)
-    return directory, sol, seq_id
+    return directory, seq_id
 
 
 def make_rapidlook_thumbnails(rapidlooks, size):
