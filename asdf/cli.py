@@ -276,7 +276,8 @@ def asdf_hello(
     seq_id: "i" = "",
     sol: "l" = "",
     dump_paths: "dp" = "",
-    save_plain_images = False
+    save_plain_images = False,
+    image_regex: "ir" = None,
 ):
     """
     processes and archives everything
@@ -337,6 +338,7 @@ def asdf_hello(
         keep_thumbnails=keep_thumbnails,
         recursive=recursive,
         target_product_type=product_type,
+        regex_filter=image_regex
     )
     if observation is None:
         return
