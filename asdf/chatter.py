@@ -232,7 +232,7 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     aprint(
         "[italic dark_turquoise]found[bright_green] {} ROI and {} "
         "marslab files; [slate_blue1]ignoring {} other files of other "
-        "types".format(len(roi), len(marslab), reject_count)
+        "types".format(str(len(roi)), str(len(marslab)), reject_count)
     )
     if (len(roi) == 0) or (len(marslab) == 0):
         return sorry_analysis()
@@ -241,7 +241,7 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     aprint(
         "[italic bright_green]{} ROI and {} marslab files in path "
         "[dark_turquoise]matched[/dark_turquoise] sol, "
-        "seq_id, and regex filters".format(len(roi), len(marslab))
+        "seq_id, and regex filters".format(str(len(roi)), str(len(marslab)))
     )
     if (len(roi) == 0) or (len(marslab) == 0):
         return sorry_analysis()
