@@ -86,7 +86,7 @@ def find_and_offer_observations(
             results, problems, hidden_things = cluster_observations(
                 products, target_file, keep_broadband, keep_caltarget
             )
-        except (ValueError, FileNotFoundError) as err:
+        except (ValueError, FileNotFoundError, PermissionError) as err:
             prog.remove_task(ASDF_RPH_SPIN.task_id)
             aprint(str(err) + " :confused_face:", style="bold red")
             return None, False
