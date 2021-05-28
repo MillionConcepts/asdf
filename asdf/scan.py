@@ -77,10 +77,16 @@ def skim_products(
             products = filtered_products
     ASDFLOG.info("... skimming headers for grouping information ...")
     products = products.sort_values(by="CTIME").reset_index(drop=True)
+    skim_results = []
+    for product in products["PATH"]:
+        try:
+            skim_results.append(aux_skimmer(product))
+        except (FileNotFoundError, TypeError, KeyError):
+            ASDFLOG.info(str(product) + " can't be parsed, skipping")
     return pd.concat(
         (
             products.drop("PATH", axis=1),
-            pd.DataFrame(products["PATH"].map(aux_skimmer).tolist()),
+            pd.DataFrame(skim_results),
             products["PATH"],
         ),
         axis=1,
