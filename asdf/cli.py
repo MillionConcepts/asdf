@@ -358,7 +358,6 @@ def asdf_hello(
                     file.write(path + "\n")
             return
     asdf_args = (
-        observation,
         roi_path,
         upload,
         output,
@@ -370,7 +369,7 @@ def asdf_hello(
         console,
     )
     if is_multiple is not True:
-        return asdf_body(*asdf_args, save_plain_images=save_plain_images)
+        return asdf_body(observation, *asdf_args, save_plain_images=save_plain_images)
     for ix, obs in enumerate(observation):
         aprint(
             "... processing observation "
@@ -380,7 +379,7 @@ def asdf_hello(
             + " ... ",
             style="bold cyan1",
         )
-        asdf_body(*asdf_args, save_plain_images=save_plain_images)
+        asdf_body(obs, *asdf_args, save_plain_images=save_plain_images)
 
 
 def fdsa_hello(
