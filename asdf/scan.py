@@ -116,7 +116,9 @@ def ls_zcam(root_dir, recursive, file_regex):
         "... {} files found in search path ...".format(str(len(files)))
     )
     if file_regex:
-        matches = tuple(filter(curry(re.match, file_regex, flags=re.I), files))
+        matches = tuple(
+            filter(curry(re.match, file_regex, flags=re.I), map(str, files))
+        )
         if len(matches) != len(files):
             ASDFLOG.info(
                 "... {} / {} matching regex {} ...".format(
