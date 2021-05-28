@@ -2,6 +2,7 @@
 formatting and helper functions for other asdf modules.
 """
 import os
+from hashlib import md5
 from pathlib import Path
 
 import matplotlib.figure
@@ -189,3 +190,26 @@ METADATA_DTYPES = {
     "SOLAR_AZIMUTH": "float32",
     "SCLK": "float64",
 }
+
+
+def md5sum(path_or_file, hash_function=md5):
+    hasher = hash_function()
+    if isinstance(path_or_file, (str, Path)):
+        with open(path_or_file, "rb") as file_to_be_hashed:
+            hashbuffer = file_to_be_hashed.read()
+            hasher.update(hashbuffer)
+    else:
+        hasher.update(path_or_file)
+        path_or_file.seek(0)
+
+    return hasher.hexdigest()
+
+
+def add_image_hashes(bandset):
+    paths = bandset.metadata['PATH'].unique()
+    md5s = tuple(map(md5sum, paths))
+    # bandset.metadata['SOURCE_MD5SUM'] = ''
+    for path, md5 in zip(paths, md5s):
+        bandset.metadata.loc[
+            bandset.metadata['PATH'] == path, 'SOURCE_MD5SUM'
+        ] = md5

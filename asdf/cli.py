@@ -34,7 +34,7 @@ from asdf.format import (
     make_rapidlook_thumbnails,
     handle_abbreviation,
     make_asdf_outpath,
-    compile_looks,
+    compile_looks, add_image_hashes,
 )
 from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint
 from asdf.network import upload_asdf_analysis
@@ -121,6 +121,10 @@ def asdf_body(
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 bandset.load("all")
+                aprint("... generating image checksums ...")
+                # TODO: make this more efficient with callbacks in the load
+                # functions or explicitly passing filelikes or something
+                add_image_hashes(bandset)
     # set up thumbnail cache
     thumbnail_staging = {}
     pick_thumbs = keyfilter(partial(contains, settings.rapidlooks.THUMBNAILS))
@@ -369,7 +373,9 @@ def asdf_hello(
         console,
     )
     if is_multiple is not True:
-        return asdf_body(observation, *asdf_args, save_plain_images=save_plain_images)
+        return asdf_body(
+            observation, *asdf_args, save_plain_images=save_plain_images
+        )
     for ix, obs in enumerate(observation):
         aprint(
             "... processing observation "
