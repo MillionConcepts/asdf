@@ -1,45 +1,14 @@
+# import statements -- don't mess with these
 from copy import deepcopy
-from itertools import chain
 
-import cv2
 import matplotlib.font_manager as mplf
-import numpy as np
-from cytoolz.functoolz import curry
-from matplotlib import cm
-from matplotlib.colors import ListedColormap
 from scipy.ndimage import gaussian_filter
 
+from asdf.settings.generators import (smoother, make_bilateralfilter)
+from marslab.imgops.imgutils import std_clip, normalize_range
+from marslab.imgops.render import colormapped_plot, simple_figure
 
-# TODO: clean this up
-from marslab.imgops.imgutils import std_clip, normalize_range, split_filter
-from marslab.imgops.render import colormapped_plot, simple_mpl_figure
-
-
-def make_orange_teal_cmap():
-    teal = (98, 252, 232)
-    orange = (255, 151, 41)
-    half_len = 256
-    vals = np.ones((half_len * 2, 4))
-    vals[0:half_len, 0] = np.linspace(orange[0] / half_len, 0, half_len)
-    vals[0:half_len, 1] = np.linspace(orange[1] / half_len, 0, half_len)
-    vals[0:half_len, 2] = np.linspace(orange[2] / half_len, 0, half_len)
-    vals[half_len:, 0] = np.linspace(0, teal[0] / half_len, half_len)
-    vals[half_len:, 1] = np.linspace(0, teal[1] / half_len, half_len)
-    vals[half_len:, 2] = np.linspace(0, teal[2] / half_len, half_len)
-    return ListedColormap(vals)
-
-
-def make_aqua_pink_accent():
-    aqua = (0, 1, 1, 1)
-    pink = (1, 0, 1, 1)
-    transparent = (0.5, 0.5, 0.5, 0)
-    vals = np.full((10, 4), transparent)
-    for channel in range(3):
-        vals[:, channel][0] = aqua[channel]
-        vals[:, channel][-1] = pink[channel]
-    return ListedColormap(vals)
-
-
+# font settings for annotations on rapidlooks
 TITLE_FONT = mplf.FontProperties(
     fname="static/fonts/TitilliumWeb-Light.ttf", size=10
 )
@@ -51,179 +20,130 @@ ROI_FONT = mplf.FontProperties(
 )
 
 
-SPECTRAL_DEFAULTS = {
+# default settings for band parameter maps
+# note: "cmap" defines a colormap used by a rapidlook. "orange_teal"
+# and "aqua_pink" are custom asdf/marslab cmaps. others are from matplotlib's
+# default library. for a list of built-in matplotlib cmaps, see:
+# https://matplotlib.org/stable/gallery/color/colormap_reference.html
+BANDMAP_DEFAULTS = {
+    "name": "{look} {bands}",
     "params": {"special_constants": [0]},
     "limiter": {"function": std_clip},
     "postfilter": {"function": gaussian_filter, "params": {"sigma": 2}},
     "plotter": {
         "function": colormapped_plot,
         "params": {
-            "cmap": make_orange_teal_cmap(),
+            "cmap": "orange_teal",
             "colorbar_fp": TICK_FONT,
             "render_colorbar": True,
         },
     },
 }
 
+# default settings for DCS and similar stretch-centric looks
 STRETCHY_DEFAULTS = {
+    "name": "dcs {bands}",
+    "look": "dcs",
     "params": {"special_constants": [0], "contrast_stretch": 1, "sigma": 0.95},
-    "plotter": {"function": simple_mpl_figure},
+    "plotter": {"function": simple_figure},
 }
+
+# default settings for enhanced color looks
 ENHANCED_DEFAULTS = {
+    "name": "enhanced color {bands}",
     "look": "composite",
     "prefilter": {
         "function": normalize_range,
         "params": {"stretch": (1.25, 1)},
     },
     "params": {"special_constants": [0]},
-    "plotter": {"function": simple_mpl_figure},
+    "plotter": {"function": simple_figure},
 }
 
+# default settings for true color looks
 TRUE_DEFAULTS = {
+    "name": "true color {bands}",
     "look": "composite",
     "params": {"special_constants": [0]},
     "limiter": {"function": normalize_range, "params": {"stretch": 0.1}},
-    "plotter": {"function": simple_mpl_figure},
+    "plotter": {"function": simple_figure},
 }
 
-
-# noinspection PyTypeChecker
-DEFAULT_RAPIDLOOKS = {
-    "BD529": SPECTRAL_DEFAULTS
-    | {
-        "look": "band_depth",
-        "bands": ("L6", "L4", "L5"),
-    },
-    "BD866": SPECTRAL_DEFAULTS
-    | {
-        "look": "band_depth",
-        "bands": ("R1", "R4", "R2"),
-    },
-    "BD678": SPECTRAL_DEFAULTS
-    | {
-        "look": "band_depth",
-        "bands": ("L4", "L2", "L3"),
-    },
-    "S56": SPECTRAL_DEFAULTS
-    | {
-        "look": "slope",
-        "bands": ("R5", "R6"),
-    },
-    "S16": SPECTRAL_DEFAULTS
-    | {
-        "look": "slope",
-        "bands": ("R1", "R6"),
-    },
-    "enhanced color": ENHANCED_DEFAULTS
-    | {"name": "enhanced color", "bands": ("L2", "L5", "L6")},
-    "L0 enhanced color": ENHANCED_DEFAULTS
-    | {"name": "enhanced color", "bands": ("L0R", "L0G", "L0B")},
-    "R0 enhanced color": ENHANCED_DEFAULTS
-    | {"name": "enhanced color", "bands": ("R0R", "R0G", "R0B")},
-    "L0 true color": TRUE_DEFAULTS
-    | {
-        "name": "true color",
-        "bands": ("L0R", "L0G", "L0B"),
-    },
-    "R0 true color": TRUE_DEFAULTS
-    | {
-        "name": "true color",
-        "bands": ("R0R", "R0G", "R0B"),
-    },
-    "dcs": STRETCHY_DEFAULTS
-    | {"look": "dcs", "name": "dcs", "bands": ("L2", "L5", "L6")},
-    "R0 dcs": STRETCHY_DEFAULTS
-    | {"look": "dcs", "name": "dcs", "bands": ("R0R", "R0G", "R0B")},
-    "L0 dcs": STRETCHY_DEFAULTS
-    | {"look": "dcs", "name": "dcs", "bands": ("L0R", "L0G", "L0B")},
-    "IR dcs": STRETCHY_DEFAULTS
-    | {"look": "dcs", "name": "dcs", "bands": ("R6", "R3", "R1")},
+# crop dimensions for rapidlooks. a setting of (25, 25, 11, 11)
+# effectively crops off the physically-masked "frame" around the detector.
+CROP_SETTINGS = {
+    "crop": (25, 25, 11, 11),
 }
 
-# ###########################################################3
-# section to procedurally generate additional looks
-# ######################################################
+#############################################################################
+#                      explicit rapidlook definitions
+#############################################################################
+# BANDMAP_DEFAULTS are automatically added
+# to all these looks
+BANDMAP = (
+    {"look": "band_depth", "bands": ("L6", "L4", "L5")},
+    {"look": "band_depth", "bands": ("R1", "R4", "R2")},
+    {"look": "band_depth", "bands": ("L4", "L2", "L3")},
+    {"look": "slope", "bands": ("R5", "R6")},
+    {"look": "slope", "bands": ("R1", "R6")},
+)
+# ENHANCED_DEFAULTS are added to these
+ENHANCED = (
+    {"bands": ("L2", "L5", "L6")},
+    {"bands": ("L0R", "L0G", "L0B")},
+    {"bands": ("R0R", "R0G", "R0B")},
+)
+# TRUE_DEFAULTS are added to these
+TRUE = (
+    {"bands": ("L0R", "L0G", "L0B")},
+    {"bands": ("R0R", "R0G", "R0B")},
+)
 
-GENERATED_LOOKS = {}
+# STRETCHY_DEFAULTS are added to these
+STRETCHY = (
+    {"bands": ("L2", "L5", "L6")},
+    {"bands": ("R0R", "R0G", "R0B")},
+    {"bands": ("L0R", "L0G", "L0B")},
+    {"bands": ("R6", "R3", "R1")},
+)
 
-invariant_dcs_looks = {}
-for look_name, look in DEFAULT_RAPIDLOOKS.items():
-    if look["look"] != "dcs":
-        continue
-    if "R6" in look["bands"]:
-        continue
-    invariant_look = deepcopy(look)
-    invariant_look["name"] = "invariant " + look["name"]
-    invariant_look["params"] = (
-        {"special_constants": [0], "contrast_stretch": 1}
-    )
-    # noinspection PyTypeChecker
-    invariant_dcs_looks["invariant " + look_name] = invariant_look
-GENERATED_LOOKS |= invariant_dcs_looks
-
-
-cubehelix_looks = {}
-for look_name, look in DEFAULT_RAPIDLOOKS.items():
-    if look["look"] not in ("band_depth", "ratio", "slope"):
-        continue
-    cubehelix_look = deepcopy(look)
-    cubehelix_look["name"] = look["look"] + " cubehelix"
-    # noinspection PyTypeChecker
-    cubehelix_look["plotter"]["params"]["cmap"] = "cubehelix"
-    cubehelix_looks[look_name + " cubehelix"] = cubehelix_look
-GENERATED_LOOKS |= cubehelix_looks
-
-
-# cv2.bilateralFilter is a weird exception to gradual partial evaluation we
-# use later in the pipeline -- it has some over-the-hood overload resolution
-# that breaks it. so we bind arguments to it here in a closure.
+# this notifies the look assembler to consider the categories above
+# and associate them with their defaults.
+CATEGORIES = ("BANDMAP", "ENHANCED", "TRUE", "STRETCHY")
 
 
-def make_bilateralfilter(d, sigmaColor, sigmaSpace):
-    def do_bilateralfilter(array):
-        return cv2.bilateralFilter(
-            array, d=d, sigmaColor=sigmaColor, sigmaSpace=sigmaSpace
-        )
+#############################################################################
+#                 procedurally-generated rapidlooks
+#############################################################################
 
-    return do_bilateralfilter
+# sigma-invariant (non-merspect-style) dcs options
+INVARIANT_OPTIONS = {"sigma": None, "contrast_stretch": 1}
 
-
-ACCENT_DEFAULTS = deepcopy(SPECTRAL_DEFAULTS)
+# defaults for 'accent' - type looks (currently just the aqua-pink overlays)
+ACCENT_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
 ACCENT_DEFAULTS["prefilter"] = {"function": make_bilateralfilter(15, 3, 7)}
 
-AQUA_PINK_OVERLAY_DEFAULTS = {
+# settings for the aqua-pink overlays
+AQUA_PINK_OVERLAY_OPTIONS = {
     "params": {
         "mpl_settings": {"colorbar_fp": TICK_FONT},
         "overlay_opacity": 0.3,
-        "overlay_cmap": make_aqua_pink_accent(),
-        "base_cmap": cm.get_cmap("Greys_r"),
+        "overlay_cmap": "aqua_pink",
+        "base_cmap": "Greys_r",
     },
 }
 
-accent_looks = {}
-for look_name, look in DEFAULT_RAPIDLOOKS.items():
-    if look["look"] not in ("band_depth", "ratio", "slope"):
-        continue
-    new_look = deepcopy(look)
-    new_look["name"] = look["look"] + " accent"
-    new_look |= ACCENT_DEFAULTS
-    # noinspection PyTypeChecker
-    new_look["overlay"] = AQUA_PINK_OVERLAY_DEFAULTS | {
-        "band": look["bands"][0]
-    }
-    accent_looks[look_name + " accent"] = new_look
-GENERATED_LOOKS |= accent_looks
-
-HEATMAP_DEFAULTS = deepcopy(SPECTRAL_DEFAULTS)
+# default options for 'heatmap' - type looks -- currently in this file
+# only including the rainbow looks
+HEATMAP_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
 HEATMAP_DEFAULTS["prefilter"] = {
-    # "function": make_bilateralfilter(20, 5, 10),
+    # syntax for the bilateral filter is slightly different because of a
+    # problem in python-opencv
     "function": make_bilateralfilter(10, 10, 10),
 }
-smoother = split_filter(curry(gaussian_filter), axis=0)
-
 HEATMAP_DEFAULTS["postfilter"] = {"function": smoother, "params": {"sigma": 5}}
 
-RAINBOW_OVERLAY_DEFAULTS = {
+RAINBOW_OPTIONS = {
     "params": {
         "mpl_settings": {"colorbar_fp": TICK_FONT},
         "overlay_opacity": 0.35,
@@ -231,42 +151,23 @@ RAINBOW_OVERLAY_DEFAULTS = {
         "base_cmap": "Greys_r",
     }
 }
-rainbow_looks = {}
-for look_name, look in DEFAULT_RAPIDLOOKS.items():
-    if look["look"] not in ("band_depth", "ratio", "slope"):
-        continue
-    new_look = deepcopy(look)
-    new_look["name"] = look["look"] + " heatmap"
-    new_look |= HEATMAP_DEFAULTS
-    # noinspection PyTypeChecker
-    new_look["overlay"] = RAINBOW_OVERLAY_DEFAULTS | {"band": look["bands"][0]}
-    rainbow_looks[look_name + " heatmap"] = new_look
-GENERATED_LOOKS |= rainbow_looks
 
+# dictionary of all procedural looks to be generated. general syntax is:
+# '$CATEGORY_NAME': (options_for_look, options_for_other_look, ...)
 
-DEFAULT_RAPIDLOOKS |= GENERATED_LOOKS
-
-
-# add crop
-# TODO: is it gross to do it this way?
-
-DEFAULT_CROP = {
-    "crop": (25, 25, 11, 11),
-}
-
-for look in DEFAULT_RAPIDLOOKS:
-    DEFAULT_RAPIDLOOKS[look] |= DEFAULT_CROP
-
-# interleaving the hard parts for more efficient loading
-drk = list(DEFAULT_RAPIDLOOKS.keys())
-onetwothree = (drk[0:-1:3], drk[1:-1:3], drk[2:-1:3])
-DEFAULT_RAPIDLOOKS = {
-    key: DEFAULT_RAPIDLOOKS[key] for key in chain.from_iterable(onetwothree)
+LOOK_GENERATORS = {
+    "accent": [AQUA_PINK_OVERLAY_OPTIONS],
+    "heatmap": [RAINBOW_OPTIONS],
+    "stretchy": [INVARIANT_OPTIONS],
+    # recolored bandmaps: just give colormap names
+    "bandmap": ["viridis"],
 }
 
 CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
 
-THUMBNAIL_THESE = (
+# any rapidlook listed here will be turned into a thumbnail and uploaded to S3,
+# and will also be linked in the Google Sheet if columns are made for them.
+THUMBNAILS = (
     "enhanced color L2_L5_L6",
     "dcs L2_L5_L6",
     "enhanced color R0R_R0G_R0B",

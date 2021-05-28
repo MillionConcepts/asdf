@@ -136,3 +136,5 @@ def listify(thing):
         if not isinstance(thing, str):
             return list(thing)
     return [thing]
+
+

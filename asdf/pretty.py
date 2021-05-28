@@ -14,24 +14,28 @@ from rich.text import Text
 
 from asdf.asdf_utils import extract_constants
 from asdf.console import aprint, ASDF_CONSOLE
-from asdf.settings.metadata import ROI_METADATA_FIELD_PROMPTS, \
-    ROI_METADATA_FIELD_CHOICES
+from asdf.settings.metadata import (
+    ROI_METADATA_FIELD_PROMPTS,
+    ROI_METADATA_FIELD_CHOICES,
+)
 from marslab.compat.mertools import MERSPECT_M20_COLOR_MAPPINGS
 
 
 def style_prog(rich_progress, style):
     rich_progress.style = style
     for column in rich_progress.columns:
-        if 'style' in dir(column):
+        if "style" in dir(column):
             column.style = style
-        if 'spinner' in dir(column):
+        if "spinner" in dir(column):
             column.spinner.style = style
-        if 'spinners' in dir(column):
+        if "spinners" in dir(column):
             for spinner in column.spinners:
-                spinner.style=style
+                spinner.style = style
 
 
 class NumberedChoicePrompt(PromptBase):
+    """prompt type for our enumerated shortcut ROI prompts"""
+
     def __init__(self, *args, skippable=True, **kwargs):
         super().__init__(*args, **kwargs)
         choices = kwargs.get("choices")
@@ -54,7 +58,7 @@ class NumberedChoicePrompt(PromptBase):
         prompt = self.prompt.copy()
         prompt_choices = " " + ", ".join(numbered_choices)
         if self.skippable is True:
-            prompt_choices += " (press Enter to skip)"
+            prompt_choices += " (press Enter to skip):"
         return prompt + prompt_choices
 
     def process_response(self, value: str):
@@ -64,10 +68,9 @@ class NumberedChoicePrompt(PromptBase):
         # convert back to 0-indexing
         return self.choice_lookup[int(value) - 1]
 
+
 # TODO: this isn't spanning across instruments, should fold into
 #   marslab.parse, blah blah
-
-
 CAM_IMAGE_SLICES = MappingProxyType(
     {
         "instrument": (0, 1),
@@ -105,9 +108,6 @@ class M20CameraHighlighter(Highlighter):
                 text.stylize("magenta1", *slice_ix)
 
 
-
-
-
 def format_roi_title(roi_title):
     prompt_text = Text()
     if roi_title is not None:
@@ -127,6 +127,7 @@ def name_prompt() -> str:
 
 
 def y_n_prompt(prompt_text, title=None):
+    """generate and perform Y/N prompts"""
     texts = prompt_text.split("{title}")
     title = format_roi_title(title)
     formatted_text = texts[0].append_text(title).append_text(texts[1])
@@ -144,11 +145,13 @@ def colorize_merspect_roi_name(roi_color_name=None):
 
 
 def generic_metadata_prompt_text(field, title):
-    prompt_text = Text("Please enter the ")
-    prompt_text.append(field, style="bold")
-    prompt_text.append(" value of ")
-    prompt_text.append(format_roi_title(title))
-    prompt_text.append(" ROI.")
+    """
+    fallback text for ROI metadata field prompts that don't have
+    specified text in settings.metadata.ROI_METADATA_FIELD_PROMPTS
+    """
+    prompt_text = Text.from_markup(
+        "What is the [bold]{}[/] value of ".format(field)
+    ).append_text(format_roi_title(title) + " ROI? (press Enter to skip)")
     return prompt_text
 
 
@@ -204,7 +207,7 @@ def format_observation(observation: pd.DataFrame):
     # TODO: this colorizing gets overwritten by the default table header style
     if constant_dict.get("COMPLETION") != "COMPLETE_CHECKSUM_PASS":
         tailtext.append(", ")
-        tailtext.append("contains partials", style="dark_orange")
+        tailtext.append("contains partial(s)", style="dark_orange")
     if constant_dict.get("THUMBNAIL") in ["T", "Y"]:
         tailtext.append(", ")
         tailtext.append("thumbnails", style="dark_orange")

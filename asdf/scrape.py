@@ -15,7 +15,7 @@ IOF_LABEL_BYTES = 35592
 METADATA_REGEX = MappingProxyType(
     {
         field: re.compile(pattern)
-        for field, pattern in settings.metadata.IOF_METADATA_REGEX_STRINGS.items()
+        for field, pattern in settings.metadata.IOF_METADATA_REGEX.items()
     }
 )
 
@@ -145,3 +145,12 @@ def bulk_scrape_metadata(iof_files: Iterable) -> list[dict]:
 # cached filesystem functions for execution speed on networked filesystems
 cached_ls = cache(os.listdir)
 cached_exists = cache(os.path.exists)
+
+
+@cache
+def is_pixel_map_heuristic(putative_pixmap_path):
+    """
+    TODO: determine if they are the actually only ones that even mention this
+     identifier
+    """
+    return "PIXEL_MAP" in get_label_text(putative_pixmap_path)

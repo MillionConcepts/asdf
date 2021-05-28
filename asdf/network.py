@@ -256,10 +256,12 @@ def upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug=False):
                 metadata_sheet.append_row(
                     row_df.apply(itemize_numpy).tolist(),
                     value_input_option="USER_ENTERED",
+                    table_range='A1:A9999'
                 )
             aprint("completed metadata sheet update")
         except gspread.exceptions.APIError as api_error:
             aprint(
-                "Sorry, couldn't update online metadata: " + str(api_error),
-                color="bold red",
+                ":confused_face: Sorry, couldn't update online metadata: "
+                + str(api_error),
+                style="bold red",
             )

@@ -24,7 +24,6 @@ from asdf.parse import (
     parse_pointing,
     parse_zcam_fn,
     pix_reference,
-    is_pixel_map,
     looks_like_marslab,
     looks_like_roi,
 )
@@ -32,7 +31,7 @@ from asdf.scrape import (
     cached_aux_skimmer,
     is_iof_est_heuristic,
     cached_ls,
-    cached_exists,
+    cached_exists, is_pixel_map_heuristic,
 )
 
 
@@ -302,7 +301,7 @@ def find_matching_pixmap(product_path):
     if len(possible_pixmaps) == 0:
         return None, match_warnings
     # check 2: are they pixmaps?
-    possible_pixmaps = list(filter(is_pixel_map, possible_pixmaps))
+    possible_pixmaps = list(filter(is_pixel_map_heuristic, possible_pixmaps))
     # TODO: find an actual way way to associate these across versions --
     #  just adding a version number check for now but this is not reliable
     #  ideally the pixmap header should reference the RAD but it does not

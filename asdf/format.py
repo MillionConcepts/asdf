@@ -1,5 +1,5 @@
 """
-formatting and output helper functions for other asdf modules.
+formatting and helper functions for other asdf modules.
 """
 import os
 from pathlib import Path
@@ -12,7 +12,23 @@ from asdf.console import ASDF_CONSOLE, aprint
 from asdf.parse import parse_pointing
 from marslab.imgops.imgutils import absolutely_destroy
 from marslab.imgops.pltutils import set_label
-from marslab.imgops.render import make_thumbnail, simple_mpl_figure
+from marslab.imgops.render import make_thumbnail, simple_figure
+
+
+def compile_looks():
+    """
+    compile looks at runtime -- makes settings.rapidlooks readable while
+    avoiding circular imports.
+    """
+    import asdf.settings.generators.look_assembler
+
+    rapidlooks = asdf.settings.generators.look_assembler.RAPIDLOOKS
+    # interleave 'hard' rapidlooks for efficiency
+    return (
+        rapidlooks[slice(None, None, 3)]
+        + rapidlooks[slice(1, None, 3)]
+        + rapidlooks[slice(2, None, 3)]
+    )
 
 
 def make_asdf_outpath(output, bandset):
@@ -57,7 +73,7 @@ def annotate_and_save(annotation, look, filename, outpath):
     # TODO: decide if these annotation things should live on zcambandset --
     #  this is not urgent. I think _maybe_ they should be separate.
     if not isinstance(look, matplotlib.figure.Figure):
-        look = simple_mpl_figure(look)
+        look = simple_figure(look)
     set_label(look, annotation, fontproperties=settings.rapidlooks.TITLE_FONT)
     look.savefig(
         Path(outpath, filename), dpi=275, bbox_inches="tight", pad_inches=0
@@ -145,7 +161,7 @@ def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
         "ROVER_ELEVATION",
         "CREATOR",
         "ANALYSIS_NAME",
-        "NAME"
+        "NAME",
     )
     uc_here = [col for col in unchanging_columns if col in metadata.columns]
     unchanging_block = metadata.reindex(columns=uc_here)
@@ -160,3 +176,16 @@ def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
     return pd.DataFrame(
         pd.concat([unchanging_block.loc[0], melted.loc[0]], axis=0)
     ).T
+
+
+METADATA_DTYPES = {
+    "SOL": "int16",
+    "WAVELENGTH": "float16",
+    "IX": "uint8",
+    "SOLAR_ELEVATION": "float32",
+    "INSTRUMENT_ELEVATION": "float32",
+    "L_S": "float32",
+    "INSTRUMENT_AZIMUTH": "float32",
+    "SOLAR_AZIMUTH": "float32",
+    "SCLK": "float64",
+}

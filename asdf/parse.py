@@ -1,16 +1,13 @@
-"""functions that essentially instantiate parsing rules"""
+"""functions that basically instantiate text parsing rules"""
 
 import re
-from functools import cache
 from pathlib import Path
 from typing import Union, Mapping
 
 import pandas as pd
 from cytoolz.functoolz import juxt
 
-from asdf.scrape import get_label_text
 from marslab import parse as mp
-from marslab.compat.xcam import piecewise_interpolate_focal_length
 
 
 def offlabel_producer(fn):
@@ -73,7 +70,7 @@ def parse_pointing(sequence: Union[Mapping, pd.DataFrame]) -> dict:
         "SITE": row["RMC"][0],
         "DRIVE": row["RMC"][1],
         "RMS": row["RMC"][6],
-        "ZOOM": row["ZOOM"]
+        "ZOOM": row["ZOOM"],
     }
 
 
@@ -122,12 +119,6 @@ def pix_reference(thing):
         )(thing)
     except (KeyError, ValueError, FileNotFoundError):
         return None
-
-
-@cache
-def is_pixel_map(putative_pixmap_path):
-    """TODO: do they remain the only ones that mention it? might be weak!"""
-    return "PIXEL_MAP" in get_label_text(putative_pixmap_path)
 
 
 def looks_like_marslab(fn):

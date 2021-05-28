@@ -9,11 +9,16 @@ from pathlib import Path
 
 import matplotlib as mpl
 import pandas as pd
+from marslab.compat.mertools import merspect_to_marslab
+from marslab.imgops.imgutils import mapfilter
 from cytoolz.curried import keyfilter
 from rich.rule import Rule
 
 import asdf.settings as settings
-from asdf.asdf_utils import catch_interaction, null_marslab_data_section
+from asdf.asdf_utils import (
+    catch_interaction,
+    null_marslab_data_section,
+)
 from asdf.chatter import (
     input_roi_metadata,
     find_and_offer_observations,
@@ -29,11 +34,11 @@ from asdf.format import (
     make_rapidlook_thumbnails,
     handle_abbreviation,
     make_asdf_outpath,
+    compile_looks,
 )
 from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint
 from asdf.network import upload_asdf_analysis
 from asdf.zcam_bandset import ZcamBandSet
-from marslab.compat.mertools import merspect_to_marslab
 
 
 def asdf_body(
@@ -48,7 +53,7 @@ def asdf_body(
     debug=False,
     console=None,
     recreate_from=None,
-    save_plain_images=False
+    save_plain_images=False,
 ):
     """
     body component of the asdf command line function -- can be called multiple
@@ -58,15 +63,13 @@ def asdf_body(
     # do we have an roi file? if so, turn passed string into a Path
     roi_path = Path(roi_path) if roi_path else None
     # ok? great. initialize BandSet object from these paths
-    console.print(Rule(" gathering metadata "))
+    aprint(Rule(" gathering metadata "))
     if recreate_from:
         prototype = pd.read_csv(recreate_from)
-        console.print(
-            "[italic hot_pink]... fdsa: loaded prototype marslab file ..."
-        )
+        aprint("[italic hot_pink]... fdsa: loaded prototype marslab file ...")
     else:
         prototype = None
-    console.print("... scraping image file headers ...")
+    aprint("... scraping image file headers ...")
     bandset = ZcamBandSet(
         observation, roi_path, suffix, threads=settings.process.THREADS
     )
@@ -87,7 +90,7 @@ def asdf_body(
     ci = partial(catch_interaction, noninteractive)
 
     # tell user where we're putting stuff
-    console.print(
+    aprint(
         "[bold green]NOTE: files will be written to {}".format(str(outpath))
     )
     # get observation name
@@ -108,18 +111,22 @@ def asdf_body(
     else:
         bandset.metadata["NAME"] = ci(name_prompt)
 
-    # do nothing if we are neither producing rapidlooks nor counting ROIs.
-    # otherwise, preload images to share I/O and for convenience.
-    # this is wasteful in the case if are images that are used
-    # by no rapidlook or ROI (but not very wasteful, and this is rare).
-    if not we_do_not_have_rois or not skip_rapidlooks:
-        console.print(Rule(" loading images "))
+    # do nothing if we are doing none of uploading, saving rapidlooks,
+    # or counting ROIs. otherwise, preload images to share I/O and for
+    # convenience. this is wasteful in the case that they are are images
+    # that are used by no rapidlook or ROI (but not very wasteful).
+    if (not we_do_not_have_rois) or (not skip_rapidlooks) or upload:
+        aprint(Rule(" loading images "))
         with console.status("", spinner="star"):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 bandset.load("all")
+    # set up thumbnail cache
+    thumbnail_staging = {}
+    pick_thumbs = keyfilter(partial(contains, settings.rapidlooks.THUMBNAILS))
+
     mpl.use("agg")
-    console.print(Rule(" looking for pixel flag maps "))
+    aprint(Rule(" looking for pixel flag maps "))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         with console.status("... handling flagmaps ...", spinner="star"):
@@ -129,7 +136,7 @@ def asdf_body(
     if we_do_not_have_rois:
         marslab_data = null_marslab_data_section()
     else:
-        console.print(Rule(" gathering ROI data "))
+        aprint(Rule(" gathering ROI data "))
         # suffix goes on this filename as it is 'analysis' - specific
         # did we get a ROI file path? convert it if it's SEL, save to
         # .fits, load it; if it's already FITS, load it
@@ -137,17 +144,17 @@ def asdf_body(
             bandset.name + bandset.suffix, outpath, convert=True
         )
         if merspect is None:
-            console.print("... counting ROIs ...")
+            aprint("... counting ROIs ...")
             marslab_data = bandset.count_rois()
             marslab_data["ROI_SOURCE"] = Path(roi_fits_fn).name
         else:
             # allow user to override counting behavior with a MERspect file
             # TODO, maybe: basic check to make sure file matches pointing
-            console.print("... converting MERspect output ...")
+            aprint("... converting MERspect output ...")
             marslab_data = merspect_to_marslab(merspect, write=False)
             marslab_data["ROI_SOURCE"] = "[merspect] " + Path(merspect).name
         if marslab_data is None:
-            console.print(
+            aprint(
                 "something has gone wrong in loading ROI data.",
                 style="red bold",
             )
@@ -160,55 +167,57 @@ def asdf_body(
                 " prototype ..."
             )
             marslab_data = fdsa_insert(marslab_data, prototype)
-    console.print(Rule(" writing data files "))
+    aprint(Rule(" writing data files "))
     if we_do_not_have_rois:
-        console.print(
-            "[dark_orange]No ROI file passed; using null values for data."
-        )
+        aprint("[dark_orange]No ROI file passed; using null values for data.")
     # add location -- TODO: lookup table once we have more than one
     marslab_data["LOCATION"] = "Octavia E. Butler Landing"
     bandset.counts = marslab_data
-    # glom all the data and metadata together into our three output formats;
+    # glom all the data and metadata together into our three output formats
     bandset.format_metadata()
     # write the compact and extended versions, save the summary in memory
     bandset.write_data_files(outpath, verbose=True)
-    # set up thumbnail cache
-    thumbnail_staging = {}
-    pick_thumbs = keyfilter(
-        partial(contains, settings.rapidlooks.THUMBNAIL_THESE)
-    )
+
     # image-saving closure
     save_images = partial(
         save_looks,
         bandset,
         outpath,
         threads=bandset.threads.get("save"),
-        plain=save_plain_images
+        plain=save_plain_images,
     )
     # generate rapidlooks
-    if skip_rapidlooks:
-        console.print(
-            "[dark_orange]skip-rapidlooks flag active, skipping "
+    if skip_rapidlooks and not upload:
+        aprint(
+            "[dark_orange]skip-rapidlooks flag active; skipping "
             "rapidlook generation"
         )
     else:
-        console.print(Rule(" generating rapidlooks "))
+        aprint(Rule(" generating rapidlooks "))
+        look_instructions = compile_looks()
+        if skip_rapidlooks and upload:
+            aprint(
+                "[dark_orange]skip-rapidlooks flag active; generating only "
+                "rapidlooks required for uploaded thumbnails"
+            )
+            look_instructions = mapfilter(
+                partial(contains, settings.rapidlooks.THUMBNAILS),
+                "name",
+                look_instructions,
+            )
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task(
                 "",
-                total=len(settings.rapidlooks.DEFAULT_RAPIDLOOKS),
+                total=len(look_instructions),
             )
             # suppressing irrelevant warnings from numpy about divides-by-zero
             # and matplotlib about opening a bunch of figures
-            # settings.rapidlooks.DEFAULT_RAPIDLOOKS = {
-            #     thing: other for thing, other in settings.rapidlooks.DEFAULT_RAPIDLOOKS.items() if thing == 'BD529'
-            # }
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                bandset.make_look_set(settings.rapidlooks.DEFAULT_RAPIDLOOKS)
+                bandset.make_look_set(look_instructions)
             prog.remove_task(ASDF_RPH.task_id)
 
-        console.print(Rule(" saving rapidlooks "))
+        aprint(Rule(" saving rapidlooks "))
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task(
                 "",
@@ -244,12 +253,12 @@ def asdf_body(
 
     # pretty-plot data if we've got it; just quit if we don't
     if we_do_not_have_rois:
-        console.print("\n:star: ... all done ... :star:", style="bold orchid1")
+        aprint("\n:star: ... all done ... :star:", style="bold orchid1")
         return
 
     pretty_plot_bandset(bandset, outpath)
 
-    console.print("\n:star: ... all done ... :star:", style="bold orchid1")
+    aprint("\n:star: ... all done ... :star:", style="bold orchid1")
 
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
@@ -275,7 +284,7 @@ def asdf_hello(
     recursive=False,
     product_type: "t" = "",
     dump_paths: "dp" = "",
-    save_plain_images = False,
+    save_plain_images=False,
     image_regex: "ir" = None,
 ):
     """
@@ -332,12 +341,12 @@ def asdf_hello(
         keep_thumbnails=keep_thumbnails,
         recursive=recursive,
         target_product_type=product_type,
-        regex_filter=image_regex
+        regex_filter=image_regex,
     )
     if observation is None:
         return
     if dump_paths:
-        console.print("... dump_paths set, writing paths and exiting ...")
+        aprint("... dump_paths set, writing paths and exiting ...")
         with open(dump_paths, "a+") as file:
             if is_multiple:
                 for obs in observation:
@@ -348,23 +357,22 @@ def asdf_hello(
                 for path in observation["PATH"].values:
                     file.write(path + "\n")
             return
+    asdf_args = (
+        observation,
+        roi_path,
+        upload,
+        output,
+        skip_rapidlooks,
+        suffix,
+        merspect,
+        noninteractive,
+        debug,
+        console,
+    )
     if is_multiple is not True:
-        return asdf_body(
-            observation,
-            roi_path,
-            upload,
-            output,
-            skip_rapidlooks,
-            suffix,
-            merspect,
-            noninteractive,
-            debug,
-            console,
-            save_plain_images=save_plain_images
-        )
-    # TODO: yuck.
+        return asdf_body(*asdf_args, save_plain_images=save_plain_images)
     for ix, obs in enumerate(observation):
-        console.print(
+        aprint(
             "... processing observation "
             + str(ix + 1)
             + " of "
@@ -372,19 +380,7 @@ def asdf_hello(
             + " ... ",
             style="bold cyan1",
         )
-        asdf_body(
-            obs,
-            roi_path,
-            upload,
-            output,
-            skip_rapidlooks,
-            suffix,
-            merspect,
-            noninteractive,
-            debug,
-            console,
-            save_plain_images=save_plain_images
-        )
+        asdf_body(*asdf_args, save_plain_images=save_plain_images)
 
 
 def fdsa_hello(
@@ -425,10 +421,9 @@ def fdsa_hello(
                 "matching {} to its observation. skipping... "
                 ":confused_face:".format(analysis["MARSLAB"])
             )
-        console.print(
-            "\n[bold italic]... fdsa: processing observation {} of {} ...".format(
-                str(ix + 1), str(len(reprocess_pairs))
-            )
+        aprint(
+            "\n[bold italic]... fdsa: processing observation "
+            "{} of {} ...".format(str(ix + 1), str(len(reprocess_pairs)))
         )
         console.style = "none"
         asdf_body(

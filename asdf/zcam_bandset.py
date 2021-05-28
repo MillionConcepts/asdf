@@ -19,7 +19,7 @@ from asdf.asdf_utils import (
     dashify,
 )
 from asdf.console import aprint
-from asdf.format import melt_metadata
+from asdf.format import melt_metadata, METADATA_DTYPES
 from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
 from asdf.scrape import bulk_scrape_metadata
@@ -94,7 +94,7 @@ class ZcamBandSet(BandSet):
 
         # scrape headers for all desired metadata fields and derive values
         # from them as necessary
-        dtypes = settings.metadata.metadata_dtypes
+        dtypes = METADATA_DTYPES
         self.metadata = self.metadata.astype(
             keyfilter(lambda key: key in self.metadata.columns, dtypes)
         )
@@ -147,6 +147,12 @@ class ZcamBandSet(BandSet):
         self.rois = roi_hdulist
         return roi_fn
 
+    def associate_pixmaps(self, pixmaps):
+        for path in self.metadata["PATH"].unique():
+            self.metadata.loc[
+                self.metadata["PATH"] == path, "PIXMAP_PATH"
+            ] = str(pixmaps[path])
+
     def load_pixmaps(self, verbose=False):
         if "PIXMAP_PATH" not in self.metadata.columns:
             return
@@ -185,6 +191,14 @@ class ZcamBandSet(BandSet):
             },
         )
         return self.counts
+
+    def count_pixmaps(self):
+        if self.rois is None:
+            aprint("No ROI data loaded.")
+            return ""
+        if self.pixmaps is None:
+            aprint("No pixmap data loaded.")
+            return ""
 
     def format_metadata(self):
         if self.counts is None:
@@ -252,7 +266,7 @@ class ZcamBandSet(BandSet):
                 self.metadata["BAND"].str.startswith(initial), "BAND"
             ].iloc[0]
             inst["bands"] = (band, band, band)
-        self.make_look_set({"context " + eye: inst})
+        self.make_look_set([inst])
         eye_edgemaps = {
             key: value for key, value in edgemaps.items() if eye in key
         }

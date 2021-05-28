@@ -202,11 +202,11 @@ def handle_map_checks(bandset):
         return
     aprint("... found matching pixmaps for all images ...")
     bandset.metadata["PIXMAP_PATH"] = ""
-    for path in bandset.metadata["PATH"].unique():
-        bandset.metadata.loc[
-            bandset.metadata["PATH"] == path, "PIXMAP_PATH"
-        ] = str(pixmaps[path])
+    bandset.associate_pixmaps(pixmaps)
     bandset.load_pixmaps(verbose=True)
+
+
+
 
 
 def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
