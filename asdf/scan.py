@@ -31,7 +31,8 @@ from asdf.scrape import (
     cached_aux_skimmer,
     is_iof_est_heuristic,
     cached_ls,
-    cached_exists, is_pixel_map_heuristic,
+    cached_exists,
+    is_pixel_map_heuristic,
 )
 
 
@@ -78,17 +79,29 @@ def skim_products(
     ASDFLOG.info("... skimming headers for grouping information ...")
     products = products.sort_values(by="CTIME").reset_index(drop=True)
     skim_results = []
+    bad_files = []
+    keep_paths = []
     for product in products["PATH"]:
         try:
             skim_results.append(aux_skimmer(product))
+            keep_paths.append(product)
         except (FileNotFoundError, TypeError, KeyError):
-            ASDFLOG.info(str(product) + " can't be parsed, skipping")
+            bad_files.append(product)
+    if len(bad_files) > 0:
+        ASDFLOG.info(
+            "... {} / {} could be opened and read ...".format(
+                str(len(skim_results)),
+                str(len(products)),
+            )
+        )
     return pd.concat(
-        (
-            products.drop("PATH", axis=1),
+        [
+            products.loc[products["PATH"].isin(keep_paths)]
+            .drop("PATH", axis=1)
+            .reset_index(drop=True),
             pd.DataFrame(skim_results),
-            products["PATH"],
-        ),
+            pd.Series(keep_paths, name="PATH"),
+        ],
         axis=1,
     )
 
