@@ -68,7 +68,8 @@ def setup_zcam_bandset_metadata(metadata):
             eye_color_row.name = eye + "0" + color
             bayer_filter_rows.append(eye_color_row)
         metadata = metadata.drop(eye_row.name)
-    metadata = pd.concat((metadata, pd.concat(bayer_filter_rows, axis=1).T))
+    if bayer_filter_rows:
+        metadata = pd.concat((metadata, pd.concat(bayer_filter_rows, axis=1).T))
     # add wavelengths and bayer pixel mappings
     metadata["WAVELENGTH"] = pd.Series(DERIVED_CAM_DICT["ZCAM"]["filters"])[
         metadata["BAND"]
