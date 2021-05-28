@@ -16,7 +16,7 @@ from cytoolz.itertoolz import partition
 from fs.osfs import OSFS
 
 import asdf.settings as settings
-from asdf.asdf_utils import load_roi_file, split_on, dir_fs, listify
+from asdf.asdf_utils import load_roi_file, split_on, dir_fs, listify, pdstr
 from asdf.console import ASDFLOG
 from asdf.network import get_public_m20_waypoints
 from asdf.parse import (
@@ -458,20 +458,19 @@ def add_effective_taus(metadata):
 
 
 def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
-    roi_stems = roi["PATH"].str.replace("-roi.fits", "", regex=False)
-    marslab_stems = marslab["PATH"].str.replace(
-        "-marslab.csv", "", regex=False
-    )
+    stemmer = pdstr("replace", "(-roi.fits|-marslab.csv)", "", regex=True)
+    roi_stems = stemmer(roi["PATH"])
+    marslab_stems = stemmer(marslab["PATH"])
 
     paired_marslab, lonely_marslab = split_on(
         marslab, marslab_stems.isin(roi_stems)
     )
     paired_roi, lonely_roi = split_on(roi, roi_stems.isin(marslab_stems))
     paired_marslab = (
-        paired_marslab.copy().sort_values(by="PATH").reset_index(drop=True)
+        paired_marslab.copy().sort_values(by="PATH", key=stemmer).reset_index(drop=True)
     )
     paired_roi = (
-        paired_roi.copy().sort_values(by="PATH").reset_index(drop=True)
+        paired_roi.copy().sort_values(by="PATH", key=stemmer).reset_index(drop=True)
     )
     # did something go horribly wrong?
     check_equal = (
@@ -479,7 +478,8 @@ def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
         .dropna(axis=1)
         .eq(paired_marslab.iloc[:, 1:].dropna(axis=1))
     )
-    assert check_equal.all(axis=None), "clustering has gone horribly wrong."
+    if not check_equal.all(axis=None):
+        raise ValueError("clustering has gone horribly wrong.")
     marslab_path = paired_marslab["PATH"]
     marslab_path.name = "MARSLAB"
     roi_path = paired_roi["PATH"]

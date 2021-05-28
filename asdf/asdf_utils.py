@@ -57,8 +57,12 @@ def add_ref_to_roi(pointing_name, roi_fits):
 
 
 def load_roi_file(
-    roi_path, title="", outpath=".", extension="-roi.fits", convert=False,
-    verbose=True
+    roi_path,
+    title="",
+    outpath=".",
+    extension="-roi.fits",
+    convert=False,
+    verbose=True,
 ):
     # TODO: move this chatter elsewhere
     # if passed ROI file is a SEL, convert to marslab FITS
@@ -118,7 +122,7 @@ def extract_constants(df, to_dict=True, drop_constants=False):
 
 
 def split_on(
-        df: pd.DataFrame, predicate: pd.Series
+    df: pd.DataFrame, predicate: pd.Series
 ) -> [pd.DataFrame, pd.DataFrame]:
     return df.loc[predicate], df.loc[~predicate]
 
@@ -138,3 +142,12 @@ def listify(thing):
     return [thing]
 
 
+def pdstr(str_method_name, *str_args, **str_kwargs):
+    """
+    creates a mappable function that accesses .str methods of passed Series
+    """
+    def replacer(series: pd.Series):
+        method = getattr(series.str, str_method_name)
+        return method(*str_args, **str_kwargs)
+
+    return replacer
