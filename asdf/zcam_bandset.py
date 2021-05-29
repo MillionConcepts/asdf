@@ -21,8 +21,12 @@ from asdf.asdf_utils import (
     to_records,
 )
 from asdf.console import aprint
-from asdf.format import melt_metadata, METADATA_DTYPES, count_rois_on_pixmaps, \
-    drop_excess_stats
+from asdf.format import (
+    melt_metadata,
+    METADATA_DTYPES,
+    count_rois_on_pixmaps,
+    drop_excess_stats,
+)
 from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
 from asdf.scrape import bulk_scrape_metadata
@@ -51,7 +55,12 @@ def polish_metadata(metadata, creation_time):
         if column not in settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS
     ]
     ordered_fields = dataframe.reindex(
-        settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS, axis=1
+        [
+            c
+            for c in settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS
+            if c in dataframe.columns
+        ],
+        axis=1,
     )
     return pd.concat([ordered_fields, dataframe[extra_columns]], axis=1)
 

@@ -165,6 +165,9 @@ def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
     unchanging_columns = (
         "SOL",
         "SEQ_ID",
+        "SITE",
+        "DRIVE",
+        "ZOOM",
         "INSTRUMENT",
         "LAT",
         "LON",
@@ -174,6 +177,9 @@ def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
         "ANALYSIS_NAME",
         "NAME",
         "LOCATION",
+        "IX",
+        "PRODUCER",
+        "PRODUCT_TYPE"
     )
     uc_here = [col for col in unchanging_columns if col in metadata.columns]
     unchanging_block = metadata.reindex(columns=uc_here)
