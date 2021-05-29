@@ -7,8 +7,6 @@ from functools import partial
 from operator import contains
 from pathlib import Path
 
-import numpy as np
-
 import matplotlib as mpl
 import pandas as pd
 from marslab.compat.mertools import merspect_to_marslab
