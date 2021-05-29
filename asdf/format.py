@@ -6,13 +6,19 @@ from hashlib import md5
 from pathlib import Path
 
 import matplotlib.figure
+import numpy
+import numpy as np
 import pandas as pd
 
 import asdf.settings as settings
+from asdf.asdf_utils import NestingDict
 from asdf.console import ASDF_CONSOLE, aprint
 from asdf.parse import parse_pointing
+from asdf.settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
+from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.imgutils import absolutely_destroy
 from marslab.imgops.pltutils import set_label
+from marslab.imgops.regions import count_rois_on_image, roi_stats
 from marslab.imgops.render import make_thumbnail, simple_figure
 
 
@@ -75,7 +81,11 @@ def annotate_and_save(annotation, look, filename, outpath):
     #  this is not urgent. I think _maybe_ they should be separate.
     if not isinstance(look, matplotlib.figure.Figure):
         look = simple_figure(look)
-    set_label(look, annotation, fontproperties=settings.rapidlooks.TITLE_FONT)
+    set_label(
+        look,
+        annotation,
+        fontproperties=settings.rapidlooks.TITLE_FONT,
+    )
     look.savefig(
         Path(outpath, filename), dpi=275, bbox_inches="tight", pad_inches=0
     )
@@ -163,6 +173,7 @@ def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
         "CREATOR",
         "ANALYSIS_NAME",
         "NAME",
+        "LOCATION",
     )
     uc_here = [col for col in unchanging_columns if col in metadata.columns]
     unchanging_block = metadata.reindex(columns=uc_here)
@@ -206,10 +217,55 @@ def md5sum(path_or_file, hash_function=md5):
 
 
 def add_image_hashes(bandset):
-    paths = bandset.metadata['PATH'].unique()
+    paths = bandset.metadata["PATH"].unique()
     md5s = tuple(map(md5sum, paths))
-    # bandset.metadata['SOURCE_MD5SUM'] = ''
-    for path, md5 in zip(paths, md5s):
+    for path, md5_string in zip(paths, md5s):
         bandset.metadata.loc[
-            bandset.metadata['PATH'] == path, 'SOURCE_MD5SUM'
-        ] = md5
+            bandset.metadata["PATH"] == path, "SOURCE_MD5SUM"
+        ] = md5_string
+
+
+def count_rois_on_pixmaps(roi_arrays, roi_names, pixmap_dict):
+    all_counts = NestingDict()
+    for filt, bayer_masked_flag_array in pixmap_dict.items():
+        all_counts[filt] = count_rois_on_pixmap(
+            bayer_masked_flag_array, roi_arrays, roi_names
+        )
+    return all_counts
+
+
+def count_rois_on_pixmap(bayer_masked_flag_array, roi_arrays, roi_names):
+    all_counts = NestingDict()
+    flag_counts = {}
+    for flag_value, flag_name in zip([1, 2, 3, 4, 5], PIXEL_FLAG_NAMES):
+        # don't bother counting absent flags
+        if flag_value not in bayer_masked_flag_array:
+            flag_counts[flag_name] = {
+                name: roi_stats(np.array([0])) for name in roi_names
+            }
+            continue
+        flagmap = np.zeros_like(bayer_masked_flag_array)
+        flagmap[bayer_masked_flag_array == flag_value] = 1
+        flag_counts[flag_name] = count_rois_on_image(
+            roi_arrays, roi_names, flagmap
+        )
+    for flag_name, count_dict in flag_counts.items():
+        for roi_name, counts in count_dict.items():
+            all_counts[roi_name][flag_name] = counts["total"]
+    return all_counts
+
+
+def drop_excess_stats(compact):
+    # TODO: garbage placeholder
+    filts = list(DERIVED_CAM_DICT["ZCAM"]["filters"])
+    for column in compact.columns:
+        if column.startswith("LEFT") or column.startswith("RIGHT"):
+            compact = compact.drop(column, axis=1)
+        if "_" not in column:
+            continue
+        if (
+            column.split("_")[0] in filts
+            and column.split("_")[1] not in COMPACT_MARSLAB_STATS
+        ):
+            compact = compact.drop(column, axis=1)
+    return compact

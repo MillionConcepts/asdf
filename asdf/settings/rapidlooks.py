@@ -18,6 +18,9 @@ TICK_FONT = mplf.FontProperties(
 ROI_FONT = mplf.FontProperties(
     fname="static/fonts/TitilliumWeb-Light.ttf", size=5
 )
+LEGEND_FONT = mplf.FontProperties(
+    fname="static/fonts/TitilliumWeb-Light.ttf", size=7
+)
 
 
 # default settings for band parameter maps

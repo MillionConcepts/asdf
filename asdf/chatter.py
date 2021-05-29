@@ -55,6 +55,7 @@ from asdf.scrape import cached_exists
 from asdf.settings.metadata import (
     ROI_METADATA_FIELDS,
     LITHOLOGICAL_ROI_FIELDS,
+    PIXEL_FLAG_NAMES,
 )
 
 # TODO: rewrite with markup
@@ -206,9 +207,6 @@ def handle_map_checks(bandset):
     bandset.load_pixmaps(verbose=True)
 
 
-
-
-
 def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     ASDF_CONSOLE.style = "FDSA"
     if not cached_exists(path):
@@ -324,9 +322,11 @@ def setup_reprocess(
         style_prog(prog, "hot_pink on black")
         ASDF_RPH_SPIN.task_id = prog.add_task(" ... scanning files ...")
         try:
-            reprocess_pairs, parser_warnings, misses = find_matching_observations(
-                analyses, image_path, image_regex
-            )
+            (
+                reprocess_pairs,
+                parser_warnings,
+                misses,
+            ) = find_matching_observations(analyses, image_path, image_regex)
         except (PermissionError, FileNotFoundError, ValueError) as err:
             prog.remove_task(ASDF_RPH_SPIN.task_id)
             aprint(str(err) + " :confused_face:", style="bold red")
@@ -486,10 +486,11 @@ def pretty_plot_bandset(bandset, outpath):
     aprint("wrote " + Path(plot_fn).name)
 
 
-def fdsa_insert(marslab_data, prototype):
-    def tw(text):
-        return Text(text, style="bold dark_orange")
+def tw(text):
+    return Text(text, style="bold dark_orange")
 
+
+def fdsa_insert(marslab_data, prototype):
     for color in prototype["COLOR"].unique():
         proto_slice = prototype.loc[prototype["COLOR"] == color]
         if len(proto_slice) > 1:
@@ -527,3 +528,36 @@ def fdsa_insert(marslab_data, prototype):
         if fields_skipped:
             aprint(fields_skipped)
     return marslab_data
+
+
+def complain_about_pixmap_counts(quality_df):
+    for _, counts in quality_df.iterrows():
+        color = counts['COLOR']
+        for flag in PIXEL_FLAG_NAMES:
+            flag_counts = counts[
+                [
+                    ix
+                    for ix in counts.index
+                    if ((flag in ix) and counts[ix] != 0)
+                ]
+            ].copy()
+            if len(flag_counts) == 0:
+                continue
+            flag_counts.index = flag_counts.index.str.replace("_" + flag, "")
+            if flag in ("bad", "no_signal", "saturated"):
+                mask_note = "masked from counting"
+            else:
+                mask_note = "not masked from counting"
+            header = Text("note: ", style="dark_orange bold")
+            roi = colorize_merspect_roi_name(color)
+            complaint = Text(
+                " ROI has {} pixels ({}):\n".format(flag, mask_note),
+                style="dark_orange bold",
+            )
+            values = "; ".join(
+                [
+                    band + ": " + str(count)
+                    for band, count in flag_counts.items()
+                ]
+            )
+            aprint(header.append(roi).append(complaint).append(values))

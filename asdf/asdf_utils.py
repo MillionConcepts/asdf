@@ -1,10 +1,14 @@
 """generic utility-type functions for asdf"""
-
-from collections.abc import Collection
+from collections import defaultdict
+from collections.abc import Collection, Mapping
+from copy import copy
+from itertools import accumulate, repeat
+from operator import add
 import random
 import string
 from pathlib import Path
 
+from cytoolz.dicttoolz import merge
 import numpy as np
 import pandas as pd
 from astropy.io import fits
@@ -55,6 +59,9 @@ def add_ref_to_roi(pointing_name, roi_fits):
         hdu.header["IMAGEREF"] = pointing_name
     return roi_fits
 
+
+def naturals():
+    return accumulate(repeat(1), add)
 
 def load_roi_file(
     roi_path,
@@ -151,3 +158,47 @@ def pdstr(str_method_name, *str_args, **str_kwargs):
         return method(*str_args, **str_kwargs)
 
     return replacer
+
+
+class NestingDict(defaultdict):
+    """
+    shorthand for automatically-nesting dictionary -- i.e.,
+    insert a series of keys at any depth into a NestingDict
+    and it automatically creates all needed levels above.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.default_factory = NestingDict
+
+    __repr__ = dict.__repr__
+
+
+def to_records(nested, accumulated_levels=None, level_names=None):
+    level_names = naturals() if level_names is None else iter(level_names)
+    records = []
+    accumulated_levels = {} if accumulated_levels is None else \
+        accumulated_levels
+    level_name = next(level_names)
+    for category, mapping in nested.items():
+        if all([isinstance(value, Mapping) for value in mapping.values()]):
+            branch = accumulated_levels.copy()
+            branch[level_name] = category
+            records += to_records(mapping, branch, copy(level_names))
+        else:
+            category_dict = accumulated_levels | {level_name: category}
+            flat = mapping | category_dict
+            records.append(flat)
+
+    return records
+
+
+def unnest(mapping_mapping):
+    unnested = []
+    for category, mapping in mapping_mapping.items():
+        unnested.append({
+            str(category) + "_" + str(key): value for key, value
+            in mapping.items()
+        })
+    return merge(unnested)
+
+

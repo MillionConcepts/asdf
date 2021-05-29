@@ -7,6 +7,8 @@ from functools import partial
 from operator import contains
 from pathlib import Path
 
+import numpy as np
+
 import matplotlib as mpl
 import pandas as pd
 from marslab.compat.mertools import merspect_to_marslab
@@ -28,13 +30,15 @@ from asdf.chatter import (
     pretty_plot_bandset,
     setup_reprocess,
     fdsa_insert,
+    complain_about_pixmap_counts,
 )
 from asdf.pretty import name_prompt
 from asdf.format import (
     make_rapidlook_thumbnails,
     handle_abbreviation,
     make_asdf_outpath,
-    compile_looks, add_image_hashes,
+    compile_looks,
+    add_image_hashes,
 )
 from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint
 from asdf.network import upload_asdf_analysis
@@ -52,8 +56,8 @@ def asdf_body(
     noninteractive=False,
     debug=False,
     console=None,
-    recreate_from=None,
     save_plain_images=False,
+    recreate_from=None,
 ):
     """
     body component of the asdf command line function -- can be called multiple
@@ -152,6 +156,7 @@ def asdf_body(
             marslab_data = bandset.count_rois()
             marslab_data["ROI_SOURCE"] = Path(roi_fits_fn).name
         else:
+            # TODO, maybe: remove this functionality
             # allow user to override counting behavior with a MERspect file
             # TODO, maybe: basic check to make sure file matches pointing
             aprint("... converting MERspect output ...")
@@ -162,6 +167,10 @@ def asdf_body(
                 "something has gone wrong in loading ROI data.",
                 style="red bold",
             )
+        if bandset.pixmaps:
+            aprint("... counting ROIs on pixel flag maps ...")
+            bandset.count_pixmaps()
+            complain_about_pixmap_counts(bandset.pixmap_counts)
         if prototype is None:
             # prompt users for info on each ROI
             marslab_data = input_roi_metadata(marslab_data, ci)
@@ -371,11 +380,10 @@ def asdf_hello(
         noninteractive,
         debug,
         console,
+        save_plain_images,
     )
     if is_multiple is not True:
-        return asdf_body(
-            observation, *asdf_args, save_plain_images=save_plain_images
-        )
+        return asdf_body(observation, *asdf_args)
     for ix, obs in enumerate(observation):
         aprint(
             "... processing observation "
@@ -385,7 +393,7 @@ def asdf_hello(
             + " ... ",
             style="bold cyan1",
         )
-        asdf_body(obs, *asdf_args, save_plain_images=save_plain_images)
+        asdf_body(obs, *asdf_args)
 
 
 def fdsa_hello(

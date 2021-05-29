@@ -115,7 +115,9 @@ def pix_reference(thing):
             mp.color_filter,
             mp.sequence,
             mp.thumbnail,
-            mp.version,
+            # TODO: version check appears too harsh at the moment but some
+            #  kind of stricter association rule needs to be made
+            # mp.version,
         )(thing)
     except (KeyError, ValueError, FileNotFoundError):
         return None

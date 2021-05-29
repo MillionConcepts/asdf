@@ -66,6 +66,7 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "SOL",
     "SEQ_ID",
     *ROI_METADATA_FIELDS,
+    "LOCATION",
     "SITE",
     "DRIVE",
     "RMS",
@@ -87,6 +88,8 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "COMPRESSION",
     *FILTER_DATA_COLUMNS,
 )
+
+COMPACT_MARSLAB_STATS = ["ERR"]
 
 # regexes for getting metadata from attached PDS3 product labels without
 # parsing PVL. this structure defines almost everything we look for in a label.
@@ -117,3 +120,14 @@ IOF_METADATA_REGEX = {
     "INSTRUMENT_ELEVATION": r"(?<=INSTRUMENT_ELEVATION ).*?([\d\.]+)",
     "INSTRUMENT_AZIMUTH": r"(?<=INSTRUMENT_AZIMUTH ).*?([\d\.]+)",
 }
+
+PIXEL_FLAG_NAMES = ("bad", "no_signal", "nonlinear", "saturated", "hot")
+
+PIXEL_FLAG_STYLE = (
+    # (1, "#ff5fd7", "o"),
+    (1, "#aa5fd7", "3"),
+    (4, "#f0fbfb", "."),
+    (0.2, "#87ff00", 'o'),
+    (7, "#00ffd7", "*"),
+    (5, "#d7af00", "|")
+)

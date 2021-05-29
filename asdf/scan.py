@@ -323,9 +323,11 @@ def find_matching_pixmap(product_path):
         return None, match_warnings
     # check 2: are they pixmaps?
     possible_pixmaps = list(filter(is_pixel_map_heuristic, possible_pixmaps))
-    # TODO: find an actual way way to associate these across versions --
-    #  just adding a version number check for now but this is not reliable
-    #  ideally the pixmap header should reference the RAD but it does not
+    # TODO: find an actual way to associate these across versions --
+    #  even adding a version number check will inappropriately reject
+    #  many pixmaps because they do not increment the version numbers
+    #  consistently. (I think.) ideally the pixmap header should reference the
+    #  RAD but it does not
     # check 3: does the candidate we pick have PRODUCT_ID that matches
     # the data product's SOURCE_PRODUCT_ID? (CANCELLED FOR NOW)
     if len(possible_pixmaps) > 1:

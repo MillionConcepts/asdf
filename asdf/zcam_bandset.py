@@ -17,12 +17,17 @@ from asdf.asdf_utils import (
     null_marslab_data_section,
     check_and_drop_duplicate_columns,
     dashify,
+    NestingDict,
+    to_records,
 )
 from asdf.console import aprint
-from asdf.format import melt_metadata, METADATA_DTYPES
+from asdf.format import melt_metadata, METADATA_DTYPES, count_rois_on_pixmaps, \
+    drop_excess_stats
 from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
 from asdf.scrape import bulk_scrape_metadata
+from asdf.settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
+from asdf.settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
 from marslab.compat.xcam import (
     DERIVED_CAM_DICT,
@@ -69,7 +74,9 @@ def setup_zcam_bandset_metadata(metadata):
             bayer_filter_rows.append(eye_color_row)
         metadata = metadata.drop(eye_row.name)
     if bayer_filter_rows:
-        metadata = pd.concat((metadata, pd.concat(bayer_filter_rows, axis=1).T))
+        metadata = pd.concat(
+            (metadata, pd.concat(bayer_filter_rows, axis=1).T)
+        )
     # add wavelengths and bayer pixel mappings
     metadata["WAVELENGTH"] = pd.Series(DERIVED_CAM_DICT["ZCAM"]["filters"])[
         metadata["BAND"]
@@ -116,6 +123,7 @@ class ZcamBandSet(BandSet):
         self.metadata["ANALYSIS_NAME"] = suffix
         self.check_onboard_debayer(fix_metadata=True)
         self.pixmaps = {}
+        self.pixmap_counts = {}
 
     def check_onboard_debayer(self, *, fix_metadata=False):
         """
@@ -200,6 +208,30 @@ class ZcamBandSet(BandSet):
         if self.pixmaps is None:
             aprint("No pixmap data loaded.")
             return ""
+        pixmap_roi_dict = NestingDict()
+        for eye in ("left", "right"):
+            eye_rois = [roi for roi in self.rois if eye in roi.name.lower()]
+            roi_arrays = [roi.data.astype(bool) for roi in eye_rois]
+            roi_names = [roi.name.split(" ")[0].lower() for roi in eye_rois]
+            eye_pixmap_dict = self.get_pixmap_dict(eye)
+            pixmap_roi_dict |= count_rois_on_pixmaps(
+                roi_arrays, roi_names, eye_pixmap_dict
+            )
+        # TODO: is this excessively complicated; should it be organized
+        #  differently at the counting step?
+        pixframe = pd.DataFrame(
+            to_records(pixmap_roi_dict, level_names=["BAND", "COLOR"])
+        )
+        pixdict = {}
+        colorgroups = pixframe.groupby("COLOR")
+        for color, colorframe in colorgroups:
+            color_rows = {}
+            for _, row in colorframe.melt(["BAND", "COLOR"]).iterrows():
+                color_rows[row["BAND"] + "_" + row["variable"]] = row["value"]
+            pixdict[color] = color_rows
+        pixdf = pd.DataFrame(pixdict).T
+        pixdf["COLOR"] = pixdf.index
+        self.pixmap_counts = pixdf.reset_index(drop=True)
 
     def format_metadata(self):
         if self.counts is None:
@@ -210,7 +242,17 @@ class ZcamBandSet(BandSet):
             melt_metadata(self.metadata), len(self.counts.index)
         )
         extended = pd.concat([metadata_block, self.counts], axis=1)
+        if isinstance(self.pixmap_counts, pd.DataFrame):
+            pixmap_counts = self.pixmap_counts.copy()
+            pixmap_counts.index = pixmap_counts["COLOR"]
+            pixmap_counts = (
+                pixmap_counts.reindex(extended["COLOR"])
+                .drop("COLOR", axis=1)
+                .reset_index(drop=True)
+            )
+            extended = pd.concat([extended, pixmap_counts], axis=1)
         compact = self.counts.copy()
+        compact = drop_excess_stats(compact)
         # write canonical pointing-identifying values into all frames
         for field, value in parse_pointing(summary).items():
             summary[field] = value
@@ -293,28 +335,38 @@ class ZcamBandSet(BandSet):
             ax.imshow(perfectly_black_rectangular_solid, interpolation=None)
         # flag off-scale, saturated, hot pixels with special markers
         extant_flags = np.unique(flat_pixmap)
+
         for flag in extant_flags:
             if flag == 0:
                 continue
             posmap = flat_pixmap.copy()
             pix_y, pix_x = np.where(posmap == flag)
-            if flag == 1:
-                ax.scatter(pix_x, pix_y, 3, "#ff5fd7", "o")
-            elif flag == 2:
-                ax.scatter(pix_x, pix_y, 4, "#ffff00", "_")
-            elif flag == 3:
-                ax.scatter(pix_x, pix_y, 0.3, "#87ff00")
-            elif flag == 4:
-                ax.scatter(pix_x, pix_y, 8, "#00ffd7", "*")
-            elif flag == 5:
-                ax.scatter(pix_x, pix_y, color="#d7af00", marker="|", s=8)
+            style = PIXEL_FLAG_STYLE[flag - 1]
+            label = PIXEL_FLAG_NAMES[flag - 1]
+            ax.scatter(pix_x, pix_y, *style, label=label)
         remove_ticks(ax)
         despine(ax)
+        context.legend(
+            prop=LEGEND_FONT,
+            bbox_to_anchor=(0.12, 0.92, 0.5, 0),
+            # frameon=False,
+            mode="expand",
+            ncol=5,
+            labelcolor="white",
+            markerscale=2,
+            facecolor="black",
+        )
         self.looks["pixmap context image " + eye] = context
         if verbose:
             aprint("generated context pixmap " + eye)
 
     def get_flattened_pixmap(self, eye):
+        """
+        get 'worst' flag value of pixel across all bands, masking
+        wrong-element bayer pixels (both because they are frequently off-scale
+        due to gain and because they will never be counted and are thus
+        irrelevant)
+        """
         eye_pixmaps = self.get_pixmap_dict(eye)
         # for each x, y position, find the 'worst' flag value of any pixel
         # we used across all bands. note that order doesn't matter.
