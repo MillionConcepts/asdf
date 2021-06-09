@@ -29,7 +29,7 @@ LEGEND_FONT = mplf.FontProperties(
 # default library. for a list of built-in matplotlib cmaps, see:
 # https://matplotlib.org/stable/gallery/color/colormap_reference.html
 BANDMAP_DEFAULTS = {
-    "name": "{bands} {look}",
+    "name": "{look} {bands}",
     "params": {"special_constants": [0]},
     "limiter": {"function": std_clip},
     "postfilter": {"function": gaussian_filter, "params": {"sigma": 2}},
