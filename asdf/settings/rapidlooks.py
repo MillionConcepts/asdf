@@ -29,7 +29,7 @@ LEGEND_FONT = mplf.FontProperties(
 # default library. for a list of built-in matplotlib cmaps, see:
 # https://matplotlib.org/stable/gallery/color/colormap_reference.html
 BANDMAP_DEFAULTS = {
-    "name": "{look} {bands}",
+    "name": "{bands} {look}",
     "params": {"special_constants": [0]},
     "limiter": {"function": std_clip},
     "postfilter": {"function": gaussian_filter, "params": {"sigma": 2}},
@@ -63,9 +63,9 @@ ENHANCED_DEFAULTS = {
     "plotter": {"function": simple_figure},
 }
 
-# default settings for true color looks
-TRUE_DEFAULTS = {
-    "name": "true color {bands}",
+# default settings for natural color looks
+NATURAL_DEFAULTS = {
+    "name": "natural color {bands}",
     "look": "composite",
     "params": {"special_constants": [0]},
     "limiter": {"function": normalize_range, "params": {"stretch": 0.1}},
@@ -87,6 +87,7 @@ BANDMAP = (
     {"look": "band_depth", "bands": ("L6", "L4", "L5")},
     {"look": "band_depth", "bands": ("R1", "R4", "R2")},
     {"look": "band_depth", "bands": ("L4", "L2", "L3")},
+    {"look": "band_depth", "bands": ("R1", "R5", "R3")},
     {"look": "slope", "bands": ("R5", "R6")},
     {"look": "slope", "bands": ("R1", "R6")},
 )
@@ -96,8 +97,8 @@ ENHANCED = (
     {"bands": ("L0R", "L0G", "L0B")},
     {"bands": ("R0R", "R0G", "R0B")},
 )
-# TRUE_DEFAULTS are added to these
-TRUE = (
+# NATURAL_DEFAULTS are added to these
+NATURAL = (
     {"bands": ("L0R", "L0G", "L0B")},
     {"bands": ("R0R", "R0G", "R0B")},
 )
@@ -112,7 +113,7 @@ STRETCHY = (
 
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
-CATEGORIES = ("BANDMAP", "ENHANCED", "TRUE", "STRETCHY")
+CATEGORIES = ("BANDMAP", "ENHANCED", "NATURAL", "STRETCHY")
 
 
 #############################################################################

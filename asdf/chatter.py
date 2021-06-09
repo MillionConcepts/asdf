@@ -23,13 +23,12 @@ from asdf.console import (
     ASDF_RPH_SPIN,
     aprint,
     ASDFLOG,
-    ASDF_PROGRESS,
 )
 from asdf.format import (
     preprocess_scan_path,
     make_pointing_annotation,
     annotate_and_save,
-    save_plainly,
+    save_plainly, insert_wavelengths_into_text,
 )
 from asdf.pretty import (
     print_scan_results,
@@ -64,12 +63,12 @@ from marslab.imgops.poolutils import wait_for_it
 
 
 def find_and_offer_observations(
-    root_dir,
-    explicit_path,
-    noninteractive,
-    keep_broadband,
-    keep_caltarget,
-    **scan_kwargs
+        root_dir,
+        explicit_path,
+        noninteractive,
+        keep_broadband,
+        keep_caltarget,
+        **scan_kwargs
 ):
     """
     process a request for ZCAM files; print the results of the request to
@@ -138,7 +137,7 @@ def find_and_offer_observations(
         return tuple(results.values()), True
     else:
         if not Confirm.ask(
-            "Does this look ok?", default="Y", console=ASDF_CONSOLE
+                "Does this look ok?", default="Y", console=ASDF_CONSOLE
         ):
             return reject_scan()
         return tuple(results.values())[0], False
@@ -160,7 +159,7 @@ def ask_user_about_roi(roi_title=None, ci: Callable = pass_parameters) -> dict:
     for field in metadata_fields:
         # don't ask people rock questions about non-rocks
         if (field.upper() in LITHOLOGICAL_ROI_FIELDS) and (
-            roi_metadata.get("FEATURE") != "rock"
+                roi_metadata.get("FEATURE") != "rock"
         ):
             continue
         roi_metadata[field] = ci(dispatched_metadata_prompt, field, roi_title)
@@ -172,8 +171,8 @@ def input_roi_metadata(marslab_data, ci):
         ci(
             aprint,
             Text("Please enter information about the ")
-            .append_text(colorize_merspect_roi_name(region))
-            .append_text(Text(" ROI.")),
+                .append_text(colorize_merspect_roi_name(region))
+                .append_text(Text(" ROI.")),
         )
         user_provided_roi_metadata = ask_user_about_roi(region, ci)
         for field, value in user_provided_roi_metadata.items():
@@ -258,8 +257,8 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
         ASDF_CONSOLE.style = "FDSA.warning"
         aprint(
             (
-                "[bold]warning: these -roi.fits files had no matching "
-                "-marslab.csv:\n\n[/bold] " + "\n".join(lonely_roi["PATH"])
+                    "[bold]warning: these -roi.fits files had no matching "
+                    "-marslab.csv:\n\n[/bold] " + "\n".join(lonely_roi["PATH"])
             ),
             style="slate_blue1",
         )
@@ -286,12 +285,12 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     for _, row in ok_analyses.iterrows():
         aprint("* " + row["MARSLAB"] + "\n" + "* " + row["ROI"] + "\n")
     if not Confirm.ask(
-        Text(
-            "Look for images to reprocess from metadata in these files?",
-            style="bold white on black",
-        ),
-        default="Y",
-        console=ASDF_CONSOLE,
+            Text(
+                "Look for images to reprocess from metadata in these files?",
+                style="bold white on black",
+            ),
+            default="Y",
+            console=ASDF_CONSOLE,
     ):
         aprint(
             "[deep_pink2 bold]\nHalting. If you didn't see the marslab/ROI "
@@ -307,12 +306,12 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
 
 
 def setup_reprocess(
-    marslab_path=".",
-    image_path=".",
-    sol=None,
-    seq_id=None,
-    marslab_regex=None,
-    image_regex=None,
+        marslab_path=".",
+        image_path=".",
+        sol=None,
+        seq_id=None,
+        marslab_regex=None,
+        image_regex=None,
 ):
     analyses = loudly_ingest_analyses(marslab_path, sol, seq_id, marslab_regex)
     if analyses is None:
@@ -352,9 +351,9 @@ def setup_reprocess(
         aprint("[white bold]" + marslab)
         print_observation(obs)
     if not Confirm.ask(
-        "Proceed with reprocessing these observations?",
-        default="Y",
-        console=ASDF_CONSOLE,
+            "Proceed with reprocessing these observations?",
+            default="Y",
+            console=ASDF_CONSOLE,
     ):
         aprint(
             "\nHalting. If you didn't see the products you wanted, check to "
@@ -439,9 +438,10 @@ def write_plain_image(look, look_name, outpath, pool, prefix, results):
 
 
 def write_annotated_image(
-    bandset, look, look_name, outpath, pool, prefix, results
+        bandset, look, look_name, outpath, pool, prefix, results
 ):
     filename = prefix + " " + look_name + ".png"
+    look_name = insert_wavelengths_into_text(look_name)
     annotation = "\n".join(
         (
             look_name,
@@ -496,8 +496,8 @@ def fdsa_insert(marslab_data, prototype):
         if len(proto_slice) > 1:
             aprint(
                 tw("this marslab file has multiple rows for ")
-                .append_text(colorize_merspect_roi_name(color))
-                .append_text(tw("... skipping."))
+                    .append_text(colorize_merspect_roi_name(color))
+                    .append_text(tw("... skipping."))
             )
             continue
         if len(proto_slice) == 0:

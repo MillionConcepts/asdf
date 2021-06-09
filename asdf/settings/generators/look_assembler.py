@@ -18,9 +18,10 @@ def insert_name_elements(look_instruction):
     if "{look}" in name:
         substitutions.append(("{look}", look_instruction.get("look")))
     if "{bands}" in name:
-        substitutions.append(
-            ("{bands}", "_".join(look_instruction.get("bands"))),
-        )
+        bands = look_instruction.get("bands")
+        if "band_depth" in look_instruction.get("look"):
+            bands = [bands[0], bands[2], bands[1]]
+        substitutions.append(("{bands}", "_".join(bands)))
     if "{cmap}" in name:
         substitutions.append(
             ("{cmap}", str(look_instruction["plotter"]["params"].get("cmap")))
@@ -36,7 +37,7 @@ def make_recolored_bandmap_looks(looks, _, cmap: str):
         if look["look"] not in SPECTOP_NAMES:
             continue
         recolored_bandmap = deepcopy(look)
-        recolored_bandmap["name"] = "{look} {cmap} {bands}"
+        recolored_bandmap["name"] = "{look} {bands} {cmap}"
 
         # noinspection PyTypeChecker
         recolored_bandmap["plotter"]["params"]["cmap"] = cmap
@@ -51,7 +52,7 @@ def make_heatmap_looks(looks, defaults, settings):
             continue
         new_look = deepcopy(look)
         new_look |= defaults
-        new_look["name"] = "{look} heatmap {bands}"
+        new_look["name"] = "{look} {bands} heatmap"
         new_look.pop("plotter")
         # noinspection PyTypeChecker
         new_look["overlay"] = settings | {"band": look["bands"][0]}
@@ -82,7 +83,7 @@ def make_accent_looks(looks, defaults, settings):
             continue
         new_look = deepcopy(look)
         new_look |= defaults
-        new_look["name"] = "{look} accent {bands}"
+        new_look["name"] = "{look} {bands} accent"
 
         new_look.pop("plotter")
         # noinspection PyTypeChecker

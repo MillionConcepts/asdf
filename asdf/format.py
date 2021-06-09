@@ -2,11 +2,11 @@
 formatting and helper functions for other asdf modules.
 """
 import os
+import re
 from hashlib import md5
 from pathlib import Path
 
 import matplotlib.figure
-import numpy
 import numpy as np
 import pandas as pd
 
@@ -275,3 +275,11 @@ def drop_excess_stats(compact):
         ):
             compact = compact.drop(column, axis=1)
     return compact
+
+
+def insert_wavelengths_into_text(annotation):
+    for filt, wavelength in DERIVED_CAM_DICT['ZCAM']['filters'].items():
+        annotation = re.sub(
+            filt, filt + '(' + str(wavelength) + 'nm)', annotation
+        )
+    return annotation
