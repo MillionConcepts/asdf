@@ -549,7 +549,7 @@ def compare_roi_colors(analyses):
     bad_indices = []
     for ix, row in analyses.iterrows():
         marslab = pd.read_csv(row["MARSLAB"])
-        roi, _ = load_roi_file(row["ROI"], verbose=False)
+        roi, _, _ = load_roi_file(row["ROI"], verbose=False)
         marslab_colors = set(marslab["COLOR"].unique())
         roi_colors = {hdu.header["NAME"].strip() for hdu in roi}
         if marslab_colors == roi_colors:

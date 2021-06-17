@@ -1,4 +1,6 @@
 """generic utility-type functions for asdf"""
+import io
+import tarfile
 from collections import defaultdict
 from collections.abc import Collection, Mapping
 from copy import copy
@@ -93,12 +95,17 @@ def load_roi_file(
     if convert:
         roi_fits_fn = Path(outpath, title + extension)
         roi_fits.writeto(roi_fits_fn, overwrite=True)
+        roi_tar_fn = Path(outpath, title + "-roi.tar")
+        with open(roi_tar_fn, 'wb') as file:
+            file.write(tar_bytes(roi_fits_fn).read())
         if verbose:
+            aprint("wrote " + str(roi_fits_fn))
             aprint("wrote " + str(roi_fits_fn))
     else:
         roi_fits_fn = None
+        roi_tar_fn = None
     # TODO: returning the filename like this is sort of clumsy
-    return roi_fits, str(roi_fits_fn)
+    return roi_fits, str(roi_fits_fn), str(roi_tar_fn)
 
 
 def null_marslab_data_section():
@@ -202,3 +209,10 @@ def unnest(mapping_mapping):
     return merge(unnested)
 
 
+def tar_bytes(filename):
+    tarbuffer = io.BytesIO()
+    fits_tar = tarfile.open(fileobj=tarbuffer, mode="w:gz")
+    fits_tar.add(filename, Path(filename).name)
+    fits_tar.close()
+    tarbuffer.seek(0)
+    return tarbuffer

@@ -22,6 +22,7 @@ DEFAULT_PRODUCT_SUBDIRECTORY = 'iof'
 GOOGLE_CLIENT_SECRETS_FILE = "asdf/secrets/google_client_secrets.json"
 GOOGLE_SHEET_ID = "1mUg_gsvOuB5FACW9BEDEIXEpPtXewOC3-l5NHj_LN9Q"
 METADATA_BACKUP_FOLDER_ID = "1iu-AS6pv924f_zN9t4HjlV6qaqRYtu46"
+GOOGLE_DRIVE_ROOT = ""
 
 
 AWS_IAM_SECRETS_FILE = "asdf/secrets/s3_iam_secrets.csv"
@@ -32,3 +33,4 @@ OBFUSCATE_THUMBNAIL_NAMES = True
 # debug-mode locations for testing uploads without dirtying live content
 DEBUG_GOOGLE_SHEET_ID = "1G7T3Xb63wkdsOWJY4qaYDkFghjRqHvUaAwHpsBbrqSY"
 DEBUG_METADATA_BACKUP_FOLDER_ID = "1pqP4Ohdsc8ACTh9EQ1HAvjFyL11fgiXE"
+DEBUG_GOOGLE_DRIVE_ROOT = "1Fs9DDNNNDKeS9x4X8DjcgT4wWbBZAgzu"

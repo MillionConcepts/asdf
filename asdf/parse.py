@@ -75,12 +75,15 @@ def parse_pointing(sequence: Union[Mapping, pd.DataFrame]) -> dict:
 
 
 def make_pointing_name(pointing):
-    pointing_name = "_".join(
-        key + str(value)
-        for key, value in parse_pointing(pointing.iloc[0]).items()
-    )
-
-    pointing_name = pointing_name.replace("SEQ_ID", "SEQID")
+    fields = []
+    for key, value in parse_pointing(pointing.iloc[0]).items():
+        if key == "SOL":
+            fields.append("SOL"+ str(value).zfill(4))
+        elif key == "SEQ_ID":
+            fields.append("SEQID" + str(value))
+        else:
+            fields.append(key + str(value))
+    pointing_name = "_".join(fields)
     pointing_name = pointing_name.replace(".", "_")
     return pointing_name
 

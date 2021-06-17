@@ -5,6 +5,12 @@ these literals should generally be safe; removing them may not be.
 
 from asdf.settings.generators import FILTER_DATA_COLUMNS
 
+# lookup table for location by sol
+LOCATION_TABLE = {
+    101: "Octavia E. Butler Landing",
+    99999: "Green Zone Campaign"
+}
+
 # fields we want to ask the user about at each ROI. This order is preserved.
 ROI_METADATA_FIELDS = (
     "FEATURE",

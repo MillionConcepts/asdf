@@ -133,6 +133,7 @@ class ZcamBandSet(BandSet):
         self.check_onboard_debayer(fix_metadata=True)
         self.pixmaps = {}
         self.pixmap_counts = {}
+        self.local_files = []
 
     def check_onboard_debayer(self, *, fix_metadata=False):
         """
@@ -159,10 +160,11 @@ class ZcamBandSet(BandSet):
             return ""
         if title is None:
             title = self.name
-        roi_hdulist, roi_fn = load_roi_file(
+        roi_hdulist, roi_fn, roi_tar = load_roi_file(
             self.rois, title=title, outpath=outpath, convert=convert
         )
         self.rois = roi_hdulist
+        self.local_files.append(roi_tar)
         return roi_fn
 
     def associate_pixmaps(self, pixmaps):
@@ -290,13 +292,15 @@ class ZcamBandSet(BandSet):
         dashify(self.extended).to_csv(extended_file, index=False)
         if verbose and (in_memory is False):
             aprint("wrote extended-format marslab file: " + extended_file)
-
         dashify(self.compact).to_csv(metadata_file, index=False)
         if verbose and (in_memory is False):
             aprint("wrote compact-format marslab file: " + metadata_file)
         if in_memory is True:
             metadata_file.seek(0)
             extended_file.seek(0)
+        else:
+            self.local_files.append(extended_file)
+            self.local_files.append(metadata_file)
         return metadata_file, extended_file
 
     def draw_context(self, edgemaps, eye):

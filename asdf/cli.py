@@ -181,8 +181,12 @@ def asdf_body(
     aprint(Rule(" writing data files "))
     if we_do_not_have_rois:
         aprint("[dark_orange]No ROI file passed; using null values for data.")
-    # add location -- TODO: lookup table once we have more than one
-    marslab_data["LOCATION"] = "Octavia E. Butler Landing"
+    # add location from lookup table and sol
+    marslab_data["LOCATION"] = "Unknown"
+    for last_sol, location_name in settings.metadata.LOCATION_TABLE.items():
+        if last_sol > int(bandset.metadata["SOL"].iloc[0]):
+            marslab_data["LOCATION"] = location_name
+            break
     bandset.counts = marslab_data
     # glom all the data and metadata together into our three output formats
     bandset.format_metadata()
@@ -254,6 +258,10 @@ def asdf_body(
     bandset.purge()
     aprint("\n")
 
+    # pretty-plot data if we've got it
+    if not we_do_not_have_rois:
+        pretty_plot_bandset(bandset, outpath)
+
     # handle metadata and thumbnail uploads
     if upload is True:
         aprint(Rule(" uploading asdf outputs "))
@@ -261,13 +269,6 @@ def asdf_body(
             thumbnail_staging, settings.rapidlooks.THUMBNAIL_SIZE
         )
         upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug)
-
-    # pretty-plot data if we've got it; just quit if we don't
-    if we_do_not_have_rois:
-        aprint("\n:star: ... all done ... :star:", style="bold orchid1")
-        return
-
-    pretty_plot_bandset(bandset, outpath)
 
     aprint("\n:star: ... all done ... :star:", style="bold orchid1")
 
