@@ -23,9 +23,10 @@ dependencies:
   - boto3
   - pathos
   - rich
-  - pip:
-      - git+https://github.com/MillionConcepts/pdr.git
-      - git+https://github.com/MillionConcepts/marslab.git
   - astropy
   - sympy
   - pytest
+  - pydrive2
+  - pip:
+      - git+https://github.com/MillionConcepts/pdr.git
+      - git+https://github.com/MillionConcepts/marslab.git

@@ -19,19 +19,20 @@ import botocore.config
 from botocore.exceptions import ClientError
 import gspread
 import pandas as pd
-import pydrive.files
+import pydrive2.files
 
 # TODO: handling authentication differently in gspread and pydrive
 #  is messy but expedient. it's possible that it will be more stable
 #  and/or performant to merge these through a lower-level oauth call,
 #  however, and this should be evaluated.
 from oauth2client.service_account import ServiceAccountCredentials
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
 
 import asdf.settings as settings
 from asdf.asdf_utils import itemize_numpy, obfuscated_name, tar_bytes
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
+from asdf.format import md5sum
 from asdf.zcam_bandset import ZcamBandSet
 
 
@@ -220,12 +221,14 @@ def make_asdf_pydrive_client():
 
 
 def bandset_gdrive_folder_name(bandset):
-    folder_name = " ".join([
-        str(bandset.compact["SOL"].iloc[0]).zfill(4),
-        bandset.compact["SEQ_ID"].iloc[0],
-        bandset.compact["NAME"].iloc[0],
-        "RMS " + str(bandset.compact["RMS"].iloc[0])
-    ])
+    folder_name = " ".join(
+        [
+            str(bandset.compact["SOL"].iloc[0]).zfill(4),
+            bandset.compact["SEQ_ID"].iloc[0],
+            bandset.compact["NAME"].iloc[0],
+            "RMS " + str(bandset.compact["RMS"].iloc[0]),
+        ]
+    )
     return folder_name
 
 
@@ -246,7 +249,6 @@ def gdrive_mkdir(drivebot, folder_name, parent):
             "title": folder_name,
             "parents": [{"id": parent}],
             "mimeType": "application/vnd.google-apps.folder",
-
         }
     )
     gdrive_folder.Upload()
@@ -262,10 +264,12 @@ def upload_bandset_to_gdrive(bandset, debug=False):
     else:
         root = settings.sources.GOOGLE_DRIVE_ROOT
     drivebot = make_asdf_pydrive_client()
-    filelist = drivebot.ListFile(
-        {"q": "'{}' in parents".format(root)}
-    ).GetList()
+    filelist = gdrive_ls(drivebot, root)
     folder_name = bandset_gdrive_folder_name(bandset)
+    # reversing this is a silly hack to make the progress timer
+    # more realistic, because the smallest files (csv and ROI)
+    # will generally be at the front of the list.
+    bandset.local_files.reverse()
     aprint("uploading all files to " + folder_name)
     ASDFLOG.info("checking folder structure")
     existing_folders = [
@@ -275,16 +279,38 @@ def upload_bandset_to_gdrive(bandset, debug=False):
         # note: this may produce unexpected behavior if people dupe folders
         aprint("found existing folder")
         folder_id = existing_folders[0]["id"]
+        existing_title_checksums = {
+            file.get("title"): file.get("md5Checksum")
+            for file in gdrive_ls(drivebot, folder_id)
+        }
     else:
         aprint("created new google drive folder")
         folder_id = gdrive_mkdir(drivebot, folder_name, root)
-    # reversing this is a silly hack to make the progress timer
-    # more realistic, because the smallest files (csv and ROI)
-    # will generally be at the front of the list.
-    bandset.local_files.reverse()
+        existing_title_checksums = {}
+
     for file in bandset.local_files:
+        if is_apparent_duplicate(file, existing_title_checksums):
+            ASDFLOG.info(
+                file + " appears to be an exact duplicate of an existing "
+                "file on Google Drive, skipping"
+            )
+            continue
         ASDFLOG.info("uploading " + file)
         gdrive_cp(drivebot, file, folder_id)
+
+
+def is_apparent_duplicate(file, existing_title_checksums):
+    if Path(file).name in existing_title_checksums.keys():
+        if md5sum(file) == existing_title_checksums[Path(file).name]:
+            return True
+    return False
+
+
+def gdrive_ls(drivebot, root):
+    filelist = drivebot.ListFile(
+        {"q": "'{}' in parents".format(root)}
+    ).GetList()
+    return filelist
 
 
 def update_google_sheet(bandset, folder_id, sheet_id, sheetbot):
@@ -369,7 +395,7 @@ def upload_asdf_analysis(
         try:
             upload_bandset_to_gdrive(bandset, debug)
             aprint("completed Google Drive upload")
-        except pydrive.files.ApiRequestError as api_error:
+        except pydrive2.files.ApiRequestError as api_error:
             aprint(
                 ":confused_face: Sorry, couldn't upload files to drive: "
                 + str(api_error),
