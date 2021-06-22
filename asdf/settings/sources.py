@@ -14,16 +14,13 @@ PIX_ROOTS = [
 PATH_ABBREVIATIONS = {
     "proj": "/project/m2020/mastcamz/surface/flight/products",
     'scratch': "/scratch/cal_wg/flight/products/",
-    "test2": "/home/michael/Desktop/zcam_data/products/",
 }
 DEFAULT_PRODUCT_SUBDIRECTORY = 'iof'
-
 
 GOOGLE_CLIENT_SECRETS_FILE = "asdf/secrets/google_client_secrets.json"
 GOOGLE_SHEET_ID = "1mUg_gsvOuB5FACW9BEDEIXEpPtXewOC3-l5NHj_LN9Q"
 METADATA_BACKUP_FOLDER_ID = "1iu-AS6pv924f_zN9t4HjlV6qaqRYtu46"
-GOOGLE_DRIVE_ROOT = ""
-
+GOOGLE_DRIVE_ROOT = "1zNioASlect4bAb4qRybQcsla1U9LDJmh"
 
 AWS_IAM_SECRETS_FILE = "asdf/secrets/s3_iam_secrets.csv"
 BACKUP_BUCKET = "g4452h324"
@@ -33,4 +30,5 @@ OBFUSCATE_THUMBNAIL_NAMES = True
 # debug-mode locations for testing uploads without dirtying live content
 DEBUG_GOOGLE_SHEET_ID = "1G7T3Xb63wkdsOWJY4qaYDkFghjRqHvUaAwHpsBbrqSY"
 DEBUG_METADATA_BACKUP_FOLDER_ID = "1pqP4Ohdsc8ACTh9EQ1HAvjFyL11fgiXE"
-DEBUG_GOOGLE_DRIVE_ROOT = "1Fs9DDNNNDKeS9x4X8DjcgT4wWbBZAgzu"
+# DEBUG_GOOGLE_DRIVE_ROOT = "1Fs9DDNNNDKeS9x4X8DjcgT4wWbBZAgzu"
+DEBUG_GOOGLE_DRIVE_ROOT = "1A1D1SrqfUj0iTNTDH8eZ4Rwsq_VuMPIY"

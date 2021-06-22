@@ -179,7 +179,7 @@ def melt_metadata(metadata: pd.DataFrame, unpivot="BAND") -> pd.DataFrame:
         "LOCATION",
         "IX",
         "PRODUCER",
-        "PRODUCT_TYPE"
+        "PRODUCT_TYPE",
     )
     uc_here = [col for col in unchanging_columns if col in metadata.columns]
     unchanging_block = metadata.reindex(columns=uc_here)
@@ -277,9 +277,14 @@ def drop_excess_stats(compact):
     return compact
 
 
-def insert_wavelengths_into_text(annotation):
-    for filt, wavelength in DERIVED_CAM_DICT['ZCAM']['filters'].items():
-        annotation = re.sub(
-            filt, filt + '(' + str(wavelength) + 'nm)', annotation
+def insert_wavelengths_into_text(text: str, is_band_depth):
+    if is_band_depth:
+        filts = re.split(r"([L|R]\d[RGB]?)", text, maxsplit=0)
+        text = (
+            f"{filts[0] + filts[1]} [left] {filts[3]}"
+            f" [center] {filts[5]} [right] {filts[6]}"
         )
-    return annotation
+    for filt, wavelength in DERIVED_CAM_DICT["ZCAM"]["filters"].items():
+        text = re.sub(filt, filt + " (" + str(wavelength) + "nm)", text)
+    text = re.sub(r"_", r" ", text)
+    return text

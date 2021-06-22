@@ -2,8 +2,7 @@
 this module holds functions for procedurally-generated sections of settings
 files, basically to enhance their readability. it specifically holds
 """
-from copy import deepcopy
-from itertools import chain
+from itertools import chain, product
 
 import cv2
 import numpy as np
@@ -30,6 +29,7 @@ FILTER_DATA_COLUMNS = tuple(
 smoother = split_filter(curry(gaussian_filter), axis=0)
 
 
+# TODO: clean this up
 def make_orange_teal_cmap():
     teal = (98, 252, 232)
     orange = (255, 151, 41)
@@ -44,25 +44,60 @@ def make_orange_teal_cmap():
     return ListedColormap(vals, name="orange_teal")
 
 
-# TODO: clean this up
+# def make_aqua_pink_accent_cmap():
+#     aqua = (0, 1, 1, 1)
+#     pink = (1, 0, 1, 1)
+#     transparent = (0.5, 0.5, 0.5, 0)
+#     vals = np.full((10, 4), transparent)
+#     for channel in range(3):
+#         vals[:, channel][0] = aqua[channel]
+#         vals[:, channel][-1] = pink[channel]
+#     return ListedColormap(vals, name="aqua_pink")
+
+
+# TODO: clean this up too
 def make_aqua_pink_accent_cmap():
     aqua = (0, 1, 1, 1)
     pink = (1, 0, 1, 1)
     transparent = (0.5, 0.5, 0.5, 0)
-    vals = np.full((10, 4), transparent)
-    for channel in range(3):
-        vals[:, channel][0] = aqua[channel]
-        vals[:, channel][-1] = pink[channel]
+    vals = np.full((16, 4), transparent)
+    ramp_range = 4
+    ramp = np.linspace(1, 0, ramp_range)
+    for channel, value in product(range(3), range(ramp_range)):
+        gray = 0.5 * ramp[ramp_range - 1 - value]
+        colorness = ramp[value]
+        vals[:, channel][value] = aqua[channel] * colorness + gray
+        vals[:, channel][-1 - value] = pink[channel] * colorness + gray
     return ListedColormap(vals, name="aqua_pink")
 
 
+# TODO: clean this up too
+def make_red_blue_accent_cmap():
+    red = (1, 0, 0, 1)
+    blue = (0, 0, 1, 1)
+    transparent = (0.5, 0.5, 0.5, 0)
+    vals = np.full((16, 4), transparent)
+    ramp_range = 5
+    ramp = np.linspace(0.5, 0, ramp_range)
+    for channel, value in product(range(3), range(ramp_range)):
+        if channel == 1:
+            green = ramp[ramp_range - 1 - value]
+        else:
+            green = 0
+        colorness = ramp[value] + 0.5
+        vals[:, channel][value] = red[channel] * colorness + green
+        vals[:, channel][-1 - value] = blue[channel] * colorness + green
+    return ListedColormap(vals, name="red_blue")
+
+
 register_cmap(cmap=make_aqua_pink_accent_cmap())
+register_cmap(cmap=make_red_blue_accent_cmap())
 register_cmap(cmap=make_orange_teal_cmap())
 
 
 def make_bilateralfilter(d, sigmaColor, sigmaSpace):
     """
-    cv2.bilateralFilter has under-the-hood dispatch resolution
+    cv2.bilateralFilter has under-the-hood duck type handling
     that chokes on the gradual partial evaluation we use later
     in the pipeline, so we pre-bind arguments to it here in a closure.
     """
@@ -72,5 +107,3 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
         )
 
     return do_bilateralfilter
-
-

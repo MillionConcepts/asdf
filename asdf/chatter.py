@@ -37,6 +37,9 @@ from asdf.pretty import (
     dispatched_metadata_prompt,
     style_prog,
     print_observation,
+    y_n_prompt,
+    metadata_choice_prompt,
+    NumberedChoicePrompt,
 )
 from asdf.scan import (
     scan_zcam_files,
@@ -69,7 +72,7 @@ def find_and_offer_observations(
     noninteractive,
     keep_broadband,
     keep_caltarget,
-    **scan_kwargs
+    **scan_kwargs,
 ):
     """
     process a request for ZCAM files; print the results of the request to
@@ -144,7 +147,9 @@ def find_and_offer_observations(
         return tuple(results.values())[0], False
 
 
-def ask_user_about_roi(roi_title=None, ci: Callable = pass_parameters) -> dict:
+def ask_user_about_roi(
+    roi_title=None, ci: Callable = pass_parameters, constants: dict = None
+) -> dict:
     """
     ask the user about all of the ROI properties we care about, unless
     the application is in noninteractive mode, in which case return our
@@ -154,9 +159,13 @@ def ask_user_about_roi(roi_title=None, ci: Callable = pass_parameters) -> dict:
         color, but no logical reason it must be
     :param ci: optional wrapper function that suppresses attempts to request
         input. for noninteractive mode.
+    :param constants: a dictionary of fields and values that the user
+        has asserted are constant across all ROIs.
     """
-    roi_metadata = {}
+    if constants is None:
+        constants = {}
     metadata_fields = list(ROI_METADATA_FIELDS)
+    roi_metadata = {}
     for field in metadata_fields:
         # don't ask people rock questions about non-rocks
         if (field.upper() in LITHOLOGICAL_ROI_FIELDS) and (
@@ -164,11 +173,31 @@ def ask_user_about_roi(roi_title=None, ci: Callable = pass_parameters) -> dict:
         ):
             roi_metadata[field] = ""
             continue
+        # if a user has told us a field is the same everywhere, don't bother
+        # them about it
+        if field in constants.keys():
+            roi_metadata[field] = constants[field]
+            continue
         roi_metadata[field] = ci(dispatched_metadata_prompt, field, roi_title)
     return roi_metadata
 
 
 def input_roi_metadata(marslab_data, ci):
+    constants = {}
+    for field in ROI_METADATA_FIELDS:
+        # TODO: this may be sloppy
+        if constants.get("FEATURE") != "rock" and (
+            field in LITHOLOGICAL_ROI_FIELDS
+        ):
+            continue
+        if ci(
+            metadata_choice_prompt,
+            Text(f"Is the value of {field} the same for all ROIs?"),
+            (True, False),
+        ):
+            constants[field] = dispatched_metadata_prompt(field)
+    # TODO: this might be confusing if all fields are constant for all ROIs,
+    #  but this is probably a rare case.
     for region in marslab_data["COLOR"]:
         ci(
             aprint,
@@ -176,8 +205,8 @@ def input_roi_metadata(marslab_data, ci):
             .append_text(colorize_merspect_roi_name(region))
             .append_text(Text(" ROI.")),
         )
-        user_provided_roi_metadata = ask_user_about_roi(region, ci)
-        for field, value in user_provided_roi_metadata.items():
+        user_provided_metadata = ask_user_about_roi(region, ci, constants)
+        for field, value in user_provided_metadata.items():
             marslab_data.loc[marslab_data["COLOR"] == region, field] = value
     return marslab_data
 
@@ -447,7 +476,7 @@ def write_annotated_image(
     bandset, look, look_name, outpath, pool, prefix, results
 ):
     filename = prefix + " " + look_name + ".png"
-    look_name = insert_wavelengths_into_text(look_name)
+    look_name = insert_wavelengths_into_text(look_name, "band" in look_name)
     annotation = "\n".join(
         (
             look_name,
@@ -559,7 +588,7 @@ def complain_about_pixmap_counts(quality_df):
             header = Text("note: ", style="dark_orange bold")
             roi = colorize_merspect_roi_name(color)
             complaint = Text(
-                " ROI has {} pixels ({}):\n".format(flag, mask_note),
+                f" ROI has {flag} pixels ({mask_note}):\n",
                 style="dark_orange bold",
             )
             values = "; ".join(

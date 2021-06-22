@@ -83,7 +83,10 @@ def make_accent_looks(looks, defaults, settings):
             continue
         new_look = deepcopy(look)
         new_look |= defaults
-        new_look["name"] = "{look} {bands} accent"
+        if "name" in settings.keys():
+            new_look["name"] = settings["name"]
+        else:
+            new_look["name"] = "{look} {bands} accent"
 
         new_look.pop("plotter")
         # noinspection PyTypeChecker

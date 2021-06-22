@@ -8,7 +8,7 @@ from asdf.settings.generators import FILTER_DATA_COLUMNS
 # lookup table for location by sol
 LOCATION_TABLE = {
     101: "Octavia E. Butler Landing",
-    99999: "Green Zone Campaign"
+    99999: "Green Zone Campaign",
 }
 
 # fields we want to ask the user about at each ROI. This order is preserved.
@@ -29,15 +29,16 @@ LITHOLOGICAL_ROI_FIELDS = ["MORPHOLOGY", "FLOAT"]
 
 # special prompt text for these
 ROI_METADATA_FIELD_PROMPTS = {
-    "FLOAT": "Is the rock associated with {title} ROI a {field}?",
-    "FEATURE": "What category of {field} is {title} ROI?",
-    "MORPHOLOGY": "Which named {field} type does the rock in {title} "
-    "ROI belong to?",
-    "SCAM": "Is the area in {title} ROI also a {field} target?",
-    "TARGET": "What named {field} does {title} ROI cover? "
+    "FLOAT": "Is / are the rock(s) associated with {title} ROI(s) a {field}?",
+    "FEATURE": "What category of {field} is / are {title} ROI(s)?",
+    "MORPHOLOGY": "Which named {field} type do / does the rock in {title} "
+    "ROI(s) belong to?",
+    "SCAM": "Is the area in {title} ROI(s) also a {field} target?",
+    "TARGET": "What named {field} do / does {title} ROI(s) cover? "
     "(press Enter to skip)",
-    "DISTANCE": "What {field} category does {title} ROI fall into?",
-    "WORKSPACE": "What {field} is {title} ROI in?  (press Enter to skip)",
+    "DISTANCE": "What {field} category do / does {title} ROI(s) fall into?",
+    "WORKSPACE": "What {field} is / are {title} ROI(s) in? (press Enter to "
+                 "skip)",
 }
 
 # restrictions, if any, on value choices for these ROIs.
@@ -133,7 +134,7 @@ PIXEL_FLAG_STYLE = (
     # (1, "#ff5fd7", "o"),
     (1, "#aa5fd7", "3"),
     (4, "#f0fbfb", "."),
-    (0.2, "#87ff00", 'o'),
+    (0.2, "#87ff00", "o"),
     (7, "#00ffd7", "*"),
-    (5, "#d7af00", "|")
+    (5, "#d7af00", "|"),
 )

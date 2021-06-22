@@ -6,7 +6,6 @@ TODO, maybe: consolidate utility-type functions into their own module
 import datetime as dt
 import io
 import json
-import logging
 import os
 import time
 import urllib.request
@@ -111,16 +110,13 @@ def upload_s3(
     """
     if client is None:
         client = boto3.client("s3")
-
     # If S3 object_name was not specified, use string rep of
     # passed object, up to 90 characters
     if object_name is None:
         object_name = str(upload_object)
-
     # 'touch' - type behavior
     if upload_object is None:
         upload_object = io.BytesIO()
-
     # encode string to bytes if we're writing it to S3 object instead
     # of interpreting it as a path
     if isinstance(upload_object, str) and pass_string:
@@ -131,8 +127,8 @@ def upload_s3(
             client.upload_file(str(upload_object), bucket, object_name)
         else:
             client.upload_fileobj(upload_object, bucket, object_name)
-    except ClientError as e:
-        return e
+    except ClientError as error:
+        return error
     return True
 
 
@@ -217,86 +213,106 @@ def make_asdf_pydrive_client():
     gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name(
         settings.sources.GOOGLE_CLIENT_SECRETS_FILE, scope
     )
-    return GoogleDrive(gauth)
+    return DriveBot(gauth)
 
 
-def bandset_gdrive_folder_name(bandset):
-    folder_name = " ".join(
-        [
-            str(bandset.compact["SOL"].iloc[0]).zfill(4),
-            bandset.compact["SEQ_ID"].iloc[0],
-            bandset.compact["NAME"].iloc[0],
-            "RMS " + str(bandset.compact["RMS"].iloc[0]),
+def bandset_gdrive_folder_names(bandset):
+    sol_folder_name = (
+        f"""{bandset.compact["NAME"].iloc[0]}_"""
+        + f"""{str(bandset.compact["SOL"].iloc[0]).zfill(4)}"""
+    )
+    obs_folder_name = (
+        f"""{bandset.compact["SEQ_ID"].iloc[0]}"""
+        + f""" {bandset.compact["NAME"].iloc[0]}"""
+        + f""" {"RMS " + str(bandset.compact["RMS"].iloc[0])}"""
+    )
+    return sol_folder_name, obs_folder_name
+
+
+class DriveBot(GoogleDrive):
+    """
+    convenience wrapper adding abstract pseudo-filesystem operations to
+    a pydrive2 GoogleDrive object
+    """
+    # TODO: maybe consider doing this with one of the fs contrib things
+    #  instead? so you can have a single gdrive / s3 interface? or perhaps
+    #  combining it in some way with google sheets, maybe even dropping to
+    #  lower-level API functions? or perhaps not.
+    def mkdir(self, folder_name, parent_id):
+        gdrive_folder = self.CreateFile(
+            {
+                "title": folder_name,
+                "parents": [{"id": parent_id}],
+                "mimeType": "application/vnd.google-apps.folder",
+            }
+        )
+        gdrive_folder.Upload()
+        folder_id = gdrive_folder["id"]
+        return folder_id
+
+    def cp(self, source_path, target_folder):
+        upload = self.CreateFile(
+            {
+                "title": Path(source_path).name,
+                "parents": [{"id": target_folder}],
+            }
+        )
+        upload.SetContentFile(source_path)
+        upload.Upload()
+
+    def ls(self, folder_id):
+        filelist = self.ListFile(
+            {"q": "'{}' in parents".format(folder_id)}
+        ).GetList()
+        return filelist
+
+    def get_checksums(self, folder_id, file_list=None):
+        if file_list is None:
+            file_list = self.ls(folder_id)
+        return {
+            file.get("title"): file.get("md5Checksum") for file in file_list
+        }
+
+    def cd(self, folder_name, parent_id):
+        root_filelist = self.ls(parent_id)
+        folder_list = [
+            file for file in root_filelist if file["title"] == folder_name
         ]
-    )
-    return folder_name
+        if folder_list:
+            folder_id = folder_list[0]["id"]
+        else:
+            folder_id = self.mkdir(folder_name, parent_id)
+        return folder_id
 
 
-def gdrive_cp(drivebot, source_path, target_folder):
-    upload = drivebot.CreateFile(
-        {
-            "title": Path(source_path).name,
-            "parents": [{"id": target_folder}],
-        }
-    )
-    upload.SetContentFile(source_path)
-    upload.Upload()
-
-
-def gdrive_mkdir(drivebot, folder_name, parent):
-    gdrive_folder = drivebot.CreateFile(
-        {
-            "title": folder_name,
-            "parents": [{"id": parent}],
-            "mimeType": "application/vnd.google-apps.folder",
-        }
-    )
-    gdrive_folder.Upload()
-    folder_id = gdrive_folder["id"]
-    return folder_id
-
-
-# TODO: maybe consider doing this with one of the fs contrib things instead?
-#  so you can have a single gdrive / s3 interface? or perhaps not
 def upload_bandset_to_gdrive(bandset, debug=False):
+    # reversing this is a silly hack to make the progress timer
+    # more realistic, because the smallest files (csv and ROI)
+    # will generally be at the front of the list.
+    bandset.local_files.reverse()
+    # id of root folder
     if debug is True:
         root = settings.sources.DEBUG_GOOGLE_DRIVE_ROOT
     else:
         root = settings.sources.GOOGLE_DRIVE_ROOT
     drivebot = make_asdf_pydrive_client()
-    filelist = gdrive_ls(drivebot, root)
-    folder_name = bandset_gdrive_folder_name(bandset)
-    # reversing this is a silly hack to make the progress timer
-    # more realistic, because the smallest files (csv and ROI)
-    # will generally be at the front of the list.
-    bandset.local_files.reverse()
-    aprint("uploading all files to " + folder_name)
     ASDFLOG.info("checking folder structure")
-    existing_folders = [
-        file for file in filelist if file["title"] == folder_name
-    ]
-    if existing_folders:
-        # note: this may produce unexpected behavior if people dupe folders
-        aprint("found existing folder")
-        folder_id = existing_folders[0]["id"]
-        existing_title_checksums = {
-            file.get("title"): file.get("md5Checksum")
-            for file in gdrive_ls(drivebot, folder_id)
-        }
-    else:
-        aprint("created new google drive folder")
-        folder_id = gdrive_mkdir(drivebot, folder_name, root)
-        existing_title_checksums = {}
-
+    sol_folder_name, obs_folder_name = bandset_gdrive_folder_names(bandset)
+    # note: this may produce unexpected behavior if people dupe folders and
+    # remove the default copy suffixes, etc.
+    sol_folder_id = drivebot.cd(sol_folder_name, root)
+    obs_folder_id = drivebot.cd(obs_folder_name, sol_folder_id)
+    aprint(f"uploading all files to {sol_folder_name}/{obs_folder_name}")
+    title_checksum_dict = drivebot.get_checksums(obs_folder_id)
     for file in bandset.local_files:
-        if is_apparent_duplicate(file, existing_title_checksums):
+        if is_apparent_duplicate(file, title_checksum_dict):
             ASDFLOG.info(
-                file + " appears to be an exact duplicate of an existing "
+                f"{file} appears to be an exact duplicate of an existing "
                 "file on Google Drive, skipping"
             )
             continue
-        ASDFLOG.info("uploading " + file)
-        gdrive_cp(drivebot, file, folder_id)
+        ASDFLOG.info(f"uploading {file}")
+        drivebot.cp(file, obs_folder_id)
 
 
 def is_apparent_duplicate(file, existing_title_checksums):
@@ -304,13 +320,6 @@ def is_apparent_duplicate(file, existing_title_checksums):
         if md5sum(file) == existing_title_checksums[Path(file).name]:
             return True
     return False
-
-
-def gdrive_ls(drivebot, root):
-    filelist = drivebot.ListFile(
-        {"q": "'{}' in parents".format(root)}
-    ).GetList()
-    return filelist
 
 
 def update_google_sheet(bandset, folder_id, sheet_id, sheetbot):
@@ -337,10 +346,14 @@ def update_google_sheet(bandset, folder_id, sheet_id, sheetbot):
         aprint("... posting new metadata ...")
         columns = metadata_sheet_values[0]
         row_df = bandset.summary.reindex(columns).fillna("-")
+        # explicitly setting table_range is necessary to avoid a weird default
+        # API behavior: if someone accidentally types a character somewhere
+        # below the last row and this parameter is not set, the sheets will
+        # treat that character's column as the first column of the table
         metadata_sheet.append_row(
             row_df.apply(itemize_numpy).tolist(),
             value_input_option="USER_ENTERED",
-            table_range="A1:A9999",
+            table_range="A1:A99999",
         )
     aprint("completed metadata sheet update")
 

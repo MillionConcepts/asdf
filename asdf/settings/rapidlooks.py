@@ -39,6 +39,7 @@ BANDMAP_DEFAULTS = {
             "cmap": "orange_teal",
             "colorbar_fp": TICK_FONT,
             "render_colorbar": True,
+            "special_constants": [0]
         },
     },
 }
@@ -137,6 +138,17 @@ AQUA_PINK_OVERLAY_OPTIONS = {
     },
 }
 
+# settings for the red-blue overlays
+RED_BLUE_OVERLAY_OPTIONS = {
+    "name": "{look} {bands} rb accent",
+    "params": {
+        "mpl_settings": {"colorbar_fp": TICK_FONT},
+        "overlay_opacity": 0.4,
+        "overlay_cmap": "red_blue",
+        "base_cmap": "Greys_r",
+    },
+}
+
 # default options for 'heatmap' - type looks -- currently in this file
 # only including the rainbow looks
 HEATMAP_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
@@ -160,7 +172,7 @@ RAINBOW_OPTIONS = {
 # '$CATEGORY_NAME': (options_for_look, options_for_other_look, ...)
 
 LOOK_GENERATORS = {
-    "accent": [AQUA_PINK_OVERLAY_OPTIONS],
+    "accent": [AQUA_PINK_OVERLAY_OPTIONS, RED_BLUE_OVERLAY_OPTIONS],
     "heatmap": [RAINBOW_OPTIONS],
     "stretchy": [INVARIANT_OPTIONS],
     # recolored bandmaps: just give colormap names

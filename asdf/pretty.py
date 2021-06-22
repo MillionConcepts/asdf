@@ -114,7 +114,7 @@ def format_roi_title(roi_title):
         prompt_text.append("the ")
         prompt_text.append(colorize_merspect_roi_name(roi_title))
     else:
-        prompt_text.append("this")
+        prompt_text.append("this / these")
     return prompt_text
 
 
@@ -151,7 +151,7 @@ def generic_metadata_prompt_text(field, title):
     """
     prompt_text = Text.from_markup(
         "What is the [bold]{}[/] value of ".format(field)
-    ).append_text(format_roi_title(title) + " ROI? (press Enter to skip)")
+    ).append_text(format_roi_title(title) + " ROI(s)? (press Enter to skip)")
     return prompt_text
 
 
