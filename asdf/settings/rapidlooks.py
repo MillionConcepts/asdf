@@ -163,7 +163,7 @@ RAINBOW_OPTIONS = {
     "params": {
         "mpl_settings": {"colorbar_fp": TICK_FONT},
         "overlay_opacity": 0.35,
-        "overlay_cmap": "gist_rainbow",
+        "overlay_cmap": "gist_rainbow_r",
         "base_cmap": "Greys_r",
     }
 }
