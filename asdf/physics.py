@@ -11,7 +11,7 @@ def add_derived_illumination_geometry(metadata):
     derive canonical incidence, emission, and phase angles from other metadata
     fields. see Shepherd et al. 2008, Rice et al. 2020, Rice 2021 (p.comm.)
     """
-    incidence_angle = metadata["SOLAR_ELEVATION"] - 90
+    incidence_angle = 90 - metadata["SOLAR_ELEVATION"]
     emission_angle = metadata["INSTRUMENT_ELEVATION"] + 90
 
     incidence_azimuth = metadata["SOLAR_AZIMUTH"]
