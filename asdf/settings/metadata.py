@@ -124,8 +124,11 @@ IOF_METADATA_REGEX = {
     # these files appear to currently be stored in
     # # /project/m2020/gds/radcal/effective_taus on islamorada
     "TAU_ESTIMATE_FILENAME": r"(?<=TAU_ESTIMATE_FILENAME).*?(\w+\.csv)",
-    "INSTRUMENT_ELEVATION": r"(?<=INSTRUMENT_ELEVATION ).*?([\d\.]+)",
-    "INSTRUMENT_AZIMUTH": r"(?<=INSTRUMENT_AZIMUTH ).*?([\d\.]+)",
+    "INSTRUMENT_ELEVATION": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
+                            r"?:\n|\r|.)*?INSTRUMENT_ELEVATION ).*?(["
+                            r"-\d\.]+)",
+    "INSTRUMENT_AZIMUTH": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
+                          r"?:\n|\r|.)*?INSTRUMENT_AZIMUTH ).*?([-\d\.]+)",
 }
 
 PIXEL_FLAG_NAMES = ("bad", "no_signal", "nonlinear", "saturated", "hot")
