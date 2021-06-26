@@ -15,7 +15,7 @@ from cytoolz.functoolz import curry
 from cytoolz.itertoolz import partition
 from fs.osfs import OSFS
 
-import asdf.settings as settings
+import asdf_settings as settings
 from asdf.asdf_utils import load_roi_file, split_on, dir_fs, listify, pdstr
 from asdf.console import ASDFLOG
 from asdf.network import get_public_m20_waypoints

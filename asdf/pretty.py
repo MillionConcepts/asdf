@@ -14,7 +14,7 @@ from rich.text import Text
 
 from asdf.asdf_utils import extract_constants
 from asdf.console import aprint, ASDF_CONSOLE
-from asdf.settings.metadata import (
+from asdf_settings.metadata import (
     ROI_METADATA_FIELD_PROMPTS,
     ROI_METADATA_FIELD_CHOICES,
 )

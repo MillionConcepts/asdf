@@ -4,7 +4,7 @@ from copy import deepcopy
 import matplotlib.font_manager as mplf
 from scipy.ndimage import gaussian_filter
 
-from asdf.settings.generators import (smoother, make_bilateralfilter)
+from .generators import smoother, make_bilateralfilter
 from marslab.imgops.imgutils import std_clip, normalize_range
 from marslab.imgops.render import colormapped_plot, simple_figure
 
@@ -24,10 +24,12 @@ LEGEND_FONT = mplf.FontProperties(
 
 
 # default settings for band parameter maps
-# note: "cmap" defines a colormap used by a rapidlook. "orange_teal"
-# and "aqua_pink" are custom asdf/marslab cmaps. others are from matplotlib's
-# default library. for a list of built-in matplotlib cmaps, see:
-# https://matplotlib.org/stable/gallery/color/colormap_reference.html
+# note: "cmap" defines a colormap used by a rapidlook. "orange_teal",
+# "red_blue", and "aqua_pink" are custom asdf/marslab cmaps. others are
+# from matplotlib's default library. for a list of built-in matplotlib cmaps,
+# see: https://matplotlib.org/stable/gallery/color/colormap_reference.html
+# {look} is the name of the look, e.g. "band_depth"; "bands" is the name of
+# the filters involved in the look
 BANDMAP_DEFAULTS = {
     "name": "{look} {bands}",
     "params": {"special_constants": [0]},
@@ -83,7 +85,7 @@ CROP_SETTINGS = {
 #                      explicit rapidlook definitions
 #############################################################################
 # BANDMAP_DEFAULTS are automatically added
-# to all these looks
+# to all these looks -- other useful looks might be "ratio" and "band_avg"
 BANDMAP = (
     {"look": "band_depth", "bands": ("L6", "L4", "L5")},
     {"look": "band_depth", "bands": ("R1", "R4", "R2")},
@@ -114,16 +116,22 @@ STRETCHY = (
 
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
-CATEGORIES = ("BANDMAP", "ENHANCED", "NATURAL", "STRETCHY")
-
+CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY"]
 
 #############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################
 
+# in general, additional OPTIONS categories should define a "name" key.
+# not doing this will tend to cause looks to be clobbered.
+
+MASKED_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
+SHADOWED_OPTIONS = {
+    "premask": {"sigma": (1, 0)}
+}
+
 # sigma-invariant (non-merspect-style) dcs options
 INVARIANT_OPTIONS = {"sigma": None, "contrast_stretch": 1}
-
 # defaults for 'accent' - type looks (currently just the aqua-pink overlays)
 ACCENT_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
 ACCENT_DEFAULTS["prefilter"] = {"function": make_bilateralfilter(15, 3, 7)}

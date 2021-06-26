@@ -28,7 +28,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 
-import asdf.settings as settings
+import asdf_settings as settings
 from asdf.asdf_utils import itemize_numpy, obfuscated_name, tar_bytes
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
 from asdf.format import md5sum

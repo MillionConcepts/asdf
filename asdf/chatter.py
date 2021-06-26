@@ -15,7 +15,7 @@ from rich.rule import Rule
 from rich.text import Text
 
 import pplot
-from asdf import settings as settings
+import asdf_settings as settings
 from asdf.asdf_utils import pass_parameters, dashify
 from asdf.console import (
     ASDF_CONSOLE,
@@ -37,9 +37,7 @@ from asdf.pretty import (
     dispatched_metadata_prompt,
     style_prog,
     print_observation,
-    y_n_prompt,
     metadata_choice_prompt,
-    NumberedChoicePrompt,
 )
 from asdf.scan import (
     scan_zcam_files,
@@ -55,7 +53,7 @@ from asdf.scan import (
     find_matching_observations,
 )
 from asdf.scrape import cached_exists
-from asdf.settings.metadata import (
+from asdf_settings.metadata import (
     ROI_METADATA_FIELDS,
     LITHOLOGICAL_ROI_FIELDS,
     PIXEL_FLAG_NAMES,

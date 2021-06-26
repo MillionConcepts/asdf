@@ -10,7 +10,7 @@ from cytoolz import keyfilter
 from matplotlib import pyplot as plt
 
 import asdf
-from asdf import settings
+import asdf_settings
 from asdf.asdf_utils import (
     dupe_df_block,
     load_roi_file,
@@ -30,8 +30,8 @@ from asdf.format import (
 from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
 from asdf.scrape import bulk_scrape_metadata
-from asdf.settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
-from asdf.settings.rapidlooks import LEGEND_FONT
+from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
+from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
 from marslab.compat.xcam import (
     DERIVED_CAM_DICT,
@@ -52,12 +52,12 @@ def polish_metadata(metadata, creation_time):
     extra_columns = [
         column
         for column in dataframe.columns
-        if column not in settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS
+        if column not in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS
     ]
     ordered_fields = dataframe.reindex(
         [
             c
-            for c in settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS
+            for c in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS
             if c in dataframe.columns
         ],
         axis=1,
@@ -272,7 +272,7 @@ class ZcamBandSet(BandSet):
         # set variable-by-image values equal to chronologically first value
         # in compact version
         for field, value in summary.iteritems():
-            if field in settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS:
+            if field in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS:
                 compact[field] = value
         creation_time = dt.datetime.utcnow().isoformat()
         summary["FILE_TIMESTAMP"] = creation_time

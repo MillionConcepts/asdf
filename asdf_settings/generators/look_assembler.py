@@ -2,8 +2,8 @@ from copy import deepcopy
 
 from marslab.spectops import SPECTOP_NAMES
 
-import asdf.settings.rapidlooks
-from asdf.settings.rapidlooks import (
+from .. import rapidlooks
+from ..rapidlooks import (
     CATEGORIES,
     CROP_SETTINGS,
     LOOK_GENERATORS,
@@ -106,8 +106,8 @@ GENERATED_LOOK_DISPATCH = {
 # + defaults
 ASSEMBLED_INSTRUCTIONS = []
 for category in CATEGORIES:
-    cat_looks = getattr(asdf.settings.rapidlooks, category)
-    cat_defaults = getattr(asdf.settings.rapidlooks, category + "_DEFAULTS")
+    cat_looks = getattr(rapidlooks, category)
+    cat_defaults = getattr(rapidlooks, category + "_DEFAULTS")
     for cat_look in cat_looks:
         instruction = cat_defaults | cat_look
         ASSEMBLED_INSTRUCTIONS.append(instruction)
@@ -119,7 +119,7 @@ GENERATED_INSTRUCTIONS = []
 for category, look_listing in LOOK_GENERATORS.items():
     assembly_function = GENERATED_LOOK_DISPATCH[category]
     category_defaults = getattr(
-        asdf.settings.rapidlooks, category.upper() + "_DEFAULTS"
+        rapidlooks, category.upper() + "_DEFAULTS"
     )
     for gen_look in look_listing:
         GENERATED_INSTRUCTIONS += assembly_function(

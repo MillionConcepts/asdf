@@ -3,9 +3,10 @@ settings for what metadata we both collect and write out. adding items to
 these literals should generally be safe; removing them may not be.
 """
 
-from asdf.settings.generators import FILTER_DATA_COLUMNS
+# don't change this
+from .generators import FILTER_DATA_COLUMNS
 
-# lookup table for location by sol
+# lookup table for location by sol -- number is final sol of location
 LOCATION_TABLE = {
     101: "Octavia E. Butler Landing",
     99999: "Green Zone Campaign",
@@ -25,9 +26,14 @@ ROI_METADATA_FIELDS = (
 # fields relevant only to rocks. users will only be queried about these fields
 # if they have set FEATURE = rock. Don't put these before the FEATURE query
 # or they'll never be asked about.
+
 LITHOLOGICAL_ROI_FIELDS = ["MORPHOLOGY", "FLOAT"]
+# REGOLITHOLOGICAL ...
+# LANDFORMOLOGICAL ...
 
 # special prompt text for these
+# {title} is replaced with the title of the ROI, currently always its color
+# {field} is replaced with the field name
 ROI_METADATA_FIELD_PROMPTS = {
     "FLOAT": "Is / are the rock(s) associated with {title} ROI(s) a {field}?",
     "FEATURE": "What category of {field} is / are {title} ROI(s)?",
@@ -59,10 +65,8 @@ ROI_METADATA_FIELD_CHOICES = {
     "FLOAT": ["Y", "N"],
 }
 
-# TODO, once we have more locations: implement lookup table for LOCATION.
-#  i.e. LOCATION_TABLE = {(0, None): "Octavia E. Butler Landing", ...}
-
-# Columns of the compact -marslab.csv file.
+# Columns of the compact -marslab.csv file. columns not here won't appear in
+# the compact version.
 # Their order here is preserved in the .csv file.
 # *ROI_METADATA_FIELDS are the user-input fields defined above.
 # *FILTER_DATA_COLUMNS are the per-filter mean/std pixel count columns.
@@ -96,12 +100,13 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     *FILTER_DATA_COLUMNS,
 )
 
-COMPACT_MARSLAB_STATS = ["ERR"]
+# statistical columns we add along with mean value to FILTER_DATA_COLUMNS
+COMPACT_MARSLAB_STATS = ["ERR", "COUNT"]
 
 # regexes for getting metadata from attached PDS3 product labels without
 # parsing PVL. this structure defines almost everything we look for in a label.
 IOF_METADATA_REGEX = {
-    # the zoom motor count is to be given several places in the label,
+    # the zoom motor count is given several places in the label,
     # but the malin mini header line has other interesting contents
     "MINI_HEADER": r"(?<=ARTICULATION_DEV_POSITION ).*(\(.*\))",
     "FRAME_TYPE": r"(?<=FRAME_TYPE ).*?(\w+)",

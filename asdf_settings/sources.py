@@ -1,3 +1,4 @@
+# must be True or False, no quotation marks
 USE_PUBLIC_WAYPOINTS = True
 PUBLIC_WAYPOINTS_URL = (
     "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json"
@@ -7,13 +8,13 @@ FIND_EFFECTIVE_TAUS = True
 EFFECTIVE_TAU_PATH = "/project/m2020/gds/radcal/effective_taus/"
 
 PIX_ROOTS = [
-    "/scratch/cal_wg/flight/products/",
+    "/scratch/cal_wg/flight/products/"
 ]
 
 # resolvers for asdf -a
 PATH_ABBREVIATIONS = {
     "proj": "/project/m2020/mastcamz/surface/flight/products",
-    'scratch': "/scratch/cal_wg/flight/products/",
+    'scratch': "/scratch/cal_wg/flight/products/"
 }
 DEFAULT_PRODUCT_SUBDIRECTORY = 'iof'
 

@@ -10,11 +10,11 @@ import matplotlib.figure
 import numpy as np
 import pandas as pd
 
-import asdf.settings as settings
+import asdf_settings as settings
 from asdf.asdf_utils import NestingDict
 from asdf.console import ASDF_CONSOLE, aprint
 from asdf.parse import parse_pointing
-from asdf.settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
+from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.imgutils import absolutely_destroy
 from marslab.imgops.pltutils import set_label
@@ -27,9 +27,8 @@ def compile_looks():
     compile looks at runtime -- makes settings.rapidlooks readable while
     avoiding circular imports.
     """
-    import asdf.settings.generators.look_assembler
 
-    rapidlooks = asdf.settings.generators.look_assembler.RAPIDLOOKS
+    rapidlooks = settings.generators.look_assembler.RAPIDLOOKS
     # interleave 'hard' rapidlooks for efficiency
     return (
         rapidlooks[slice(None, None, 3)]

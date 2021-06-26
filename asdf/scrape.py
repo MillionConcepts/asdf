@@ -6,7 +6,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Callable, Union, Iterable
 
-from asdf import settings
+import asdf_settings
 
 # I don't really know if this is fixed, but I doubt we're ever
 # missing anything important if we skim this much off the top
@@ -15,7 +15,7 @@ IOF_LABEL_BYTES = 35592
 METADATA_REGEX = MappingProxyType(
     {
         field: re.compile(pattern)
-        for field, pattern in settings.metadata.IOF_METADATA_REGEX.items()
+        for field, pattern in asdf_settings.metadata.IOF_METADATA_REGEX.items()
     }
 )
 
