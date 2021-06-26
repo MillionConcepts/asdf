@@ -224,10 +224,7 @@ def cluster_observations(
         name = "_".join(
             [format(sol, "0>4"), seq_id, product_type, thumb, producer]
         )
-        versioned = drop_mismatched_versions(group, base_version)
-        if len(versioned) != len(group):
-            rejected_version_count += len(group) - len(versioned)
-            group = versioned
+
         # TODO: hideous logic
         # handle non-repointed-observation case: simply split by RMS
         if (group["FRAME_TYPE"] == "STEREO").all():
@@ -237,6 +234,10 @@ def cluster_observations(
                     target_file not in rmsgroup["PATH"].values
                 ):
                     continue
+                versioned = drop_mismatched_versions(rmsgroup, base_version)
+                if len(versioned) != len(rmsgroup):
+                    rejected_version_count += len(rmsgroup) - len(versioned)
+                    rmsgroup = versioned
                 if not rmsgroup["FILTER"].duplicated().any():
                     observations[name + "_RMS" + str(rms)] = rmsgroup
                 else:
