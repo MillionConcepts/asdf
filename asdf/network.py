@@ -217,10 +217,7 @@ def make_asdf_pydrive_client():
 
 
 def bandset_gdrive_folder_names(bandset):
-    sol_folder_name = (
-        f"""{bandset.compact["NAME"].iloc[0]}_"""
-        + f"""{str(bandset.compact["SOL"].iloc[0]).zfill(4)}"""
-    )
+    sol_folder_name = f"""{str(bandset.compact["SOL"].iloc[0]).zfill(4)}"""
     obs_folder_name = (
         f"""{bandset.compact["SEQ_ID"].iloc[0]}"""
         + f""" {bandset.compact["NAME"].iloc[0]}"""
@@ -234,6 +231,7 @@ class DriveBot(GoogleDrive):
     convenience wrapper adding abstract pseudo-filesystem operations to
     a pydrive2 GoogleDrive object
     """
+
     # TODO: maybe consider doing this with one of the fs contrib things
     #  instead? so you can have a single gdrive / s3 interface? or perhaps
     #  combining it in some way with google sheets, maybe even dropping to
@@ -286,8 +284,8 @@ class DriveBot(GoogleDrive):
 
 
 def upload_bandset_to_gdrive(bandset, debug=False):
-    # reversing this is a silly hack to make the progress timer
-    # more realistic, because the smallest files (csv and ROI)
+    # reversing this list is a silly hack to make the progress timer
+    # more realistic, because the smallest files (csv and fits.tar.gz)
     # will generally be at the front of the list.
     bandset.local_files.reverse()
     # id of root folder
@@ -313,6 +311,10 @@ def upload_bandset_to_gdrive(bandset, debug=False):
             continue
         ASDFLOG.info(f"uploading {file}")
         drivebot.cp(file, obs_folder_id)
+    url = f"https://drive.google.com/drive/folders/{obs_folder_id}"
+    bandset.summary[
+        "NAME"
+    ] = f"""=HYPERLINK("{url}", "{bandset.summary['NAME']}")"""
 
 
 def is_apparent_duplicate(file, existing_title_checksums):
@@ -375,30 +377,19 @@ def upload_asdf_analysis(
 ):
     if debug is True:
         sheet_id = settings.sources.DEBUG_GOOGLE_SHEET_ID
-        folder_id = settings.sources.DEBUG_METADATA_BACKUP_FOLDER_ID
+        sheet_backup_folder_id = (
+            settings.sources.DEBUG_METADATA_BACKUP_FOLDER_ID
+        )
         s3_debug_prefix = "debug/"
     else:
         sheet_id = settings.sources.GOOGLE_SHEET_ID
-        folder_id = settings.sources.METADATA_BACKUP_FOLDER_ID
+        sheet_backup_folder_id = settings.sources.METADATA_BACKUP_FOLDER_ID
         s3_debug_prefix = ""
     with ASDF_CONSOLE.status(
         "... backing up marslab & ROI files ...", spinner="star"
     ):
         backup_data_to_s3(bandset, roi_fits_fn, s3_debug_prefix)
     aprint("completed marslab and ROI backup")
-    with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
-        try:
-            upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails)
-            sheetbot = gspread.service_account(
-                settings.sources.GOOGLE_CLIENT_SECRETS_FILE
-            )
-            update_google_sheet(bandset, folder_id, sheet_id, sheetbot)
-        except gspread.exceptions.APIError as api_error:
-            aprint(
-                ":confused_face: Sorry, couldn't update online metadata: "
-                + str(api_error),
-                style="bold red",
-            )
     aprint("... uploading files to Google Drive space ...")
     with ASDF_PROGRESS as prog:
         ASDF_RPH.task_id = prog.add_task(
@@ -415,3 +406,18 @@ def upload_asdf_analysis(
                 style="bold red",
             )
         prog.remove_task(ASDF_RPH.task_id)
+    with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
+        try:
+            upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails)
+            sheetbot = gspread.service_account(
+                settings.sources.GOOGLE_CLIENT_SECRETS_FILE
+            )
+            update_google_sheet(
+                bandset, sheet_backup_folder_id, sheet_id, sheetbot
+            )
+        except gspread.exceptions.APIError as api_error:
+            aprint(
+                ":confused_face: Sorry, couldn't update online metadata: "
+                + str(api_error),
+                style="bold red",
+            )

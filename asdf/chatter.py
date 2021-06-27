@@ -1,21 +1,19 @@
 """
 secondary-level handlers & wrappers for asdf workflow
 """
-import warnings
+from itertools import chain
 from pathlib import Path
 from typing import Callable
+import warnings
 
 from cytoolz.dicttoolz import valfilter
+from marslab.compat.xcam import DERIVED_CAM_DICT
+from marslab.imgops.poolutils import wait_for_it
 from pathos.multiprocessing import ProcessPool
-from rich.prompt import (
-    Prompt,
-    Confirm,
-)
+from rich.prompt import Prompt, Confirm
 from rich.rule import Rule
 from rich.text import Text
 
-import pplot
-import asdf_settings as settings
 from asdf.asdf_utils import pass_parameters, dashify
 from asdf.console import (
     ASDF_CONSOLE,
@@ -53,15 +51,17 @@ from asdf.scan import (
     find_matching_observations,
 )
 from asdf.scrape import cached_exists
+import asdf_settings as settings
 from asdf_settings.metadata import (
     ROI_METADATA_FIELDS,
-    LITHOLOGICAL_ROI_FIELDS,
+    FEATURE_EXCLUSIVE_ROI_FIELDS,
+    EMPTY_METADATA_FIELDS,
     PIXEL_FLAG_NAMES,
 )
+import pplot
 
-# TODO: rewrite with markup
-from marslab.compat.xcam import DERIVED_CAM_DICT
-from marslab.imgops.poolutils import wait_for_it
+
+# TODO: rewrite everything in this module with better markup
 
 
 def find_and_offer_observations(
@@ -145,6 +145,18 @@ def find_and_offer_observations(
         return tuple(results.values())[0], False
 
 
+def is_feature_mismatch(metadata, field):
+    if field not in list(
+        chain.from_iterable(FEATURE_EXCLUSIVE_ROI_FIELDS.values())
+    ):
+        return False
+    if metadata.get("FEATURE") is None:
+        return True
+    if FEATURE_EXCLUSIVE_ROI_FIELDS.get(metadata["FEATURE"]) is None:
+        return True
+    return field not in FEATURE_EXCLUSIVE_ROI_FIELDS[metadata["FEATURE"]]
+
+
 def ask_user_about_roi(
     roi_title=None, ci: Callable = pass_parameters, constants: dict = None
 ) -> dict:
@@ -165,10 +177,12 @@ def ask_user_about_roi(
     metadata_fields = list(ROI_METADATA_FIELDS)
     roi_metadata = {}
     for field in metadata_fields:
-        # don't ask people rock questions about non-rocks
-        if (field.upper() in LITHOLOGICAL_ROI_FIELDS) and (
-            roi_metadata.get("FEATURE") != "rock"
-        ):
+        # fill 'empty' fields like notes and coordinated observations
+        if field in EMPTY_METADATA_FIELDS:
+            roi_metadata[field] = ""
+            continue
+        # don't ask people soil questions about rocks, etc
+        if is_feature_mismatch(roi_metadata, field):
             roi_metadata[field] = ""
             continue
         # if a user has told us a field is the same everywhere, don't bother
@@ -184,9 +198,9 @@ def input_roi_metadata(marslab_data, ci):
     constants = {}
     for field in ROI_METADATA_FIELDS:
         # TODO: this may be sloppy
-        if constants.get("FEATURE") != "rock" and (
-            field in LITHOLOGICAL_ROI_FIELDS
-        ):
+        if field in EMPTY_METADATA_FIELDS:
+            continue
+        if is_feature_mismatch(constants, field):
             continue
         if ci(
             metadata_choice_prompt,
@@ -330,7 +344,6 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
             "directories.",
         )
         return None
-
     return ok_analyses.reset_index(drop=True)
 
 

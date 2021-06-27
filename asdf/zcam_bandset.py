@@ -134,6 +134,8 @@ class ZcamBandSet(BandSet):
         self.pixmaps = {}
         self.pixmap_counts = {}
         self.local_files = []
+        # a slightly goofy holding location for things like google drive ids
+        self.remote_resource_id = None
 
     def check_onboard_debayer(self, *, fix_metadata=False):
         """

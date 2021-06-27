@@ -4,6 +4,8 @@ these literals should generally be safe; removing them may not be.
 """
 
 # don't change this
+from itertools import chain
+
 from .generators import FILTER_DATA_COLUMNS
 
 # lookup table for location by sol -- number is final sol of location
@@ -11,25 +13,45 @@ LOCATION_TABLE = {
     101: "Octavia E. Butler Landing",
     99999: "Green Zone Campaign",
 }
+# these are always generated blank and intended to be populated manually when
+# needed. we don't actually ask the user about them. they will, however,
+# repopulate from saved files using fdsa.
+EMPTY_METADATA_FIELDS = [
+    "SCAM LIBS",
+    "SCAM VISIR",
+    "SCAM RMI",
+    "SCAM Raman",
+    "PIXL",
+    "SHERLOC",
+    "WATSON",
+    "notes",
+]
+
+# fields relevant only to specific feature types. users will only be queried
+# about these fields if they have set FEATURE = the key of the list. Don't put
+# these before the FEATURE query or they'll never be asked about.
+FEATURE_EXCLUSIVE_ROI_FIELDS = {
+    "rock": ["MORPHOLOGY", "FLOAT", "ROCK SURFACE"],
+    "soil": ["GRAIN SIZE", "SOIL LOCATION", "SOIL COLOR"],
+    "landform": ["LANDFORM TYPE"],
+}
+# don't mess with this statement if you want to be able to use exclusive_fields
+# later. it pulls all the lists out of FEATURE_EXCLUSIVE_ROI_FIELDS
+exclusive_fields = list(
+    chain.from_iterable(FEATURE_EXCLUSIVE_ROI_FIELDS.values())
+)
 
 # fields we want to ask the user about at each ROI. This order is preserved.
+# the asterisk is a shorthand for "insert all of these fields at this position"
 ROI_METADATA_FIELDS = (
     "FEATURE",
-    "FLOAT",
-    "MORPHOLOGY",
-    "SCAM",
+    *exclusive_fields,
     "TARGET",
     "DISTANCE",
     "WORKSPACE",
+    "DESCRIPTION",
+    *EMPTY_METADATA_FIELDS,
 )
-
-# fields relevant only to rocks. users will only be queried about these fields
-# if they have set FEATURE = rock. Don't put these before the FEATURE query
-# or they'll never be asked about.
-
-LITHOLOGICAL_ROI_FIELDS = ["MORPHOLOGY", "FLOAT"]
-# REGOLITHOLOGICAL ...
-# LANDFORMOLOGICAL ...
 
 # special prompt text for these
 # {title} is replaced with the title of the ROI, currently always its color
@@ -37,32 +59,55 @@ LITHOLOGICAL_ROI_FIELDS = ["MORPHOLOGY", "FLOAT"]
 ROI_METADATA_FIELD_PROMPTS = {
     "FLOAT": "Is / are the rock(s) associated with {title} ROI(s) a {field}?",
     "FEATURE": "What category of {field} is / are {title} ROI(s)?",
+    "DESCRIPTION": "Enter any additional {field} {title} ROI(s) require(s) "
+    "(press Enter to skip)",
     "MORPHOLOGY": "Which named {field} type do / does the rock in {title} "
     "ROI(s) belong to?",
-    "SCAM": "Is the area in {title} ROI(s) also a {field} target?",
     "TARGET": "What named {field} do / does {title} ROI(s) cover? "
     "(press Enter to skip)",
     "DISTANCE": "What {field} category do / does {title} ROI(s) fall into?",
     "WORKSPACE": "What {field} is / are {title} ROI(s) in? (press Enter to "
-                 "skip)",
+    "skip)",
 }
 
-# restrictions, if any, on value choices for these ROIs.
+# restrictions, if any, on value choices for these fields.
 ROI_METADATA_FIELD_CHOICES = {
     "FEATURE": [
         "rock",
         "soil",
+        "landform",
         "pebble",
-        "remnant",
-        "delta",
         "hardware",
-        "crater rim",
-        "wheel track",
     ],
-    "MORPHOLOGY": ["pitted", "paver", "massive"],
+    "FLOAT": ["float", "in-place", "unclear"],
+    "MORPHOLOGY": ["pitted", "paver", "massive", "layered"],
+    "ROCK SURFACE": [
+        "thick dust",
+        "bright natural surface",
+        "dark natural surface",
+        "LIBS-cleared surface",
+        "gDRT-cleared surface",
+        "abraded surface",
+        "coating",
+        "clast/inclusion",
+    ],
+    "GRAIN SIZE": ["fine", "coarse", "mixed"],
+    "SOIL LOCATION": [
+        "bedform crest",
+        "bedform trough",
+        "on rock",
+        "on hardware",
+        "wheel track/disturbed surface",
+        "undisturbed regolith",
+    ],
+    "SOIL COLOR": [
+        "bright/dusty",
+        "dark/neutral",
+        "blueish/purplish",
+        "reddish/orangeish",
+    ],
+    "LANDFORM TYPE": ["delta", "remnant", "Jezero rim"],
     "DISTANCE": ["nearfield", "midfield", "farfield"],
-    "SCAM": ["Y", "N"],
-    "FLOAT": ["Y", "N"],
 }
 
 # Columns of the compact -marslab.csv file. columns not here won't appear in
@@ -130,10 +175,10 @@ IOF_METADATA_REGEX = {
     # # /project/m2020/gds/radcal/effective_taus on islamorada
     "TAU_ESTIMATE_FILENAME": r"(?<=TAU_ESTIMATE_FILENAME).*?(\w+\.csv)",
     "INSTRUMENT_ELEVATION": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
-                            r"?:\n|\r|.)*?INSTRUMENT_ELEVATION ).*?(["
-                            r"-\d\.]+)",
+    r"?:\n|\r|.)*?INSTRUMENT_ELEVATION ).*?(["
+    r"-\d\.]+)",
     "INSTRUMENT_AZIMUTH": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
-                          r"?:\n|\r|.)*?INSTRUMENT_AZIMUTH ).*?([-\d\.]+)",
+    r"?:\n|\r|.)*?INSTRUMENT_AZIMUTH ).*?([-\d\.]+)",
 }
 
 PIXEL_FLAG_NAMES = ("bad", "no_signal", "nonlinear", "saturated", "hot")

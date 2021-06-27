@@ -100,7 +100,6 @@ def load_roi_file(
             file.write(tar_bytes(roi_fits_fn).read())
         if verbose:
             aprint("wrote " + str(roi_fits_fn))
-            aprint("wrote " + str(roi_fits_fn))
     else:
         roi_fits_fn = None
         roi_tar_fn = None
