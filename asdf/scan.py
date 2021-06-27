@@ -331,10 +331,9 @@ def find_matching_pixmap(product_path):
     #  RAD but it does not
     # check 3: does the candidate we pick have PRODUCT_ID that matches
     # the data product's SOURCE_PRODUCT_ID? (CANCELLED FOR NOW)
-    if len(possible_pixmaps) > 1:
-        match_warnings.append(
-            "multiple matches for " + product_path.name + ", using first"
-        )
+    possible_pixmaps = prune_excessive_pixmap_matches(
+        match_warnings, possible_pixmaps, product_path
+    )
     pixmap = possible_pixmaps[0]
     # data_source_id = scrape_product_id(
     #     cached_label_loader(product_path), "SOURCE_"
@@ -346,6 +345,24 @@ def find_matching_pixmap(product_path):
     #     )
     #     return None, match_warnings
     return pixmap, match_warnings
+
+
+def prune_excessive_pixmap_matches(
+    match_warnings, possible_pixmaps, product_path
+):
+    if len(possible_pixmaps) > 1:
+        ok_pixmaps = []
+        parsed_fns = list(map(parse_zcam_fn, possible_pixmaps))
+        versions = [parsed["VERSION"] for parsed in parsed_fns]
+        for parsed in parsed_fns:
+            if parsed["VERSION"] == max(versions):
+                ok_pixmaps.append(Path(parsed["PATH"]))
+        match_warnings.append(
+            f"multiple matches for {product_path.name}, "
+            f"using highest version # or first if version #s are equal;"
+        )
+        possible_pixmaps = ok_pixmaps
+    return possible_pixmaps
 
 
 def match_in_dirs(search_dirs, product_path, predicate=None):
@@ -472,10 +489,14 @@ def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
     )
     paired_roi, lonely_roi = split_on(roi, roi_stems.isin(marslab_stems))
     paired_marslab = (
-        paired_marslab.copy().sort_values(by="PATH", key=stemmer).reset_index(drop=True)
+        paired_marslab.copy()
+        .sort_values(by="PATH", key=stemmer)
+        .reset_index(drop=True)
     )
     paired_roi = (
-        paired_roi.copy().sort_values(by="PATH", key=stemmer).reset_index(drop=True)
+        paired_roi.copy()
+        .sort_values(by="PATH", key=stemmer)
+        .reset_index(drop=True)
     )
     # did something go horribly wrong?
     check_equal = (
