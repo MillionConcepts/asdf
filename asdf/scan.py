@@ -265,8 +265,9 @@ def cluster_observations(
                     target_file not in observation["PATH"].values
                 ):
                     continue
-                if not observation["FILTER"].duplicated().any():
-                    observations[name + "_RMS" + str(repoint[0])] = observation
+                versioned = drop_mismatched_versions(observation, base_version)
+                if not versioned["FILTER"].duplicated().any():
+                    observations[name + "_RMS" + str(repoint[0])] = versioned
                 else:
                     parser_warnings.append(
                         "warning: an unknown windowing issue may have "
