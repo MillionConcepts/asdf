@@ -206,8 +206,8 @@ def input_roi_metadata(marslab_data, ci):
         if ci(
             metadata_choice_prompt,
             Text(f"Is the value of {field} the same for all ROIs?"),
-            (True, False),
-        ):
+            ("Yes", "No"),
+        ) == "Yes":
             constants[field] = dispatched_metadata_prompt(field)
     # TODO: this might be confusing if all fields are constant for all ROIs,
     #  but this is probably a rare case.
