@@ -1,5 +1,6 @@
 import datetime as dt
 import io
+import pickle
 from functools import partial
 from pathlib import Path
 
@@ -25,7 +26,7 @@ from asdf.format import (
     melt_metadata,
     METADATA_DTYPES,
     count_rois_on_pixmaps,
-    drop_excess_stats,
+    drop_excess_stats, perfectly_black_rectangular_solid,
 )
 from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
@@ -43,7 +44,8 @@ from marslab.imgops.debayer import RGGB_PATTERN, mask_bayer_pixels
 from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.loaders import rasterio_load
 from marslab.imgops.pltutils import remove_ticks, despine
-from marslab.imgops.regions import make_roi_edgemaps, draw_edgemaps_on_image
+from marslab.imgops.regions import make_roi_edgemaps, draw_edgemaps_on_image, \
+    draw_edgemaps_on_axis
 
 
 def polish_metadata(metadata, creation_time):
@@ -332,35 +334,38 @@ class ZcamBandSet(BandSet):
             self.looks["context image " + eye], eye_edgemaps, width=0.1
         )
 
-    def draw_pixmap_context(self, edgemaps, eye, verbose=False):
+    def draw_eye_pixmaps(self, edgemaps, eye, verbose=False):
         # TODO: consider reorganizing this whole situation
-        flat_pixmap = self.get_flattened_pixmap(eye)
-        perfectly_black_rectangular_solid = np.zeros(
-            (flat_pixmap.shape[0], flat_pixmap.shape[1], 3)
-        )
-        if edgemaps is not None:
-            eye_edgemaps = keyfilter(lambda key: eye in key, edgemaps)
-            context = draw_edgemaps_on_image(
-                perfectly_black_rectangular_solid, eye_edgemaps, width=8
+        eye_pixmaps = self.get_pixmap_dict(eye)
+        eye_pixmaps['flat'] = self.get_flattened_pixmap(eye)
+        for name, pixmap in eye_pixmaps.items():
+            self.render_pixmap_context(
+                edgemaps, eye, pixmap, name, verbose
             )
-            ax = context.axes[0]
-        else:
-            context = plt.figure()
-            ax = context.add_subplot()
-            ax.imshow(perfectly_black_rectangular_solid, interpolation=None)
-        # flag off-scale, saturated, hot pixels with special markers
-        extant_flags = np.unique(flat_pixmap)
 
+    def render_pixmap_context(
+            self, edgemaps, eye, pixmap, name, verbose
+    ):
+        # regenerate matplotlib objects from bytes
+        background = perfectly_black_rectangular_solid(pixmap.shape)
+        context = plt.figure()
+        ax = context.add_subplot()
+        ax.imshow(background, interpolation=None)
+        # flag off-scale, saturated, hot pixels with special markers
+        extant_flags = np.unique(pixmap)
         for flag in extant_flags:
             if flag == 0:
                 continue
-            posmap = flat_pixmap.copy()
+            posmap = pixmap.copy()
             pix_y, pix_x = np.where(posmap == flag)
             style = PIXEL_FLAG_STYLE[flag - 1]
             label = PIXEL_FLAG_NAMES[flag - 1]
             ax.scatter(pix_x, pix_y, *style, label=label)
         remove_ticks(ax)
         despine(ax)
+        if edgemaps is not None:
+            eye_edgemaps = keyfilter(lambda key: eye in key, edgemaps)
+            draw_edgemaps_on_axis(ax, eye_edgemaps, width=8, colorize=False)
         context.legend(
             prop=LEGEND_FONT,
             bbox_to_anchor=(0.12, 0.92, 0.5, 0),
@@ -371,9 +376,26 @@ class ZcamBandSet(BandSet):
             markerscale=2,
             facecolor="black",
         )
-        self.looks["pixmap context image " + eye] = context
+        if name == "flat":
+            name = eye
+        self.looks[f"pixmap context image {name}"] = context
         if verbose:
-            aprint("generated context pixmap " + eye)
+            aprint(f"generated context pixmap {name}")
+
+
+
+    # def render_edgemaps_if_present(self, edgemaps, eye, eye_pixmaps):
+    #     background = perfectly_black_rectangular_solid(
+    #         list(eye_pixmaps.values())[0].shape
+    #     )
+    #     if edgemaps is not None:
+    #         eye_edgemaps = keyfilter(lambda key: eye in key, edgemaps)
+    #         context = draw_edgemaps_on_image(background, eye_edgemaps, width=8, colorize=False)
+    #     else:
+    #         context = plt.figure()
+    #         ax = context.add_subplot()
+    #         ax.imshow(background, interpolation=None)
+    #     return context
 
     def get_flattened_pixmap(self, eye):
         """
@@ -413,7 +435,8 @@ class ZcamBandSet(BandSet):
         return eye_pixmaps
 
     def make_context_images(self, verbose=False):
-        # TODO: automatically try to count ROIs and stuff
+        # TODO: automatically try to count ROIs and stuff? maybe?
+        # TODO: parallelize now that we're making a million of these?
         if self.rois:
             if verbose:
                 aprint("... making ROI context images ...")
@@ -428,7 +451,7 @@ class ZcamBandSet(BandSet):
         if verbose:
             aprint("... making pixmap context images ...")
         for eye in ("left", "right"):
-            self.draw_pixmap_context(edgemaps, eye, verbose)
+            self.draw_eye_pixmaps(edgemaps, eye, verbose)
 
     def titular_target(self):
         """

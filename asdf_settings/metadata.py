@@ -186,7 +186,7 @@ PIXEL_FLAG_NAMES = ("bad", "no_signal", "nonlinear", "saturated", "hot")
 PIXEL_FLAG_STYLE = (
     # (1, "#ff5fd7", "o"),
     (1, "#aa5fd7", "3"),
-    (4, "#f0fbfb", "."),
+    (4, "#888888", "."),
     (0.2, "#87ff00", "o"),
     (7, "#00ffd7", "*"),
     (5, "#d7af00", "|"),

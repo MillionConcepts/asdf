@@ -239,6 +239,10 @@ def count_rois_on_pixmaps(roi_arrays, roi_names, pixmap_dict):
     return all_counts
 
 
+def perfectly_black_rectangular_solid(xy_shape):
+    return np.zeros((*xy_shape, 3))
+
+
 def count_rois_on_pixmap(bayer_masked_flag_array, roi_arrays, roi_names):
     all_counts = NestingDict()
     flag_counts = {}

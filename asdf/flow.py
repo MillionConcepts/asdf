@@ -245,11 +245,8 @@ def asdf_body(
     # make context images and write them out
     if bandset.rois or bandset.pixmaps:
         aprint(Rule(" making context images "))
-        # remove save threading b/c max 4 images and pointless
         with ASDF_CONSOLE.status("... processing context ...", spinner="star"):
-            bandset.threads = {}
             bandset.make_context_images(verbose=True)
-            save_images = partial(save_images, threads=None)
             save_images(prefix=bandset.name + bandset.suffix)
             thumbnail_staging |= pick_thumbs(bandset.looks)
     bandset.purge()

@@ -1,6 +1,7 @@
 """
 secondary-level handlers & wrappers for asdf workflow
 """
+import os
 from itertools import chain
 from pathlib import Path
 from typing import Callable
@@ -458,15 +459,20 @@ def save_looks(bandset, outpath, prefix=None, threads=None, plain=False):
         ASDFLOG.info("... serializing images ...")
     for look_name, look in bandset.looks.items():
         # TODO: ugh.
+        image_path = outpath
+        if "pixmap" in look_name:
+            image_path = str(Path(image_path, "pixmaps"))
+        if not os.path.exists(image_path):
+            os.makedirs(image_path)
         if plain is True:
             filename = write_plain_image(
-                look, look_name, outpath, pool, prefix, results
+                look, look_name, image_path, pool, prefix, results
             )
         else:
             filename = write_annotated_image(
-                bandset, look, look_name, outpath, pool, prefix, results
+                bandset, look, look_name, image_path, pool, prefix, results
             )
-        bandset.local_files.append(str(Path(outpath, filename)))
+        bandset.local_files.append(str(Path(image_path, filename)))
     if pool is not None:
         # TODO: extend this, generally speaking, to give useful messages about
         #  failure
