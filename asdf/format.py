@@ -3,6 +3,7 @@ formatting and helper functions for other asdf modules.
 """
 import os
 import re
+from functools import partial
 from hashlib import md5
 from pathlib import Path
 
@@ -75,21 +76,38 @@ def save_plainly(look, filename, outpath):
         look.save(Path(outpath, filename))
 
 
-def annotate_and_save(annotation, look, filename, outpath):
+def annotate_and_save(title, annotation, look, filename, outpath):
     # TODO: decide if these annotation things should live on zcambandset --
     #  this is not urgent. I think _maybe_ they should be separate.
     if not isinstance(look, matplotlib.figure.Figure):
         look = simple_figure(look)
-    set_label(
-        look,
-        annotation,
-        fontproperties=settings.rapidlooks.TITLE_FONT,
-    )
+    ax = look.axes[0]
+    render_figure_labels(ax, title, annotation)
     look.savefig(
         Path(outpath, filename), dpi=275, bbox_inches="tight", pad_inches=0
     )
     absolutely_destroy(look)
     return 0
+
+
+def render_figure_labels(ax, title, annotation):
+    render = partial(
+        ax.text,
+        x=0.5,
+        horizontalalignment='center',
+        verticalalignment='center',
+        transform=ax.transAxes
+    )
+    render(
+        y=settings.rapidlooks.TITLE_POSITION,
+        s=title,
+        fontproperties=settings.rapidlooks.TITLE_FONT,
+    )
+    render(
+        y=settings.rapidlooks.ANNOTATION_POSITION,
+        s=annotation,
+        fontproperties=settings.rapidlooks.ANNOTATION_FONT
+    )
 
 
 def handle_abbreviation(

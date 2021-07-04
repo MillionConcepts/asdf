@@ -8,9 +8,14 @@ from .generators import smoother, make_bilateralfilter
 from marslab.imgops.imgutils import std_clip, normalize_range
 from marslab.imgops.render import colormapped_plot, simple_figure
 
-# font settings for annotations on rapidlooks
+# font settings for annotations on rapidlooks -- bear in mind that the
+# images are rendered at 275 dpi, so the sizes may be smaller than you
+# expect they should be
 TITLE_FONT = mplf.FontProperties(
-    fname="static/fonts/TitilliumWeb-Light.ttf", size=10
+    fname="static/fonts/TitilliumWeb-Light.ttf", size=11.2
+)
+ANNOTATION_FONT = mplf.FontProperties(
+    fname="static/fonts/TitilliumWeb-Light.ttf", size=8.8
 )
 TICK_FONT = mplf.FontProperties(
     fname="static/fonts/TitilliumWeb-Light.ttf", size=6
@@ -22,6 +27,11 @@ LEGEND_FONT = mplf.FontProperties(
     fname="static/fonts/TitilliumWeb-Light.ttf", size=7
 )
 
+# positions of image title and remainder of annotation, in
+# percentage of plot height -- if you change font size, you
+# may need to change these as well
+TITLE_POSITION = -0.029
+ANNOTATION_POSITION = -0.089
 
 # default settings for band parameter maps
 # note: "cmap" defines a colormap used by a rapidlook. "orange_teal",
@@ -116,8 +126,8 @@ STRETCHY = (
 
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
-CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY"]
-
+# CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY"]
+CATEGORIES = ["BANDMAP"]
 #############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################

@@ -496,19 +496,25 @@ def write_annotated_image(
     # aggressively remove names of stretches &c
     look_name = remove_stretch_names(look_name)
     look_name = insert_wavelengths_into_text(look_name, "band" in look_name)
+    # annotation = "\n".join(
+    #     (
+    #         look_name,
+    #         make_pointing_annotation(bandset.metadata),
+    #         settings.rapidlooks.CREDIT_TEXT,
+    #     )
+    # )
     annotation = "\n".join(
         (
-            look_name,
             make_pointing_annotation(bandset.metadata),
             settings.rapidlooks.CREDIT_TEXT,
         )
     )
     if pool is None:
-        annotate_and_save(annotation, look, filename, outpath)
+        annotate_and_save(look_name, annotation, look, filename, outpath)
         ASDFLOG.info("wrote " + filename)
     else:
         results[filename] = pool.apipe(
-            annotate_and_save, annotation, look, filename, outpath
+            annotate_and_save, look_name, annotation, look, filename, outpath
         )
     return filename
 
