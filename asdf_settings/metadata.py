@@ -143,6 +143,7 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "FILE_TIMESTAMP",
     "INSTRUMENT",
     "COMPRESSION",
+    "COMPRESSION_QUALITY",
     *FILTER_DATA_COLUMNS,
 )
 
@@ -166,6 +167,11 @@ IOF_METADATA_REGEX = {
     "PRODUCT_CREATION_TIME": r"(?<=PRODUCT_CREATION_TIME ).*?([\d\-T:]+)",
     "L_S": r"(?<=SOLAR_LONGITUDE ).*?([\d\.]+)",
     "COMPRESSION": r"(?<=INST_CMPRS_NAME ).*?(\w+)",
+    # note that JPEG compression is rendered as a negative number under
+    # IMG_REQUEST_PARMS, which is why we're specifying the one from
+    # COMPRESSION_PARMS here
+    "COMPRESSION_QUALITY": r"(?:COMPRESSION_PARMS("
+    r"?:\n|\r|.)*?INST_CMPRS_QUALITY ).*?([-\d]+)",
     "BAYER": r"(?<=BAYER_METHOD ).*?([\w_]+)",
     "SOLAR_ELEVATION": r"(?<=SOLAR_ELEVATION ).*?([\d\.]+)",
     "SOLAR_AZIMUTH": r"(?<=SOLAR_AZIMUTH ).*?([\d\.]+)",
