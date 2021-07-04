@@ -28,7 +28,7 @@ from asdf.format import (
     make_pointing_annotation,
     annotate_and_save,
     save_plainly,
-    insert_wavelengths_into_text,
+    insert_wavelengths_into_text, remove_stretch_names,
 )
 from asdf.pretty import (
     print_scan_results,
@@ -493,6 +493,8 @@ def write_annotated_image(
     bandset, look, look_name, outpath, pool, prefix, results
 ):
     filename = prefix + " " + look_name + ".png"
+    # aggressively remove names of stretches &c
+    look_name = remove_stretch_names(look_name)
     look_name = insert_wavelengths_into_text(look_name, "band" in look_name)
     annotation = "\n".join(
         (

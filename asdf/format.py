@@ -291,3 +291,10 @@ def insert_wavelengths_into_text(text: str, is_band_depth):
         text = re.sub(filt, filt + " (" + str(wavelength) + "nm)", text)
     text = re.sub(r"_", r" ", text)
     return text
+
+
+def remove_stretch_names(look_name):
+    bands_present = re.search(r"([L|R]\d[RGB]?_?)+", look_name)
+    if bands_present:
+        look_name = look_name[:bands_present.span()[1]]
+    return look_name
