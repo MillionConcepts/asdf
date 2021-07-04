@@ -284,8 +284,8 @@ def insert_wavelengths_into_text(text: str, is_band_depth):
     if is_band_depth:
         filts = re.split(r"([L|R]\d[RGB]?)", text, maxsplit=0)
         text = (
-            f"{filts[0] + filts[1]} [left] {filts[3]}"
-            f" [center] {filts[5]} [right] {filts[6]}"
+            f"{filts[0]}{filts[3]}, "
+            f"shoulders at {filts[1]} and {filts[5]}"
         )
     for filt, wavelength in DERIVED_CAM_DICT["ZCAM"]["filters"].items():
         text = re.sub(filt, filt + " (" + str(wavelength) + "nm)", text)
@@ -296,5 +296,5 @@ def insert_wavelengths_into_text(text: str, is_band_depth):
 def remove_stretch_names(look_name):
     bands_present = re.search(r"([L|R]\d[RGB]?_?)+", look_name)
     if bands_present:
-        look_name = look_name[:bands_present.span()[1]]
+        look_name = look_name[: bands_present.span()[1]]
     return look_name
