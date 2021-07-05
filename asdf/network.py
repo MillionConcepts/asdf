@@ -300,8 +300,12 @@ def upload_bandset_to_gdrive(bandset, debug=False):
     # remove the default copy suffixes, etc.
     sol_folder_id = drivebot.cd(sol_folder_name, root)
     obs_folder_id = drivebot.cd(obs_folder_name, sol_folder_id)
+    pixmap_folder_id = drivebot.cd("pixmaps", obs_folder_id)
     aprint(f"uploading all files to {sol_folder_name}/{obs_folder_name}")
-    title_checksum_dict = drivebot.get_checksums(obs_folder_id)
+    title_checksum_dict = (
+        drivebot.get_checksums(obs_folder_id)
+        | drivebot.get_checksums(pixmap_folder_id)
+    )
     for file in bandset.local_files:
         if is_apparent_duplicate(file, title_checksum_dict):
             ASDFLOG.info(
@@ -310,7 +314,10 @@ def upload_bandset_to_gdrive(bandset, debug=False):
             )
             continue
         ASDFLOG.info(f"uploading {file}")
-        drivebot.cp(file, obs_folder_id)
+        if "pixmap" in file:
+            drivebot.cp(file, pixmap_folder_id)
+        else:
+            drivebot.cp(file, obs_folder_id)
     url = f"https://drive.google.com/drive/folders/{obs_folder_id}"
     bandset.summary[
         "NAME"
