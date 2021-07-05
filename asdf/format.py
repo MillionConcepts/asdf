@@ -18,7 +18,6 @@ from asdf.parse import parse_pointing
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.imgutils import absolutely_destroy
-from marslab.imgops.pltutils import set_label
 from marslab.imgops.regions import count_rois_on_image, roi_stats
 from marslab.imgops.render import make_thumbnail, simple_figure
 
@@ -28,7 +27,6 @@ def compile_looks():
     compile looks at runtime -- makes settings.rapidlooks readable while
     avoiding circular imports.
     """
-
     rapidlooks = settings.generators.look_assembler.RAPIDLOOKS
     # interleave 'hard' rapidlooks for efficiency
     return (
@@ -298,17 +296,30 @@ def drop_excess_stats(compact):
     return compact
 
 
-def insert_wavelengths_into_text(text: str, is_band_depth):
-    if is_band_depth:
-        filts = re.split(r"([L|R]\d[RGB]?)", text, maxsplit=0)
-        text = (
-            f"{filts[0]}{filts[3]}, "
-            f"shoulders at {filts[1]} and {filts[5]}"
-        )
+def rearrange_band_depth_for_filename(text):
+    filts = re.split(r"([L|R]\d[RGB]?)", text, maxsplit=0)
+    return (
+        f"{filts[0]}{filts[3]} shoulders {filts[1]} {filts[5]}{filts[6]}"
+    )
+
+
+def rearrange_band_depth_for_title(text):
+    filts = re.split(r"([L|R]\d[RGB]?)", text, maxsplit=0)
+    return (
+        f"{filts[0]}{filts[3]}, "
+        f"shoulders at {filts[1]} and {filts[5]}"
+    )
+
+
+def insert_wavelengths_into_text(text: str):
+    if "depth" in text:
+        text = rearrange_band_depth_for_title(text)
     for filt, wavelength in DERIVED_CAM_DICT["ZCAM"]["filters"].items():
         text = re.sub(filt, filt + " (" + str(wavelength) + "nm)", text)
     text = re.sub(r"_", r" ", text)
     return text
+
+
 
 
 def remove_stretch_names(look_name):
@@ -316,3 +327,23 @@ def remove_stretch_names(look_name):
     if bands_present:
         look_name = look_name[: bands_present.span()[1]]
     return look_name
+
+
+def construct_filename(look_name, prefix):
+    if "band_depth" in look_name:
+        look_name = rearrange_band_depth_for_filename(look_name)
+    filename = prefix + " " + look_name + ".png"
+    return filename
+
+
+def construct_title_and_annotation(bandset, look_name):
+    # aggressively remove names of stretches &c
+    title = remove_stretch_names(look_name)
+    title = insert_wavelengths_into_text(title)
+    annotation = "\n".join(
+        (
+            make_pointing_annotation(bandset.metadata),
+            settings.rapidlooks.CREDIT_TEXT,
+        )
+    )
+    return annotation, title

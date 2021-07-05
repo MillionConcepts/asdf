@@ -30,8 +30,8 @@ LEGEND_FONT = mplf.FontProperties(
 # positions of image title and remainder of annotation, in
 # percentage of plot height -- if you change font size, you
 # may need to change these as well
-TITLE_POSITION = -0.029
-ANNOTATION_POSITION = -0.089
+TITLE_POSITION = -0.028
+ANNOTATION_POSITION = -0.088
 
 # default settings for band parameter maps
 # note: "cmap" defines a colormap used by a rapidlook. "orange_teal",
@@ -126,8 +126,7 @@ STRETCHY = (
 
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
-# CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY"]
-CATEGORIES = ["BANDMAP"]
+CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY"]
 #############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################

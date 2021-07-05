@@ -25,10 +25,10 @@ from asdf.console import (
 )
 from asdf.format import (
     preprocess_scan_path,
-    make_pointing_annotation,
     annotate_and_save,
     save_plainly,
-    insert_wavelengths_into_text, remove_stretch_names,
+    construct_filename,
+    construct_title_and_annotation,
 )
 from asdf.pretty import (
     print_scan_results,
@@ -492,29 +492,14 @@ def write_plain_image(look, look_name, outpath, pool, prefix, results):
 def write_annotated_image(
     bandset, look, look_name, outpath, pool, prefix, results
 ):
-    filename = prefix + " " + look_name + ".png"
-    # aggressively remove names of stretches &c
-    look_name = remove_stretch_names(look_name)
-    look_name = insert_wavelengths_into_text(look_name, "band" in look_name)
-    # annotation = "\n".join(
-    #     (
-    #         look_name,
-    #         make_pointing_annotation(bandset.metadata),
-    #         settings.rapidlooks.CREDIT_TEXT,
-    #     )
-    # )
-    annotation = "\n".join(
-        (
-            make_pointing_annotation(bandset.metadata),
-            settings.rapidlooks.CREDIT_TEXT,
-        )
-    )
+    annotation, title = construct_title_and_annotation(bandset, look_name)
+    filename = construct_filename(look_name, prefix)
     if pool is None:
-        annotate_and_save(look_name, annotation, look, filename, outpath)
+        annotate_and_save(title, annotation, look, filename, outpath)
         ASDFLOG.info("wrote " + filename)
     else:
         results[filename] = pool.apipe(
-            annotate_and_save, look_name, annotation, look, filename, outpath
+            annotate_and_save, title, annotation, look, filename, outpath
         )
     return filename
 
