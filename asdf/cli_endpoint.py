@@ -184,9 +184,10 @@ def fdsa_hello(
             aprint(
                 "\n[deep_pink2 bold italic]sorry, something has gone "
                 "wrong "
-                "matching {} to its observation. skipping... "
+                "matching {} to its observation... "
                 ":confused_face:".format(analysis["MARSLAB"])
             )
+            return
         aprint(
             "\n[bold italic]... fdsa: processing observation "
             "{} of {} ...".format(str(ix + 1), str(len(reprocess_pairs)))

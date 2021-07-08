@@ -65,11 +65,12 @@ def add_ref_to_roi(pointing_name, roi_fits):
 def naturals():
     return accumulate(repeat(1), add)
 
+
 def load_roi_file(
     roi_path,
     title="",
     outpath=".",
-    extension="-roi.fits",
+    extension="-roi.fits.gz",
     convert=False,
     verbose=True,
 ):
@@ -94,17 +95,20 @@ def load_roi_file(
     #  be distinct.
     if convert:
         roi_fits_fn = Path(outpath, title + extension)
+        import gzip
+        zipfile = gzip.open(roi_fits_fn, mode='wb')
+        roi_fits.writeto(zipfile)
         roi_fits.writeto(roi_fits_fn, overwrite=True)
-        roi_tar_fn = Path(outpath, title + "-roi.tar")
-        with open(roi_tar_fn, 'wb') as file:
-            file.write(tar_bytes(roi_fits_fn).read())
+        # roi_tar_fn = Path(outpath, title + "-roi.tar")
+        # with open(roi_tar_fn, 'wb') as file:
+        #     file.write(tar_bytes(roi_fits_fn).read())
         if verbose:
             aprint("wrote " + str(roi_fits_fn))
     else:
         roi_fits_fn = None
-        roi_tar_fn = None
+        # roi_tar_fn = None
     # TODO: returning the filename like this is sort of clumsy
-    return roi_fits, str(roi_fits_fn), str(roi_tar_fn)
+    return roi_fits, str(roi_fits_fn)
 
 
 def null_marslab_data_section():

@@ -164,11 +164,11 @@ class ZcamBandSet(BandSet):
             return ""
         if title is None:
             title = self.name
-        roi_hdulist, roi_fn, roi_tar = load_roi_file(
+        roi_hdulist, roi_fn = load_roi_file(
             self.rois, title=title, outpath=outpath, convert=convert
         )
         self.rois = roi_hdulist
-        self.local_files.append(roi_tar)
+        self.local_files.append(roi_fn)
         return roi_fn
 
     def associate_pixmaps(self, pixmaps):

@@ -301,7 +301,7 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
         ASDF_CONSOLE.style = "FDSA.warning"
         aprint(
             (
-                "[bold]warning: these -roi.fits files had no matching "
+                "[bold]warning: these -roi.* files had no matching "
                 "-marslab.csv:\n\n[/bold] " + "\n".join(lonely_roi["PATH"])
             ),
             style="slate_blue1",
@@ -313,8 +313,8 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     if len(bad_analyses) > 0:
         ASDF_CONSOLE.style = "FDSA.warning"
         aprint(
-            "the following pairs of ROI/marslab files did not have "
-            "matching colors: ",
+            "\n\n[bold]warning: these pairs of ROI/marslab files did not have "
+            "matching colors:\n",
         )
         for badmars, badroi in bad_analyses[["MARSLAB", "ROI"]].values:
             aprint(badmars + ", " + badroi)
@@ -382,6 +382,9 @@ def setup_reprocess(
             aprint(
                 "[slate_blue1]no matching observations in path for "
                 "{}".format(miss_path),
+            )
+            analyses = analyses.drop(
+                analyses.loc[analyses['MARSLAB'].isin(misses)].index
             )
     if len(reprocess_pairs) == 0:
         sorry_analysis()
@@ -562,6 +565,7 @@ def fdsa_insert(marslab_data, prototype):
                     "note: no {} field in this marslab file, probably from an "
                     "earlier asdf version\n".format(field)
                 )
+                marslab_data[field] = ""
                 continue
             proto_value = proto_slice[field].iloc[0]
             fields_used.append_text(

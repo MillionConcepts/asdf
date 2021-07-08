@@ -131,4 +131,7 @@ def looks_like_marslab(fn):
 
 
 def looks_like_roi(fn):
-    return bool(Path(fn).name.endswith("-roi.fits"))
+    return bool(
+        Path(fn).name.endswith("-roi.fits")
+        or Path(fn).name.endswith("-roi.fits.gz")
+    )
