@@ -104,8 +104,9 @@ def load_roi_file(
     #  be distinct.
     if convert:
         roi_fits_fn = Path(outpath, title + extension)
-        if Path(roi_fits_fn).absolute() == Path(roi_fits.filename()):
-            roi_fits_fn = Path(str(roi_fits_fn) + ".tmp")
+        if roi_fits.filename():
+            if Path(roi_fits_fn).absolute() == Path(roi_fits.filename()):
+                roi_fits_fn = Path(str(roi_fits_fn) + ".tmp")
         zipfile = gzip.open(roi_fits_fn, mode='wb')
         roi_fits.writeto(zipfile)
         if roi_fits_fn.suffix == '.tmp':
