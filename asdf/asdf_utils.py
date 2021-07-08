@@ -1,5 +1,7 @@
 """generic utility-type functions for asdf"""
 import io
+import shutil
+import gzip
 import tarfile
 from collections import defaultdict
 from collections.abc import Collection, Mapping
@@ -82,7 +84,14 @@ def load_roi_file(
             aprint("loaded MERspect .sel file")
     # if it's FITS, just load it
     else:
-        roi_fits = fits.open(roi_path)
+        if str(roi_path).endswith('.gz'):
+            # astropy technically reads this transparently but is slow
+            zipfile = gzip.open(roi_path, 'rb')
+            fitsbytes = io.BytesIO(zipfile.read())
+            roi_fits = fits.open(fitsbytes)
+            zipfile.close()
+        else:
+            roi_fits = fits.open(roi_path)
         if verbose:
             aprint("loaded marslab ROI FITS file")
     # add optional reference (like pointing name)
@@ -95,18 +104,19 @@ def load_roi_file(
     #  be distinct.
     if convert:
         roi_fits_fn = Path(outpath, title + extension)
-        import gzip
+        if Path(roi_fits_fn).absolute() == Path(roi_fits.filename()):
+            roi_fits_fn = Path(str(roi_fits_fn) + ".tmp")
         zipfile = gzip.open(roi_fits_fn, mode='wb')
         roi_fits.writeto(zipfile)
-        roi_fits.writeto(roi_fits_fn, overwrite=True)
-        # roi_tar_fn = Path(outpath, title + "-roi.tar")
-        # with open(roi_tar_fn, 'wb') as file:
-        #     file.write(tar_bytes(roi_fits_fn).read())
+        if roi_fits_fn.suffix == '.tmp':
+            roi_fits.close()
+            shutil.move(roi_fits_fn, str(roi_fits_fn)[:-4])
+            roi_fits_fn = Path(str(roi_fits_fn)[:-4])
+            roi_fits = fits.open(roi_fits_fn)
         if verbose:
             aprint("wrote " + str(roi_fits_fn))
     else:
         roi_fits_fn = None
-        # roi_tar_fn = None
     # TODO: returning the filename like this is sort of clumsy
     return roi_fits, str(roi_fits_fn)
 

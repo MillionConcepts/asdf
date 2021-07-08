@@ -10,6 +10,7 @@ from urllib.error import URLError
 
 import numpy as np
 import pandas as pd
+from astropy.io import fits
 from cytoolz.dicttoolz import valfilter
 from cytoolz.functoolz import curry
 from cytoolz.itertoolz import partition
@@ -481,7 +482,7 @@ def add_effective_taus(metadata):
 
 
 def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
-    stemmer = pdstr("replace", "(-roi.fits|-marslab.csv)", "", regex=True)
+    stemmer = pdstr("replace", "(-roi.fits(?:.gz)?|-marslab.csv)", "", regex=True)
     roi_stems = stemmer(roi["PATH"])
     marslab_stems = stemmer(marslab["PATH"])
 
@@ -572,7 +573,7 @@ def compare_roi_colors(analyses):
     bad_indices = []
     for ix, row in analyses.iterrows():
         marslab = pd.read_csv(row["MARSLAB"])
-        roi, _ = load_roi_file(row["ROI"], verbose=False)
+        roi = fits.open(row["ROI"])
         marslab_colors = set(marslab["COLOR"].unique())
         roi_colors = {hdu.header["NAME"].strip() for hdu in roi}
         if marslab_colors == roi_colors:
