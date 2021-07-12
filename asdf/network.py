@@ -376,6 +376,23 @@ def upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails):
             bandset.summary[name] = '=IMAGE("' + link + '")'
 
 
+def clear_google_drive_trash():
+    trash = settings.sources.GOOGLE_DRIVE_TRASH
+    if trash is None:
+        return
+    drivebot = make_asdf_pydrive_client()
+    trash_list = drivebot.ls(trash)
+    if not trash_list:
+        return
+    aprint(f"... clearing {len(trash_list)} unneeded Drive files ...")
+    with ASDF_PROGRESS as prog:
+        task_id = prog.add_task("", total=len(trash_list))
+        for drivefile in trash_list:
+            drivefile.Delete()
+            prog.advance(task_id, 1)
+        prog.remove_task(task_id)
+
+
 def upload_asdf_analysis(
     bandset: ZcamBandSet,
     thumbnails: MutableMapping,
@@ -428,3 +445,6 @@ def upload_asdf_analysis(
                 + str(api_error),
                 style="bold red",
             )
+    aprint("... cleaning up trash ...")
+    clear_google_drive_trash()
+

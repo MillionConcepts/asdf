@@ -17,14 +17,14 @@ LOCATION_TABLE = {
 # needed. we don't actually ask the user about them. they will, however,
 # repopulate from saved files using fdsa.
 EMPTY_METADATA_FIELDS = [
-    "SCAM LIBS",
-    "SCAM VISIR",
-    "SCAM RMI",
-    "SCAM Raman",
+    "SCAM_LIBS",
+    "SCAM_VISIR",
+    "SCAM_RMI",
+    "SCAM_RAMAN",
     "PIXL",
     "SHERLOC",
     "WATSON",
-    "notes",
+    "NOTES",
 ]
 
 # fields relevant only to specific feature types. users will only be queried
