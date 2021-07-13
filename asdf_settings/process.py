@@ -4,6 +4,6 @@ settings will not be optimal across environments.
 """
 
 THREADS = {
-    'save': None,
-    'look': None
+    'save': 6,
+    'look': 4
 }

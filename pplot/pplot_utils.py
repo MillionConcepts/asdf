@@ -102,7 +102,6 @@ def find_longest_filter(data):
     )
 
 
-import matplotlib.font_manager as mplf
 
 
 def pretty_plot(
@@ -135,7 +134,8 @@ def pretty_plot(
         "scale_to_avg",
         None,
     ]  # Tests that the variable has a valid value
-    # Remap the colors to feature names; add morphology / soil location when available
+    # Remap the colors to feature names; add morphology / soil location when
+    # available
     roi_labels = {}
     for _, row in data.iterrows():
         if pd.isnull(row["FEATURE"]) or (row["FEATURE"] == "-"):
@@ -154,8 +154,10 @@ def pretty_plot(
     # path to file containing referenced font
     titillium = "static/fonts/TitilliumWeb-Light.ttf"
     # can also include other face properties, different fonts, etc.
+    # TODO: possibly allow these to reference asdf_settings, or expose ability
+    #  to pass these fontproperties as a dict
     label_fp = mplf.FontProperties(fname=titillium, size=20.5)
-    title_fp = mplf.FontProperties(fname=titillium, size=18)
+    title_fp = mplf.FontProperties(fname=titillium, size=18) # TODO: not used
     tick_fp = mplf.FontProperties(fname=titillium, size=15)
     legend_fp = mplf.FontProperties(fname=titillium, size=14)
     tick_minor_fp = mplf.FontProperties(fname=titillium, size=11)
@@ -336,7 +338,8 @@ def pretty_plot(
             ),
         )
 
-        # Plot bayer separately as smaller markers, w/ left eye filled and right as outlines
+        # Plot bayer separately as smaller markers, w/ left eye filled and
+        #  right as outlines
         # TODO: add black outlines to the bayer filters
         for bayer in ["L0R", "L0G", "L0B", "R0R", "R0G", "R0B"]:
             try:

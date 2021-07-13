@@ -36,6 +36,7 @@ def compile_looks():
     )
 
 
+# TODO: generate browse and data paths explicitly
 def make_asdf_outpath(output, bandset):
     """
     where are we locally writing files? by default, directories separated
@@ -92,9 +93,9 @@ def render_figure_labels(ax, title, annotation):
     render = partial(
         ax.text,
         x=0.5,
-        horizontalalignment='center',
-        verticalalignment='center',
-        transform=ax.transAxes
+        horizontalalignment="center",
+        verticalalignment="center",
+        transform=ax.transAxes,
     )
     render(
         y=settings.rapidlooks.TITLE_POSITION,
@@ -104,7 +105,7 @@ def render_figure_labels(ax, title, annotation):
     render(
         y=settings.rapidlooks.ANNOTATION_POSITION,
         s=annotation,
-        fontproperties=settings.rapidlooks.ANNOTATION_FONT
+        fontproperties=settings.rapidlooks.ANNOTATION_FONT,
     )
 
 
@@ -298,17 +299,12 @@ def drop_excess_stats(compact):
 
 def rearrange_band_depth_for_filename(text):
     filts = re.split(r"([L|R]\d[RGB]?)", text, maxsplit=0)
-    return (
-        f"{filts[0]}{filts[3]} shoulders {filts[1]} {filts[5]}{filts[6]}"
-    )
+    return f"{filts[0]}{filts[3]} shoulders {filts[1]} {filts[5]}{filts[6]}"
 
 
 def rearrange_band_depth_for_title(text):
     filts = re.split(r"([L|R]\d[RGB]?)", text, maxsplit=0)
-    return (
-        f"{filts[0]}{filts[3]}, "
-        f"shoulders at {filts[1]} and {filts[5]}"
-    )
+    return f"{filts[0]}{filts[3]}, " f"shoulders at {filts[1]} and {filts[5]}"
 
 
 def insert_wavelengths_into_text(text: str):
@@ -318,8 +314,6 @@ def insert_wavelengths_into_text(text: str):
         text = re.sub(filt, filt + " (" + str(wavelength) + "nm)", text)
     text = re.sub(r"_", r" ", text)
     return text
-
-
 
 
 def remove_stretch_names(look_name):

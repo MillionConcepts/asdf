@@ -62,7 +62,7 @@ from asdf_settings.metadata import (
 import pplot
 
 
-# TODO: rewrite everything in this module with better markup
+# TODO: rewrite strings / rich printing in this module with better markup
 
 
 def find_and_offer_observations(
@@ -540,6 +540,7 @@ def tw(text):
     return Text(text, style="bold dark_orange")
 
 
+# TODO: improve structure
 def fdsa_insert(marslab_data, prototype):
     for color in prototype["COLOR"].unique():
         proto_slice = prototype.loc[prototype["COLOR"] == color]
@@ -581,6 +582,7 @@ def fdsa_insert(marslab_data, prototype):
     return marslab_data
 
 
+# TODO: improve structure
 def complain_about_pixmap_counts(quality_df):
     for _, counts in quality_df.iterrows():
         color = counts["COLOR"]

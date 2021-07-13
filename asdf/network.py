@@ -38,7 +38,8 @@ from asdf.zcam_bandset import ZcamBandSet
 
 def get_public_m20_waypoints():
     waypoint_server_response = urllib.request.urlopen(
-        settings.sources.PUBLIC_WAYPOINTS_URL
+        settings.sources.PUBLIC_WAYPOINTS_URL,
+        timeout=15
     )
     return json.loads(waypoint_server_response.read())["features"]
 
@@ -176,6 +177,7 @@ def backup_data_to_s3(bandset, roi_fits_fn, debug_prefix=""):
             )
 
 
+# TODO: don't tar this
 def feed_into_hopper(roi_fits_fn, s3_prefix, upload_hopper):
     fits_tar_key = s3_prefix + Path(roi_fits_fn).name.replace("fits", "tar.gz")
     tarbuffer = tar_bytes(roi_fits_fn)

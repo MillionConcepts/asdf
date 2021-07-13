@@ -226,6 +226,7 @@ def unnest(mapping_mapping):
     return merge(unnested)
 
 
+# TODO: fully deprecate
 def tar_bytes(filename):
     tarbuffer = io.BytesIO()
     fits_tar = tarfile.open(fileobj=tarbuffer, mode="w:gz")

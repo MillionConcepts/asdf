@@ -1,20 +1,19 @@
 """
-top-level handler loops for asdf / fdsa
+top-level handler loop for asdf / fdsa
 """
-import os
-import warnings
 from functools import partial
 from operator import contains
+import os
 from pathlib import Path
+import warnings
 
-import matplotlib as mpl
-import pandas as pd
+from cytoolz.curried import keyfilter
 from marslab.compat.mertools import merspect_to_marslab
 from marslab.imgops.imgutils import mapfilter
-from cytoolz.curried import keyfilter
+import matplotlib as mpl
+import pandas as pd
 from rich.rule import Rule
 
-import asdf_settings as settings
 from asdf.asdf_utils import (
     catch_interaction,
     null_marslab_data_section,
@@ -28,18 +27,20 @@ from asdf.chatter import (
     fdsa_insert,
     complain_about_pixmap_counts,
 )
-from asdf.pretty import name_prompt
+from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint
 from asdf.format import (
     make_rapidlook_thumbnails,
     make_asdf_outpath,
     compile_looks,
     add_image_hashes,
 )
-from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint
 from asdf.network import upload_asdf_analysis
+from asdf.pretty import name_prompt
 from asdf.zcam_bandset import ZcamBandSet
+import asdf_settings as settings
 
 
+# TODO: add dry-run options for testing
 def asdf_body(
     observation,
     roi_path=None,
@@ -124,12 +125,9 @@ def asdf_body(
                 bandset.load("all")
                 aprint("... generating image checksums ...")
                 # TODO: make this more efficient with callbacks in the load
-                # functions or explicitly passing filelikes or something
+                #  functions or explicitly passing filelikes or something
                 add_image_hashes(bandset)
-    # set up thumbnail cache
-    thumbnail_staging = {}
-    pick_thumbs = keyfilter(partial(contains, settings.rapidlooks.THUMBNAILS))
-
+    # much safer and more consistent than any of the GUI backends
     mpl.use("agg")
     if skip_pixmaps is not True:
         aprint(Rule(" looking for pixel flag maps "))
@@ -151,16 +149,16 @@ def asdf_body(
         # suffix goes on this filename as it is 'analysis' - specific
         # did we get a ROI file path? convert it if it's SEL, save to
         # .fits, load it; if it's already FITS, load it
-        roi_fits_fn = bandset.load_rois(
+        roi_fits_fn, roi_input_fn = bandset.load_rois(
             bandset.name + bandset.suffix, outpath, convert=True
         )
         if merspect is None:
             aprint("... counting ROIs ...")
             marslab_data = bandset.count_rois()
-            marslab_data["ROI_SOURCE"] = Path(roi_fits_fn).name
+            marslab_data["ROI_SOURCE"] = Path(roi_input_fn).name
         else:
             # TODO, maybe: remove this functionality
-            # allow user to override counting behavior with a MERspect file
+            #  allow user to override counting behavior with a MERspect file
             # TODO, maybe: basic check to make sure file matches pointing
             aprint("... converting MERspect output ...")
             marslab_data = merspect_to_marslab(merspect, write=False)
@@ -242,10 +240,14 @@ def asdf_body(
                 "",
                 total=len(bandset.looks),
             )
-            save_images(outpath=Path(outpath, 'browse'), prefix=bandset.name)
+            save_images(outpath=Path(outpath, "browse"), prefix=bandset.name)
             prog.remove_task(ASDF_RPH.task_id)
         # keep images that are to be thumbnailed for upload, discard those
         # that are not; waste not memory, want not memory
+        # set up thumbnail cache
+        thumbnail_staging = {}
+        pick_thumbs = keyfilter(
+            partial(contains, settings.rapidlooks.THUMBNAILS))
         thumbnail_staging |= pick_thumbs(bandset.looks)
         bandset.purge("looks")
 
@@ -254,14 +256,17 @@ def asdf_body(
         aprint(Rule(" making context images "))
         with ASDF_CONSOLE.status("... processing context ...", spinner="star"):
             bandset.make_context_images(verbose=True)
-            save_images(outpath=Path(outpath, 'data'), prefix=bandset.name + bandset.suffix)
+            save_images(
+                outpath=Path(outpath, "data"),
+                prefix=bandset.name + bandset.suffix,
+            )
             thumbnail_staging |= pick_thumbs(bandset.looks)
     bandset.purge()
     aprint("\n")
 
     # pretty-plot data if we've got it
     if not we_do_not_have_rois:
-        pretty_plot_bandset(bandset, Path(outpath, 'data'))
+        pretty_plot_bandset(bandset, Path(outpath, "data"))
 
     # handle metadata and thumbnail uploads
     if upload is True:

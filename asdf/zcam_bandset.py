@@ -166,7 +166,8 @@ class ZcamBandSet(BandSet):
     def load_rois(self, title=None, outpath=None, convert=False):
         if self.rois is None:
             aprint("No ROI data loaded.")
-            return ""
+            return "", ""
+        input_rois = self.rois
         if title is None:
             title = self.name
         roi_hdulist, roi_fn = load_roi_file(
@@ -177,7 +178,7 @@ class ZcamBandSet(BandSet):
         )
         self.rois = roi_hdulist
         self.local_files.append(roi_fn)
-        return roi_fn
+        return roi_fn, input_rois
 
     def associate_pixmaps(self, pixmaps):
         for path in self.metadata["PATH"].unique():
@@ -387,19 +388,6 @@ class ZcamBandSet(BandSet):
         self.looks[f"pixmap context image {name}"] = context
         if verbose:
             aprint(f"generated context pixmap {name}")
-
-    # def render_edgemaps_if_present(self, edgemaps, eye, eye_pixmaps):
-    #     background = perfectly_black_rectangular_solid(
-    #         list(eye_pixmaps.values())[0].shape
-    #     )
-    #     if edgemaps is not None:
-    #         eye_edgemaps = keyfilter(lambda key: eye in key, edgemaps)
-    #         context = draw_edgemaps_on_image(background, eye_edgemaps, width=8, colorize=False)
-    #     else:
-    #         context = plt.figure()
-    #         ax = context.add_subplot()
-    #         ax.imshow(background, interpolation=None)
-    #     return context
 
     def get_flattened_pixmap(self, eye):
         """

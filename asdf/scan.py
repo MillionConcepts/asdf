@@ -17,7 +17,7 @@ from cytoolz.itertoolz import partition
 from fs.osfs import OSFS
 
 import asdf_settings as settings
-from asdf.asdf_utils import load_roi_file, split_on, dir_fs, listify, pdstr
+from asdf.asdf_utils import split_on, dir_fs, listify, pdstr
 from asdf.console import ASDFLOG
 from asdf.network import get_public_m20_waypoints
 from asdf.parse import (
@@ -35,6 +35,10 @@ from asdf.scrape import (
     cached_exists,
     is_pixel_map_heuristic,
 )
+
+
+# TODO: make all the error-printing statements in this module more consistent
+#  with style in other modules
 
 
 def drop_mismatched_versions(siblings, base_version=None):
@@ -449,10 +453,9 @@ def associate_waypoints(metadata, m20_waypoint_dict):
 
 
 def add_public_waypoints_to_metadata(metadata):
-    # TODO: add a timeout
     try:
         m20_waypoint_dict = get_public_m20_waypoints()
-    except (ValueError, URLError) as e:
+    except (ValueError, URLError, OSError) as e:
         print(str(e) + " ; not adding waypoints to metadata")
         return metadata
     return associate_waypoints(metadata, m20_waypoint_dict)
@@ -482,7 +485,9 @@ def add_effective_taus(metadata):
 
 
 def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
-    stemmer = pdstr("replace", "(-roi.fits(?:.gz)?|-marslab.csv)", "", regex=True)
+    stemmer = pdstr(
+        "replace", "(-roi.fits(?:.gz)?|-marslab.csv)", "", regex=True
+    )
     roi_stems = stemmer(roi["PATH"])
     marslab_stems = stemmer(marslab["PATH"])
 
