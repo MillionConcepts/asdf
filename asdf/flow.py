@@ -52,6 +52,7 @@ def asdf_body(
     debug=False,
     console=None,
     save_plain_images=False,
+    skip_pixmaps=False,
     recreate_from=None,
 ):
     """
@@ -130,11 +131,17 @@ def asdf_body(
     pick_thumbs = keyfilter(partial(contains, settings.rapidlooks.THUMBNAILS))
 
     mpl.use("agg")
-    aprint(Rule(" looking for pixel flag maps "))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        with console.status("... handling flagmaps ...", spinner="star"):
-            handle_map_checks(bandset)
+    if skip_pixmaps is not True:
+        aprint(Rule(" looking for pixel flag maps "))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with console.status("... handling flagmaps ...", spinner="star"):
+                handle_map_checks(bandset)
+    else:
+        aprint(
+            "[dark_orange]skip-pixmaps flag active; skipping "
+            "pixmap handling"
+        )
     # handle ROI file conversion, ROI counting, user input per-ROI metadata
     roi_fits_fn = None
     if we_do_not_have_rois:
@@ -195,7 +202,6 @@ def asdf_body(
     save_images = partial(
         save_looks,
         bandset,
-        outpath,
         threads=bandset.threads.get("save"),
         plain=save_plain_images,
     )
@@ -236,7 +242,7 @@ def asdf_body(
                 "",
                 total=len(bandset.looks),
             )
-            save_images(prefix=bandset.name)
+            save_images(outpath=Path(outpath, 'browse'), prefix=bandset.name)
             prog.remove_task(ASDF_RPH.task_id)
         # keep images that are to be thumbnailed for upload, discard those
         # that are not; waste not memory, want not memory
@@ -248,14 +254,14 @@ def asdf_body(
         aprint(Rule(" making context images "))
         with ASDF_CONSOLE.status("... processing context ...", spinner="star"):
             bandset.make_context_images(verbose=True)
-            save_images(prefix=bandset.name + bandset.suffix)
+            save_images(outpath=Path(outpath, 'data'), prefix=bandset.name + bandset.suffix)
             thumbnail_staging |= pick_thumbs(bandset.looks)
     bandset.purge()
     aprint("\n")
 
     # pretty-plot data if we've got it
     if not we_do_not_have_rois:
-        pretty_plot_bandset(bandset, outpath)
+        pretty_plot_bandset(bandset, Path(outpath, 'data'))
 
     # handle metadata and thumbnail uploads
     if upload is True:

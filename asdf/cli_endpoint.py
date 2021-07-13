@@ -25,7 +25,8 @@ def asdf_hello(
     dump_paths: "dp" = "",
     save_plain_images=False,
     image_regex: "ir" = None,
-    config=None
+    config=None,
+        skip_pixmaps: "sp"=False
 ):
     """
     processes and archives everything
@@ -114,6 +115,7 @@ def asdf_hello(
         debug,
         console,
         save_plain_images,
+        skip_pixmaps
     )
     if is_multiple is not True:
         return asdf_body(observation, *asdf_args)
@@ -152,7 +154,9 @@ def fdsa_hello(
     sol: "l" = "",
     marslab_regex: "mr" = None,
     image_regex: "ir" = ".*IOF.*",
-    config=None
+    config=None,
+    skip_pixmaps: "sp" = False
+
 ):
     """reprocesses and archives everything"""
     console = ASDF_CONSOLE
@@ -203,5 +207,6 @@ def fdsa_hello(
             console=console,
             recreate_from=marslab_fn,
             noninteractive=True,
+            skip_pixmaps=skip_pixmaps
         )
         console.style = "FDSA"

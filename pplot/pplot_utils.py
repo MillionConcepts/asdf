@@ -1,3 +1,4 @@
+import re
 from itertools import cycle
 from pathlib import Path
 import pandas as pd
@@ -106,7 +107,6 @@ import matplotlib.font_manager as mplf
 
 def pretty_plot(
     data,
-    roi_labels={},
     scale_method="scale_to_avg",
     plot_fn=None,
     solar_elevation=None,
@@ -142,9 +142,9 @@ def pretty_plot(
             label = row["COLOR"]
         else:
             label = row["FEATURE"]
-            if (label == "rock") and (row["MORPHOLOGY"] != "-"):
+            if (label == "rock") and not pd.isnull(row["MORPHOLOGY"]) and (row["MORPHOLOGY"] != "-"):
                 label += f" ({row['MORPHOLOGY']})"
-            elif (label == "soil") and (row["SOIL LOCATION"] != "-"):
+            elif (label == "soil") and not pd.isnull(row["SOIL LOCATION"]) and (row["SOIL LOCATION"] != "-"):
                 label += f" ({row['SOIL LOCATION']})"
         roi_labels[row["COLOR"]] = label
     # adding this to slightly increase robustness
@@ -162,10 +162,10 @@ def pretty_plot(
     citation_fp = mplf.FontProperties(fname=titillium, size=12)
     metadata_fp = mplf.FontProperties(fname=titillium, size=22)
 
-    # TODO: Handle the case where solar_elevation is not the same for all of the spectra in the
-    # input marslab file, e.g. a file composited across observations.
-    # Can fix the existence check and make sure solar_elevation is an np.array but that will
-    # propagate to other things downstream...
+    # TODO: Handle the case where solar_elevation is not the same for all of
+    #  the spectra in the input marslab file, e.g. a file composited across
+    #  observations. Can fix the existence check and make sure solar_elevation
+    #  is an np.array but that will propagate to other things downstream...
     theta_rad = (
         (90 - solar_elevation) * 2 * np.pi / 360
         if solar_elevation
@@ -178,51 +178,18 @@ def pretty_plot(
         60,
     )  # Creates a x-axis buffer for graphical layout reasons.
     datadomain = [400 - lpad, 1100 + rpad]
-    # To define the y-axis extent, we add a little margin to the actual min/max data values
-    #  and then round to the nearest tenth. The ylims will always be even tenths.
-    datarange = [
-        np.floor(
-            0.25
-            * np.nanmin(
-                data[
-                    [
-                        k
-                        for k in data.keys()
-                        if len(k) <= 3
-                        and not k in ["SOL", "L_S", "RMS", "LAT", "LON"]
-                    ]
-                ].values
-            )
-            / np.cos(theta_rad)
-            * 10
-        )
-        / 10,
-        np.ceil(
-            1.05
-            * np.nanmax(
-                data[
-                    [
-                        k
-                        for k in data.keys()
-                        if len(k) <= 3
-                        and not k in ["SOL", "L_S", "RMS", "LAT", "LON"]
-                    ]
-                ].values
-            )
-            / np.cos(theta_rad)
-            * 10
-        )
-        / 10,
+    # To define the y-axis extent, we add a little margin to the actual
+    # min/max data values and then round to the nearest tenth. The ylims
+    # will always be even tenths.
+    available_filters = [
+        k for k in data.keys() if k in DERIVED_CAM_DICT["ZCAM"]["filters"]
     ]
-    datamean = np.nanmean(
-        data[
-            [
-                k
-                for k in data.keys()
-                if len(k) <= 3 and not k in ["SOL", "L_S", "RMS", "LAT", "LON"]
-            ]
-        ].values
-    ) / np.cos(theta_rad)
+    scale = 10 / np.cos(theta_rad)
+    datarange = [
+        np.floor(0.25 * scale * np.nanmin(data[available_filters].values))
+        / 10,
+        np.ceil(1.05 * scale * np.nanmax(data[available_filters].values)) / 10,
+    ]
 
     fig, ax = plt.subplots(
         figsize=(plot_width, plot_height), facecolor=bgcolor
@@ -234,12 +201,10 @@ def pretty_plot(
     ax.set_xlim(datadomain)
 
     # Set the ticks for the bottom axis
-    ax.set_xticks(np.linspace(datadomain[0] + lpad, datadomain[1] - rpad, 8))
+    xtick_pos = np.linspace(datadomain[0] + lpad, datadomain[1] - rpad, 8)
+    ax.set_xticks(xtick_pos)
     ax.set_xticklabels(
-        np.array(
-            np.linspace(datadomain[0] + lpad, datadomain[1] - rpad, 8), "int16"
-        ).tolist(),
-        fontproperties=tick_fp,
+        xtick_pos.astype(np.int16).tolist(), fontproperties=tick_fp
     )
     ax.set_xlabel("wavelength (nm)", fontproperties=label_fp)
 
@@ -251,60 +216,32 @@ def pretty_plot(
         edges=[
             d
             for d in ["left", "right", "top", "bottom"]
-            if not d in plot_edges
+            if d not in plot_edges
         ],
     )
     prx.set_xticks([])  # wipe auto-ticks or they stick around
+
+    left_bayers = [k for k in data.keys() if re.match(r"L0[RGB]$", k)]
     prx.set_xticks(
-        (
-            filter_to_wavelength[
-                [k for k in data.keys() if (len(k) == 3) and "L0" in k]
-            ].values[0]
-            - datadomain[0]
-        )
+        (filter_to_wavelength[left_bayers].values[0] - datadomain[0])
         / (datadomain[1] - datadomain[0]),
         minor=True,
     )
     prx.set_xticklabels(
-        [
-            f"L0{k[-1]}\nR0{k[-1]}"
-            for k in data.keys()
-            if (len(k) == 3)
-            and "L0" in k
-            and not "L_S" in k
-            and not "RMS" in k
-            and not "LAT" in k
-            and not "LON" in k
-        ],
+        [f"L0{k[-1]}\nR0{k[-1]}" for k in left_bayers],
         minor=True,
         fontproperties=tick_minor_fp,
     )
-    # Set the major ticks of the top axis with the narrow band filters
+    # Set the major ticks of the top axis with the narrowband filters
+    narrowband = [
+        k for k in available_filters if ("0" not in k) and ("R1" not in k)
+    ]
     prx.set_xticks(
-        (
-            filter_to_wavelength[
-                [
-                    k
-                    for k in data.keys()
-                    if (
-                        (k in DERIVED_CAM_DICT["ZCAM"]["filters"])
-                        and ("0" not in k)
-                    )
-                ]
-            ].values[0]
-            - datadomain[0]
-        )
+        (filter_to_wavelength[narrowband].values[0] - datadomain[0])
         / (datadomain[1] - datadomain[0])
     )
     prx.set_xticklabels(
-        [
-            k.replace("L1", "L1\nR1")
-            for k in data.keys()
-            if (
-                (k in DERIVED_CAM_DICT["ZCAM"]["filters"])
-                and ("0" not in k)
-            )
-        ],
+        [k.replace("L1", "L1\nR1") for k in narrowband],
         fontproperties=tick_fp,
     )
 
@@ -321,22 +258,14 @@ def pretty_plot(
     )
 
     # Set the ticks for the left yaxis
-    ax.set_yticks(
-        np.linspace(
-            datarange[0],
-            datarange[1],
-            int(1 + (datarange[1] - datarange[0]) / 0.1),
-        )
+    ytick_pos = np.linspace(
+        datarange[0],
+        datarange[1],
+        int(1 + (datarange[1] - datarange[0]) / 0.1),
     )
+    ax.set_yticks(ytick_pos)
     ax.set_yticklabels(
-        np.round(
-            np.linspace(
-                datarange[0],
-                datarange[1],
-                int(1 + (datarange[1] - datarange[0]) / 0.1),
-            ),
-            1,
-        ),
+        np.round(ytick_pos, 1),
         fontproperties=tick_fp,
     )
     ax.tick_params(length=6)
@@ -353,25 +282,19 @@ def pretty_plot(
         sym = iter(sym)
     for i in range(len(data.index)):
         symbol = next(sym)
-        # Plot L bayer and other filters (no R bayer) as connected
-        full_spectrum = [
-            k
-            for k in data.keys()
-            if (
-                (k in DERIVED_CAM_DICT["ZCAM"]["filters"])
-                and ("R0" not in k)
-                and np.isfinite(data.iloc[i][k])
-            )
+        # Plot narrowband filters as connected
+        notna_narrowband = [
+            f for f in narrowband if np.isfinite(data.iloc[i][f])
         ]
         markersizes = [
-            8 if len(k) == 3 else 13 for k in full_spectrum
+            8 if len(k) == 3 else 13 for k in notna_narrowband
         ]  # plot bayers w/ smaller symbols
-        ix = np.argsort(filter_to_wavelength[full_spectrum].values[0])
+        ix = np.argsort(filter_to_wavelength[notna_narrowband].values[0])
         # plot the errorbars
         ax.errorbar(
-            filter_to_wavelength[full_spectrum].values[0][ix],
-            data.iloc[i][full_spectrum][ix] / np.cos(theta_rad),
-            yerr=data.iloc[i][[f"{f}_ERR" for f in full_spectrum]][ix],
+            filter_to_wavelength[notna_narrowband].values[0][ix],
+            data.iloc[i][notna_narrowband][ix] / np.cos(theta_rad),
+            yerr=data.iloc[i][[f"{f}_ERR" for f in notna_narrowband]][ix],
             fmt=f"",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             alpha=0.5,
@@ -380,9 +303,9 @@ def pretty_plot(
 
         # plot the line
         ax.errorbar(
-            filter_to_wavelength[full_spectrum].values[0][ix],
-            data.iloc[i][full_spectrum][ix] / np.cos(theta_rad),
-            yerr=data.iloc[i][[f"{f}_ERR" for f in full_spectrum]][ix],
+            filter_to_wavelength[notna_narrowband].values[0][ix],
+            data.iloc[i][notna_narrowband][ix] / np.cos(theta_rad),
+            yerr=data.iloc[i][[f"{f}_ERR" for f in notna_narrowband]][ix],
             fmt=f"-",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             markersize=10,
@@ -392,8 +315,8 @@ def pretty_plot(
 
         # plot the symbols
         ax.scatter(
-            filter_to_wavelength[full_spectrum].values[0][ix],
-            data.iloc[i][full_spectrum][ix] / np.cos(theta_rad),
+            filter_to_wavelength[notna_narrowband].values[0][ix],
+            data.iloc[i][notna_narrowband][ix] / np.cos(theta_rad),
             marker=f"{symbol}",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             edgecolors="k",

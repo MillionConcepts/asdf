@@ -1,5 +1,6 @@
 """generic utility-type functions for asdf"""
 import io
+import os
 import shutil
 import gzip
 import tarfile
@@ -103,6 +104,8 @@ def load_roi_file(
     #  to be extracted from the loading loop. save and load functions should
     #  be distinct.
     if convert:
+        if not Path(outpath).exists():
+            os.makedirs(outpath)
         roi_fits_fn = Path(outpath, title + extension)
         if roi_fits.filename():
             if Path(roi_fits_fn).absolute() == Path(roi_fits.filename()):

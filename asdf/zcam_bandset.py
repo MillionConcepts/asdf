@@ -1,5 +1,6 @@
 import datetime as dt
 import io
+import os
 import pickle
 from functools import partial
 from pathlib import Path
@@ -26,7 +27,8 @@ from asdf.format import (
     melt_metadata,
     METADATA_DTYPES,
     count_rois_on_pixmaps,
-    drop_excess_stats, perfectly_black_rectangular_solid,
+    drop_excess_stats,
+    perfectly_black_rectangular_solid,
 )
 from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
@@ -44,8 +46,11 @@ from marslab.imgops.debayer import RGGB_PATTERN, mask_bayer_pixels
 from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.loaders import rasterio_load
 from marslab.imgops.pltutils import remove_ticks, despine
-from marslab.imgops.regions import make_roi_edgemaps, draw_edgemaps_on_image, \
-    draw_edgemaps_on_axis
+from marslab.imgops.regions import (
+    make_roi_edgemaps,
+    draw_edgemaps_on_image,
+    draw_edgemaps_on_axis,
+)
 
 
 def polish_metadata(metadata, creation_time):
@@ -165,7 +170,10 @@ class ZcamBandSet(BandSet):
         if title is None:
             title = self.name
         roi_hdulist, roi_fn = load_roi_file(
-            self.rois, title=title, outpath=outpath, convert=convert
+            self.rois,
+            title=title,
+            outpath=Path(outpath, "data"),
+            convert=convert,
         )
         self.rois = roi_hdulist
         self.local_files.append(roi_fn)
@@ -287,9 +295,11 @@ class ZcamBandSet(BandSet):
 
     def write_data_files(self, outpath=".", verbose=False, in_memory=False):
         if in_memory is False:
-            stem = str(Path(outpath, self.name + self.suffix))
+            stem = str(Path(outpath, "data", self.name + self.suffix))
             metadata_file = stem + "-marslab.csv"
             extended_file = stem + "-marslab-extended.csv"
+            if not Path(outpath, "data").exists():
+                os.makedirs(Path(outpath, "data"))
         else:
             metadata_file = io.BytesIO()
             extended_file = io.BytesIO()
@@ -337,15 +347,11 @@ class ZcamBandSet(BandSet):
     def draw_eye_pixmaps(self, edgemaps, eye, verbose=False):
         # TODO: consider reorganizing this whole situation
         eye_pixmaps = self.get_pixmap_dict(eye)
-        eye_pixmaps['flat'] = self.get_flattened_pixmap(eye)
+        eye_pixmaps["flat"] = self.get_flattened_pixmap(eye)
         for name, pixmap in eye_pixmaps.items():
-            self.render_pixmap_context(
-                edgemaps, eye, pixmap, name, verbose
-            )
+            self.render_pixmap_context(edgemaps, eye, pixmap, name, verbose)
 
-    def render_pixmap_context(
-            self, edgemaps, eye, pixmap, name, verbose
-    ):
+    def render_pixmap_context(self, edgemaps, eye, pixmap, name, verbose):
         # regenerate matplotlib objects from bytes
         background = perfectly_black_rectangular_solid(pixmap.shape)
         context = plt.figure()
@@ -381,8 +387,6 @@ class ZcamBandSet(BandSet):
         self.looks[f"pixmap context image {name}"] = context
         if verbose:
             aprint(f"generated context pixmap {name}")
-
-
 
     # def render_edgemaps_if_present(self, edgemaps, eye, eye_pixmaps):
     #     background = perfectly_black_rectangular_solid(

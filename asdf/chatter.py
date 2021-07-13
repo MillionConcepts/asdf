@@ -462,7 +462,7 @@ def save_looks(bandset, outpath, prefix=None, threads=None, plain=False):
         ASDFLOG.info("... serializing images ...")
     for look_name, look in bandset.looks.items():
         # TODO: ugh.
-        image_path = outpath
+        image_path = str(outpath)
         if "pixmap" in look_name:
             image_path = str(Path(image_path, "pixmaps"))
         if not os.path.exists(image_path):
