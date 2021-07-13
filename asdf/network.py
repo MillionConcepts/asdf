@@ -24,6 +24,7 @@ import pydrive2.files
 #  is messy but expedient. it's possible that it will be more stable
 #  and/or performant to merge these through a lower-level oauth call,
 #  however, and this should be evaluated.
+from googleapiclient.errors import HttpError
 from oauth2client.service_account import ServiceAccountCredentials
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
@@ -381,7 +382,7 @@ def upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails):
             bandset.summary[name] = '=IMAGE("' + link + '")'
 
 
-def clear_google_drive_trash():
+def clear_google_drive_trash(debug=False):
     trash = settings.sources.GOOGLE_DRIVE_TRASH
     if trash is None:
         return
@@ -393,7 +394,11 @@ def clear_google_drive_trash():
     with ASDF_PROGRESS as prog:
         task_id = prog.add_task("", total=len(trash_list))
         for drivefile in trash_list:
-            drivefile.Delete()
+            try:
+                drivefile.Delete()
+            except (HttpError, pydrive2.files.ApiRequestError) as hte:
+                if debug:
+                    aprint(f"couldn't delete {drivefile['title']}: {hte}")
             prog.advance(task_id, 1)
         prog.remove_task(task_id)
 
@@ -451,5 +456,6 @@ def upload_asdf_analysis(
                 style="bold red",
             )
     aprint("... cleaning up trash ...")
-    clear_google_drive_trash()
+    clear_google_drive_trash(debug)
+
 
