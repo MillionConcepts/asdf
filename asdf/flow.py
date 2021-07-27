@@ -260,7 +260,8 @@ def asdf_body(
                 outpath=Path(outpath, "data"),
                 prefix=bandset.name + bandset.suffix,
             )
-            thumbnail_staging |= pick_thumbs(bandset.looks)
+            if not (skip_rapidlooks and not upload):
+                thumbnail_staging |= pick_thumbs(bandset.looks)
     bandset.purge()
     aprint("\n")
 

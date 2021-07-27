@@ -155,3 +155,7 @@ examples/
 
 # deployment
 vendor/
+
+# test data
+/asdf/tests/data/e2e*
+/asdf/tests/data/products

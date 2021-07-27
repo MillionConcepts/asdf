@@ -152,7 +152,7 @@ def pretty_plot(
         if (data[k] == "-").all():
             data = data.drop(k, axis=1)
     # path to file containing referenced font
-    titillium = "static/fonts/TitilliumWeb-Light.ttf"
+    titillium = Path(Path(__file__).parent.parent, "static/fonts/TitilliumWeb-Light.ttf")
     # can also include other face properties, different fonts, etc.
     # TODO: possibly allow these to reference asdf_settings, or expose ability
     #  to pass these fontproperties as a dict

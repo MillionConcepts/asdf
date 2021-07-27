@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
@@ -26,7 +28,7 @@ def asdf_hello(
     save_plain_images=False,
     image_regex: "ir" = None,
     config=None,
-        skip_pixmaps: "sp"=False
+    skip_pixmaps: "sp"=False
 ):
     """
     processes and archives everything
@@ -139,7 +141,7 @@ def initialize_asdf(config):
         log.addHandler(ASDF_RPH)
     if config is not None:
         import sys
-        sys.path.insert(0, config)
+        sys.path.insert(0, str(config))
 
 
 def fdsa_hello(
