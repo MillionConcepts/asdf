@@ -28,7 +28,7 @@ def test_end_to_end_noninteractive(case_name, case):
     asdf.cli_endpoint.asdf_hello(
         case["data_path"],
         case["roi_path"],
-        output=case["temp_path"],
+        output=case["output_path"],
         config=TEST_CASE_WORKING_DIRECTORY,
         **case["endpoint_kwargs"],
     )

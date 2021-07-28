@@ -1,11 +1,14 @@
 from hashlib import md5
 from pathlib import Path
+import re
 
 import pandas as pd
 import rich
 from fs.osfs import OSFS
 
-RUNTIME_VARIABLE_COLUMNS = ('ASDF_VERSION', 'FILE_TIMESTAMP', 'CREATOR')
+RUNTIME_VARIABLE_COLUMNS = re.compile(
+    r'(ASDF_VERSION|FILE_TIMESTAMP|CREATOR|.*_PATH)'
+)
 
 
 
@@ -25,9 +28,10 @@ def md5sum(path_or_file, hash_function=md5):
 
 def overwrite_variable_columns(syspath):
     temp = pd.read_csv(syspath)
-    for col in RUNTIME_VARIABLE_COLUMNS:
-        temp.loc[:, col] = "NULL"
-    temp.to_csv(syspath)
+    for col in temp.columns:
+        if re.match(RUNTIME_VARIABLE_COLUMNS, col):
+            temp.loc[:, col] = "NULL"
+    temp.to_csv(syspath, index=False)
 
 
 def blot_gzip_timestamp(syspath):
@@ -99,4 +103,4 @@ def compare_to_reference_checksums(
         for file in shared_slice_new.loc[mismatches]["file"]:
             rich.print(f"[italic]{file}")
     if bad_comparison and fail_on_mismatch:
-        raise ValueError("mismatches found, failing.")
+        raise ValueError(f"mismatches found, failing\n\n{mismatches}")
