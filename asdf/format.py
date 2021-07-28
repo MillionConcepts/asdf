@@ -82,19 +82,6 @@ def annotate_and_save(title, annotation, look, filename, outpath):
         look = simple_figure(look)
     ax = look.axes[0]
     render_figure_labels(ax, title, annotation)
-    from io import BytesIO
-    try:
-        buf = BytesIO(look.figure.axes[0].get_images()[0].get_array().tobytes())
-        buf.seek(0)
-        print(title, "array 1", md5(buf.read()).hexdigest())
-    except:
-        pass
-    try:
-        buf2 = BytesIO(look.figure.axes[1].get_images()[0].get_array().tobytes())
-        buf2.seek(0)
-        print(title, "array 2", md5(buf2.read()).hexdigest())
-    except:
-        pass
     look.savefig(
         Path(outpath, filename), dpi=275, bbox_inches="tight", pad_inches=0
     )

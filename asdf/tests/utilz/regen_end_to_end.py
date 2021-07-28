@@ -30,7 +30,7 @@ for case in e2e_cases.values():
         config=TEST_CASE_WORKING_DIRECTORY,
         **case["endpoint_kwargs"],
     )
-    checksums = make_test_checksums(case)
+    checksums = make_test_checksums(case, "temp_path")
 
     checksum_df = pd.DataFrame(checksums, columns=["file", "md5"])
     checksum_df.to_csv(

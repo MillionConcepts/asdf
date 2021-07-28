@@ -42,9 +42,9 @@ def blot_gzip_timestamp(syspath):
         zipped_file.write(blotbytes)
 
 
-def make_test_checksums(case):
+def make_test_checksums(case, dir_key="output_path"):
     checksums = []
-    temp_fs = OSFS(case["temp_path"])
+    temp_fs = OSFS(case[dir_key])
     for file in temp_fs.walk.files():
         if "checksum" in file:
             continue
