@@ -104,25 +104,25 @@ def find_and_offer_observations(
         for category in hidden_things:
             aprint(category, style="purple bold")
         aprint("\n")
-    if len(results) == 0:
+    if not len(results):
         aprint(
             "[bold red]Sorry, no usable observations found. :confused_face:"
         )
         return None, False
     if noninteractive:
-        if (len(results) > 1) and (noninteractive != "all"):
+        if noninteractive == "all":
+            aprint(
+                "noninteractive-all mode; processing all observations.",
+                style="dark_orange bold",
+            )
+            return tuple(results.values()), True
+        else:
             aprint(
                 "noninteractive mode; using #1. If this isn't the one you "
                 "wanted, please run asdf again and explicitly pass a file "
                 "from the observation you want."
             )
             return tuple(results.values())[0], False
-        if (len(results) > 1) and (noninteractive == "all"):
-            aprint(
-                "noninteractive-all mode; processing all observations.",
-                style="dark_orange bold",
-            )
-            return tuple(results.values()), True
         return tuple(results.values())[0], False
 
     if len(results) > 1:

@@ -108,39 +108,49 @@ def render_figure_labels(ax, title, annotation):
         fontproperties=settings.rapidlooks.ANNOTATION_FONT,
     )
 
+def clean_sequence_id(seq_id):
+    # Make sure that the sequence ID is in the proper format
+    if "ZCAM" in str(seq_id).upper():
+        return seq_id.upper()
+    seq_id = "ZCAM" + format(int(seq_id), "0>5")
+    return seq_id
 
-def handle_abbreviation(
+def parse_abbreviated_inputs(
     sol,
     seq_id,
-    root=None,
-    filetype=None,
+    root_path_abbreviation=None,
+    product_subdirectory=None,
 ):
+    """Commonly used directory paths on ASU servers have standard abbreviations
+    which are defined in asdf_settings.sources. This function expands these abbreviations
+    and concatenates sol and optionally subdirectory into an appropriately
+    formatted working directory pathlib.Path object.
+    Defaults to the first entry in asdf_settings.sources.PATH_ABBREVIATIONS and IOF subdirectory.
+    Also returns a correctly formatted seq_id (by prepending 'ZCAM').
+    """
     sol_path = format(int(sol), "0>4") if sol else ""
     # default path root and subdirectory, which can be overridden
-    if root:
+    if root_path_abbreviation:
         try:
-            path_root = settings.sources.PATH_ABBREVIATIONS[root]
+            path_root = settings.sources.PATH_ABBREVIATIONS[root_path_abbreviation]
         except KeyError:
             source_names = ", ".join(
                 settings.sources.PATH_ABBREVIATIONS.keys()
             )
             ASDF_CONSOLE.log(
                 "sorry, I don't know the abbreviation {}. I know: {}.".format(
-                    root, source_names
+                    root_path_abbreviation, source_names
                 ),
                 style="bold red",
             )
             return None, None
     else:
         path_root = list(settings.sources.PATH_ABBREVIATIONS.values())[0]
-    if filetype:
-        product_subdirectory = filetype
-    else:
+    if not product_subdirectory:
         product_subdirectory = settings.sources.DEFAULT_PRODUCT_SUBDIRECTORY
     directory = Path(path_root, sol_path, product_subdirectory)
-    if seq_id:
-        seq_id = "ZCAM" + str(seq_id)
-    return directory, seq_id
+
+    return directory, clean_sequence_id(seq_id)
 
 
 def make_rapidlook_thumbnails(rapidlooks, size):

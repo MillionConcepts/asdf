@@ -3,10 +3,10 @@ from pathlib import Path
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
-# for the following function. They are not malformed type hints, but
+# for the following function. THEY ARE NOT MALFORMED TYPE HINTS, but
 # instructions to clize to create single-letter aliases for parameters in the
 # CLI. (--output, -o; etc.)
-def asdf_hello(
+def asdf_initiate(
     path,
     roi_path=None,
     *,
@@ -40,8 +40,8 @@ def asdf_hello(
     :param upload: upload metadata to google drive
     :param output: output path; default is "output/$username/$sol"
     :param abbreviate: pass abbreviated version of iof location:
-        sol,(optional) seq_id,(optional) root root_dir code, (optional)
-        product type
+        sol, seq_id, (optional) root root_dir code, (optional)
+        product type. root_dir defaults to "proj" and product type defaults to "iof"
         examples: (1) 36,03107,scratch,iof (2) 36,03107
     :param skip_rapidlooks: don't write default rapidlooks
     :param suffix: add suffix for this analysis/group of ROIs to data,
@@ -64,18 +64,19 @@ def asdf_hello(
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
-    console = ASDF_CONSOLE
+    console = ASDF_CONSOLE # a rich.Console object with the asdf styleguide implemented
     with console.status(".. initializing ...", spinner="star"):
-        initialize_asdf(config)
+        setup_fdsa_configuration(config)
         from asdf.flow import asdf_body
     # find all associated files and ask the user about them
-    if noninteractive_all:
+    if noninteractive_all: # run all sequences without user input
         noninteractive = "all"
-    if abbreviate:
-        from asdf.format import handle_abbreviation
-        directory, seq_id = handle_abbreviation(*path.split(","))
+    if abbreviate: # construct a path from the abbreviated template
+        from asdf.format import parse_abbreviated_inputs
+        # TODO: Accept separators other than commas and robustify against white space.
+        directory, seq_id = parse_abbreviated_inputs(*path.split(","))
         explicit_path = None
-    else:
+    else: # use the path provided, willy-nilly
         directory = None
         seq_id = None
         explicit_path = path
@@ -93,7 +94,7 @@ def asdf_hello(
         regex_filter=image_regex,
     )
     if observation is None:
-        return
+        return # meaningful log/output for this case was already provided by `find_and_offer_observation`
     if dump_paths:
         aprint("... dump_paths set, writing paths and exiting ...")
         with open(dump_paths, "a+") as file:
@@ -133,7 +134,7 @@ def asdf_hello(
         asdf_body(obs, *asdf_args)
 
 
-def initialize_asdf(config):
+def setup_fdsa_configuration(config):
     import logging
     from marslab.imgops.bandset import log as bandlog
     for log in (bandlog, ASDFLOG):
@@ -144,7 +145,7 @@ def initialize_asdf(config):
         sys.path.insert(0, str(config))
 
 
-def fdsa_hello(
+def fdsa_initiate(
     marslab_path,
     image_path,
     *,
@@ -166,7 +167,7 @@ def fdsa_hello(
     with console.status(
         "[deep_pink2 on black].. gnizilaitini ...", spinner="betaWave"
     ):
-        initialize_asdf(config)
+        setup_fdsa_configuration(config)
         from asdf.flow import asdf_body
     from rich.rule import Rule
     aprint(Rule(" fdsa mode ", style="deep_pink2 blink"), style="FDSA")

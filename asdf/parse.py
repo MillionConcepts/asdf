@@ -127,10 +127,12 @@ def pix_reference(thing):
 
 
 def looks_like_marslab(fn):
+    # TODO: Fail back to interrogating properties of the file contents.
     return bool(Path(fn).name.endswith("-marslab.csv"))
 
 
 def looks_like_roi(fn):
+    # TODO: Fail back to interrogating properties of the file contents.
     return bool(
         Path(fn).name.endswith("-roi.fits")
         or Path(fn).name.endswith("-roi.fits.gz")

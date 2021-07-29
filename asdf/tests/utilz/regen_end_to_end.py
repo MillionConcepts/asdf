@@ -23,7 +23,7 @@ e2e_cases = {
 
 
 for case in e2e_cases.values():
-    asdf.cli_endpoint.asdf_hello(
+    asdf.cli_endpoint.asdf_initiate(
         case["data_path"],
         case["roi_path"],
         output=case["temp_path"],

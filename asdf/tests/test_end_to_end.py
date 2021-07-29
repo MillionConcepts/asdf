@@ -25,7 +25,7 @@ e2e_cases = {
 
 @pytest.mark.parametrize("case_name,case", e2e_cases.items())
 def test_end_to_end_noninteractive(case_name, case):
-    asdf.cli_endpoint.asdf_hello(
+    asdf.cli_endpoint.asdf_initiate(
         case["data_path"],
         case["roi_path"],
         output=case["output_path"],
