@@ -257,12 +257,12 @@ def cluster_observations(
             # handle repointed-stereo-observation case: split by pairs of RMS
             # TODO: this will currently fail if all filters from a single eye
             #  are missing
-
             if len(group["RMS"].unique()) % 2 != 0:
                 parser_warnings.append(
-                    "warning: {} has a mast movement pattern I cannot "
-                    "interpret. files may not have been chunked "
-                    "correctly.".format(seq_id)
+                    f"warning: {seq_id} has a mast movement pattern I cannot "
+                    "interpret, or not all files from the observation are "
+                    "currently present in the directory. files may not have "
+                    "been chunked correctly."
                 )
             for repoint in partition(2, group["RMS"].unique()):
                 observation = group.loc[group["RMS"].isin(repoint)]

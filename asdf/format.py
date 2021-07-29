@@ -121,11 +121,13 @@ def parse_abbreviated_inputs(
     root_path_abbreviation=None,
     product_subdirectory=None,
 ):
-    """Commonly used directory paths on ASU servers have standard abbreviations
-    which are defined in asdf_settings.sources. This function expands these abbreviations
-    and concatenates sol and optionally subdirectory into an appropriately
-    formatted working directory pathlib.Path object.
-    Defaults to the first entry in asdf_settings.sources.PATH_ABBREVIATIONS and IOF subdirectory.
+    """Commonly used directory paths have standard abbreviations which are
+    defined in asdf_settings.sources. Defining them in settings rather than
+    this function facilitates environment-specific deployments (local, ASU,
+    etc.)  This function expands these abbreviations and concatenates sol and
+    optionally subdirectory into an appropriately formatted working directory
+    pathlib.Path object. Defaults to the first entry in
+    asdf_settings.sources.PATH_ABBREVIATIONS and IOF subdirectory.
     Also returns a correctly formatted seq_id (by prepending 'ZCAM').
     """
     sol_path = format(int(sol), "0>4") if sol else ""

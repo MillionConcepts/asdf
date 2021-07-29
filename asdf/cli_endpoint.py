@@ -66,7 +66,8 @@ def asdf_initiate(
     # path if one was passed
     console = ASDF_CONSOLE # a rich.Console object with the asdf styleguide implemented
     with console.status(".. initializing ...", spinner="star"):
-        setup_fdsa_configuration(config)
+        initialize_loggers()
+        insert_settings_module_path(config)
         from asdf.flow import asdf_body
     # find all associated files and ask the user about them
     if noninteractive_all: # run all sequences without user input
@@ -94,7 +95,9 @@ def asdf_initiate(
         regex_filter=image_regex,
     )
     if observation is None:
-        return # meaningful log/output for this case was already provided by `find_and_offer_observation`
+        # meaningful log/output for this case was already provided by
+        # `find_and_offer_observation`
+        return
     if dump_paths:
         aprint("... dump_paths set, writing paths and exiting ...")
         with open(dump_paths, "a+") as file:
@@ -134,15 +137,18 @@ def asdf_initiate(
         asdf_body(obs, *asdf_args)
 
 
-def setup_fdsa_configuration(config):
+def insert_settings_module_path(config):
+    if config is not None:
+        import sys
+        sys.path.insert(0, str(config))
+
+
+def initialize_loggers():
     import logging
     from marslab.imgops.bandset import log as bandlog
     for log in (bandlog, ASDFLOG):
         log.setLevel(logging.INFO)
         log.addHandler(ASDF_RPH)
-    if config is not None:
-        import sys
-        sys.path.insert(0, str(config))
 
 
 def fdsa_initiate(
@@ -167,7 +173,8 @@ def fdsa_initiate(
     with console.status(
         "[deep_pink2 on black].. gnizilaitini ...", spinner="betaWave"
     ):
-        setup_fdsa_configuration(config)
+        initialize_loggers()
+        insert_settings_module_path(config)
         from asdf.flow import asdf_body
     from rich.rule import Rule
     aprint(Rule(" fdsa mode ", style="deep_pink2 blink"), style="FDSA")

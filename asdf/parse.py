@@ -128,6 +128,11 @@ def pix_reference(thing):
 
 def looks_like_marslab(fn):
     # TODO: Fail back to interrogating properties of the file contents.
+    #  Michael notes: these functions are used primarily to scan directories.
+    #  it will result in very, very slow operation if we have them also open
+    #  every file in the search path. where they are *not* being used to scan
+    #  directories, they are probably being inappropriately used and some other
+    #  functions should replace them.
     return bool(Path(fn).name.endswith("-marslab.csv"))
 
 
