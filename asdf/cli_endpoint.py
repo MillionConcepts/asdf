@@ -27,7 +27,7 @@ def asdf_initiate(
     save_plain_images=False,
     image_regex: "ir" = None,
     config=None,
-    skip_pixmaps: "sp"=False
+    skip_pixmaps: "sp" = False,
 ):
     """
     processes and archives everything
@@ -62,24 +62,26 @@ def asdf_initiate(
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
-    console = ASDF_CONSOLE # a rich.Console object with the asdf styleguide implemented
+    console = ASDF_CONSOLE  # a rich.Console object with the asdf styleguide implemented
     with console.status(".. initializing ...", spinner="star"):
         initialize_loggers()
         insert_settings_module_path(config)
         from asdf.flow import asdf_body
     # find all associated files and ask the user about them
-    if noninteractive_all: # run all sequences without user input
+    if noninteractive_all:  # run all sequences without user input
         noninteractive = "all"
-    if abbreviate: # construct a path from the abbreviated template
+    if abbreviate:  # construct a path from the abbreviated template
         from asdf.format import parse_abbreviated_inputs
+
         # TODO: Accept separators other than commas and robustify against white space.
         directory, seq_id = parse_abbreviated_inputs(*path.split(","))
         explicit_path = None
-    else: # use the path provided, willy-nilly
+    else:  # use the path provided, willy-nilly
         directory = None
         seq_id = None
         explicit_path = path
     from asdf.chatter import find_and_offer_observations
+
     observation, is_multiple = find_and_offer_observations(
         root_dir=directory,
         explicit_path=explicit_path,
@@ -108,18 +110,13 @@ def asdf_initiate(
         debug,
         console,
         save_plain_images,
-        skip_pixmaps
+        skip_pixmaps,
     )
     if is_multiple is not True:
         return asdf_body(observation, *asdf_args)
     for ix, obs in enumerate(observation):
         aprint(
-            "... processing observation "
-            + str(ix + 1)
-            + " of "
-            + str(len(observation))
-            + " ... ",
-            style="bold cyan1",
+            f"[bold cyan1]... processing observation {ix+1} of {len(observation)} ... "
         )
         asdf_body(obs, *asdf_args)
 
@@ -140,12 +137,14 @@ def perform_path_dump(dump_paths, is_multiple, observation):
 def insert_settings_module_path(config):
     if config is not None:
         import sys
+
         sys.path.insert(0, str(config))
 
 
 def initialize_loggers():
     import logging
     from marslab.imgops.bandset import log as bandlog
+
     for log in (bandlog, ASDFLOG):
         log.setLevel(logging.INFO)
         log.addHandler(ASDF_RPH)
@@ -164,8 +163,7 @@ def fdsa_initiate(
     marslab_regex: "mr" = None,
     image_regex: "ir" = ".*IOF.*",
     config=None,
-    skip_pixmaps: "sp" = False
-
+    skip_pixmaps: "sp" = False,
 ):
     """reprocesses and archives everything"""
     console = ASDF_CONSOLE
@@ -177,8 +175,10 @@ def fdsa_initiate(
         insert_settings_module_path(config)
         from asdf.flow import asdf_body
     from rich.rule import Rule
+
     aprint(Rule(" fdsa mode ", style="deep_pink2 blink"), style="FDSA")
     from asdf.chatter import setup_reprocess
+
     reprocess_pairs, analyses = setup_reprocess(
         marslab_path,
         image_path,
@@ -196,15 +196,14 @@ def fdsa_initiate(
         roi_fn = analysis["ROI"]
         if marslab_fn != analysis["MARSLAB"]:
             aprint(
-                "\n[deep_pink2 bold italic]sorry, something has gone "
-                "wrong "
-                "matching {} to its observation... "
-                ":confused_face:".format(analysis["MARSLAB"])
+                f"\n[deep pink2 bold italic]sorry, something has gone wrong "
+                f"matching {analysis['MARSLAB']} to its observation... "
+                f":confused_face"
             )
             return
         aprint(
-            "\n[bold italic]... fdsa: processing observation "
-            "{} of {} ...".format(str(ix + 1), str(len(reprocess_pairs)))
+            f"\n[bold italic]... fdsa: processing observation {ix + 1} of "
+            f"{len(reprocess_pairs)}"
         )
         console.style = "none"
         asdf_body(
@@ -217,6 +216,6 @@ def fdsa_initiate(
             console=console,
             recreate_from=marslab_fn,
             noninteractive=True,
-            skip_pixmaps=skip_pixmaps
+            skip_pixmaps=skip_pixmaps,
         )
         console.style = "FDSA"
