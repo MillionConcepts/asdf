@@ -23,7 +23,6 @@ def asdf_initiate(
     keep_caltarget: "kg" = False,
     keep_thumbnails: "kt" = False,
     recursive=False,
-    product_type: "t" = "",
     dump_paths: "dp" = "",
     save_plain_images=False,
     image_regex: "ir" = None,
@@ -56,7 +55,6 @@ def asdf_initiate(
     :param keep_caltarget: include frames from apparent caltarget observations
         in searches
     :param recursive: search all directories under the chosen path
-    :param product_type: filter files for a particular product type
     :param dump_paths: dump paths and quit after producing file list
     :param keep_thumbnails: include thumbnails in searches
     :param save_plain_images: save images without labels or borders
@@ -91,7 +89,6 @@ def asdf_initiate(
         keep_caltarget=keep_caltarget,
         keep_thumbnails=keep_thumbnails,
         recursive=recursive,
-        target_product_type=product_type,
         regex_filter=image_regex,
     )
     if observation is None:
@@ -99,17 +96,7 @@ def asdf_initiate(
         # `find_and_offer_observation`
         return
     if dump_paths:
-        aprint("... dump_paths set, writing paths and exiting ...")
-        with open(dump_paths, "a+") as file:
-            if is_multiple:
-                for obs in observation:
-                    for path in obs["PATH"].values:
-                        file.write(path + "\n")
-                    file.write("\n\n")
-            else:
-                for path in observation["PATH"].values:
-                    file.write(path + "\n")
-            return
+        return perform_path_dump(dump_paths, is_multiple, observation)
     asdf_args = (
         roi_path,
         upload,
@@ -135,6 +122,19 @@ def asdf_initiate(
             style="bold cyan1",
         )
         asdf_body(obs, *asdf_args)
+
+
+def perform_path_dump(dump_paths, is_multiple, observation):
+    aprint("... dump_paths set, writing paths and exiting ...")
+    with open(dump_paths, "a+") as file:
+        if is_multiple:
+            for obs in observation:
+                for path in obs["PATH"].values:
+                    file.write(path + "\n")
+                file.write("\n\n")
+        else:
+            for path in observation["PATH"].values:
+                file.write(path + "\n")
 
 
 def insert_settings_module_path(config):

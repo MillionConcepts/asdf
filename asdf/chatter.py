@@ -116,13 +116,11 @@ def find_and_offer_observations(
                 style="dark_orange bold",
             )
             return tuple(results.values()), True
-        else:
-            aprint(
-                "noninteractive mode; using #1. If this isn't the one you "
-                "wanted, please run asdf again and explicitly pass a file "
-                "from the observation you want."
-            )
-            return tuple(results.values())[0], False
+        aprint(
+            "noninteractive mode; using #1. If this isn't the one you "
+            "wanted, please run asdf again and explicitly pass a file "
+            "from the observation you want."
+        )
         return tuple(results.values())[0], False
 
     if len(results) > 1:

@@ -30,7 +30,6 @@ from asdf.parse import (
 )
 from asdf.scrape import (
     cached_aux_skimmer,
-    is_iof_est_heuristic,
     cached_ls,
     cached_exists,
     is_pixel_map_heuristic,
@@ -150,7 +149,6 @@ def scan_zcam_files(
     regex_filter=None,
     keep_thumbnails=False,
     recursive=False,
-    target_product_type=None,
 ):
 
     products = ls_zcam(root_dir, recursive, regex_filter)
@@ -173,27 +171,6 @@ def scan_zcam_files(
     if keep_thumbnails is False:
         field_filters["THUMBNAIL"] = "N"
     products = skim_products(products, field_filters)
-
-    if target_product_type:
-        target_product_type = target_product_type.upper()
-        if target_product_type in ("IOF", "IOF_EST"):
-            ioflikes = products.loc[products["PRODUCT_TYPE"] == "IOF"].copy()
-            # TODO: this may not be reliable or good, at least yet. probably
-            #  better to filter directories.
-            is_iof_est = ioflikes["PATH"].map(is_iof_est_heuristic)
-            if target_product_type == "IOF":
-                is_iof_est = ~is_iof_est
-            typeproducts = ioflikes[~is_iof_est]
-        else:
-            typeproducts = products.loc[
-                products["PRODUCT_TYPE"] == target_product_type
-            ].copy()
-        ASDFLOG.info(
-            "... {} / {} match the requested product type ...".format(
-                str(len(typeproducts)), str(len(products))
-            )
-        )
-        products = typeproducts
     if len(products) == 0:
         raise ValueError("sorry, no matching products found in path.")
     return products
