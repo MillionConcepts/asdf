@@ -6,14 +6,12 @@ used to update the tests if they pass muster.
 
 TODO: add CLI hook with options.
 """
-from pathlib import Path
 
-import pandas as pd
+import rich
 
 import asdf.cli_endpoint
 from asdf.tests.data.test_cases import TEST_CASES, TEST_CASE_WORKING_DIRECTORY
-from asdf.tests.utilz.test_utilz import make_test_checksums, \
-    compare_to_reference_checksums
+from asdf.tests.utilz.test_utilz import compare_asdf_outputs
 
 e2e_cases = {
     case_name: case
@@ -24,22 +22,26 @@ e2e_cases = {
 
 for case in e2e_cases.values():
     asdf.cli_endpoint.asdf_initiate(
-        case["data_path"],
+        case["input_product_path"],
         case["roi_path"],
-        output=case["temp_path"],
+        output=case["temp_output_path"],
         config=TEST_CASE_WORKING_DIRECTORY,
         **case["endpoint_kwargs"],
     )
-    checksums = make_test_checksums(case, "temp_path")
+    # checksums = make_test_checksums(case, "temp_path")
+    #
+    # checksum_df = pd.DataFrame(checksums, columns=["file", "md5"])
+    # checksum_df.to_csv(
+    #     Path(case["temp_path"], case["checksum_path"].name), index=False
+    # )
+    if not case["reference_output_path"].exists():
+        continue
+    problems = compare_asdf_outputs(case["temp_output_path"], case["reference_output_path"])
+    if len(problems):
+        for file, file_problems in problems.items():
+            rich.print(f"[bold red] {file}:\n")
+            for file_problem in file_problems:
+                rich.print([f"[italic] {file_problem}"])
 
-    checksum_df = pd.DataFrame(checksums, columns=["file", "md5"])
-    checksum_df.to_csv(
-        Path(case["temp_path"], case["checksum_path"].name), index=False
-    )
-
-    if case["checksum_path"].exists():
-        compare_to_reference_checksums(
-            checksum_df, case["checksum_path"], fail_on_mismatch=False
-        )
 
 

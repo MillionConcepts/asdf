@@ -1,106 +1,148 @@
-from hashlib import md5
-from pathlib import Path
 import re
+from functools import reduce
+from operator import and_
 
+import numpy as np
 import pandas as pd
 import rich
+from PIL import Image
+from astropy.io import fits
+from cytoolz import valfilter
 from fs.osfs import OSFS
 
 RUNTIME_VARIABLE_COLUMNS = re.compile(
-    r'(ASDF_VERSION|FILE_TIMESTAMP|CREATOR|.*_PATH)'
+    r"(ASDF_VERSION|FILE_TIMESTAMP|CREATOR|.*_PATH)"
 )
 
 
-
-# dupe from asdf.format, sorry, import issues.
-def md5sum(path_or_file, hash_function=md5):
-    hasher = hash_function()
-    if isinstance(path_or_file, (str, Path)):
-        with open(path_or_file, "rb") as file_to_be_hashed:
-            hashbuffer = file_to_be_hashed.read()
-            hasher.update(hashbuffer)
-    else:
-        hasher.update(path_or_file)
-        path_or_file.seek(0)
-
-    return hasher.hexdigest()
+def intersection(*iterables):
+    return reduce(and_, [set(iterable) for iterable in iterables])
 
 
-def overwrite_variable_columns(syspath):
-    temp = pd.read_csv(syspath)
-    for col in temp.columns:
-        if re.match(RUNTIME_VARIABLE_COLUMNS, col):
-            temp.loc[:, col] = "NULL"
-    temp.to_csv(syspath, index=False)
+def tree(root_path):
+    tree_fs = OSFS(str(root_path))
+    return list(tree_fs.walk.files())
 
 
-def blot_gzip_timestamp(syspath):
-    with open(syspath, 'rb') as zipped_file:
-        gzbytes = zipped_file.read()
-        blotbytes = gzbytes[:4] + b'\x00a\x00a' + gzbytes[8:]
-    with open(syspath, 'wb') as zipped_file:
-        zipped_file.write(blotbytes)
+def record_mismatches(results, absent, novel):
+    for file in absent:
+        results[file] = "missing from output"
+    for file in novel:
+        results[file] = "not found in reference"
+    return results
 
 
-def make_test_checksums(case, dir_key="output_path"):
-    checksums = []
-    temp_fs = OSFS(case[dir_key])
-    for file in temp_fs.walk.files():
-        if "checksum" in file:
-            continue
-        syspath = temp_fs.getsyspath(file)
-        # NULL out csv columns that vary at runtime so they do not create
-        # spurious test failures
-        if file.endswith(".csv"):
-            overwrite_variable_columns(syspath)
-        # similarly null out gzip header timestamp
-        if file.endswith('.gz'):
-            blot_gzip_timestamp(syspath)
-        md5 = md5sum(syspath)
-        checksums.append({"file": file, "md5": md5})
-    return checksums
+def disjoint(*sets):
+    shared = intersection(*sets)
+    return [
+        [file for file in this_set if file not in shared] for this_set in sets
+    ]
 
 
-def compare_to_reference_checksums(
-    current_df, prior_fn, fail_on_mismatch=True
-):
-    prior_checksums = pd.read_csv(prior_fn)
-    shared_elements = set(prior_checksums["file"].values).intersection(
-        set(current_df["file"].values)
-    )
-    bad_comparison = False
-    if (len(shared_elements) != len(prior_checksums["file"])) or (
-        len(shared_elements) != len(current_df["file"])
-    ):
-        bad_comparison = True
-        rich.print("[bold red]missing or changed filenames[/]")
-        rich.print("unique to new: ")
-        for file in [
-            file for file in current_df["file"] if file not in shared_elements
-        ]:
-            print(file)
-        rich.print("unique to old: ")
-        for file in [
-            file
-            for file in prior_checksums["file"]
-            if file not in shared_elements
-        ]:
-            rich.print(f"[italic]{file}")
-    shared_slice_new = (
-        current_df.loc[current_df["file"].isin(shared_elements)]
-        .sort_values(by="file")
-        .reset_index(drop=True)
-    )
-    shared_slice_old = (
-        prior_checksums.loc[prior_checksums["file"].isin(shared_elements)]
-        .sort_values(by="file")
-        .reset_index(drop=True)
-    )
-    mismatches = shared_slice_new["md5"] != shared_slice_old["md5"]
-    if mismatches.any():
-        bad_comparison = True
-        rich.print("[bold red]changed checksums[/]")
-        for file in shared_slice_new.loc[mismatches]["file"]:
-            rich.print(f"[italic]{file}")
-    if bad_comparison and fail_on_mismatch:
-        raise ValueError(f"mismatches found, failing\n\n{mismatches}")
+def drop_variable_and_mismatched(df, mismatches) -> pd.DataFrame:
+    variable_columns = [
+        col for col in df.columns if re.match(RUNTIME_VARIABLE_COLUMNS, col)
+    ]
+    mismatched_columns = [col for col in df.columns if col in mismatches]
+    return df.drop(columns=(variable_columns + mismatched_columns))
+
+
+def compare_csv_files(test_path, ref_path):
+    problems = []
+    test_df, ref_df = pd.read_csv(test_path), pd.read_csv(ref_path)
+    test_mismatches, ref_mismatches = disjoint(test_df.columns, ref_df.columns)
+    # are we missing, or have we added, entire columns?
+    if len(test_mismatches + ref_mismatches):
+        for col in test_mismatches:
+            problems.append(f"{col} found only in test")
+        for col in ref_mismatches:
+            problems.append(f"{col} found only in reference")
+    # don't try to compare columns we know to be absent, or which we expect to
+    # change between runs even if all inputs are the same(e.g., creation time)
+    test_df_pruned = drop_variable_and_mismatched(
+        test_df, test_mismatches
+    ).sort_index(axis=1)
+    ref_df_pruned = drop_variable_and_mismatched(
+        ref_df, ref_mismatches
+    ).sort_index(axis=1)
+    diff = test_df_pruned == ref_df_pruned
+    # remaining columns are completely equal -- quit
+    if diff.all(axis=None):
+        return problems
+    diff = diff.loc[:, ~diff.all(axis=0).values]
+    for col in diff.columns:
+        problems.append(
+            f"mismatched values in {col}: "
+            f"{test_df.loc[~diff[col], col].values}, "
+            f"{ref_df.loc[~diff[col], col].values}"
+        )
+    return problems
+
+
+def compare_browse_images(test_path, ref_path):
+    problems = []
+    test_image, ref_image = (Image.open(test_path), Image.open(ref_path))
+    if not (test_image.getbands() == ref_image.getbands()):
+        problems.append("images have different modes or color spaces")
+        return problems
+    test_array, ref_array = np.array(test_image), np.array(ref_image)
+    if not (test_array.shape == ref_array.shape):
+        problems.append("images are different sizes")
+        return problems
+    diff = abs(test_array - ref_array)
+    if np.mean(diff) > 1e-5:
+        problems.append("images differ by mean value > 1e-5")
+    if diff[np.nonzero(diff)].size > 500:
+        problems.append("images have > 500 mismatched pixels")
+    return problems
+
+
+def compare_roi_fits(test_path, ref_path):
+    # TODO, maybe: make all of this a little more verbose
+    problems = []
+    test_fits, ref_fits = fits.open(test_path), fits.open(ref_path)
+    if test_fits.info(False) != ref_fits.info(False):
+        problems.append("files have mismatched hdulists")
+        return problems
+    for test_hdu, ref_hdu in zip(test_fits, ref_fits):
+        if test_hdu.header != ref_hdu.header:
+            problems.append(f"{test_hdu.name} headers mismatched")
+        if not (test_hdu.data == ref_hdu.data).all():
+            problems.append(f"{test_hdu.name} data mismatched")
+    return problems
+
+
+def dispatched_asdf_comparison(file, test_fs, ref_fs):
+    test_path, ref_path = (test_fs.getsyspath(file), ref_fs.getsyspath(file))
+    if file.endswith("csv"):
+        return compare_csv_files(test_path, ref_path)
+    if file.endswith("png"):
+        return compare_browse_images(test_path, ref_path)
+    if file.endswith(".fits.gz"):
+        return compare_roi_fits(test_path, ref_path)
+    return [f"unknown file type"]
+
+
+def compare_asdf_outputs(test_root, ref_root):
+    test, reference = tree(test_root), tree(ref_root)
+    problems = {}
+    novel_files, absent_files = disjoint(test, reference)
+    # note files that are completely new or missing
+    if len(novel_files + absent_files):
+        problems |= record_mismatches(problems, absent_files, novel_files)
+    # do comparisons between others
+    for file in intersection(test, reference):
+        problems[file] = dispatched_asdf_comparison(
+            file, OSFS(test_root), OSFS(ref_root)
+        )
+    return valfilter(lambda x: x != [], problems)
+
+
+def print_mismatches(absent_files, novel_files):
+    rich.print("[bold red]missing or changed filenames[/]")
+    rich.print("unique to new: ")
+    for file in novel_files:
+        rich.print(f"[italic]{file}")
+    rich.print("unique to old: ")
+    for file in absent_files:
+        rich.print(f"[italic]{file}")

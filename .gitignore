@@ -158,4 +158,7 @@ vendor/
 
 # test data
 /asdf/tests/data/e2e*
-/asdf/tests/data/products
+/asdf/tests/data/input_products/*/
+/asdf/tests/data/reference_output/
+/asdf/tests/data/rois/
+/asdf/tests/data/temp_output/
