@@ -62,7 +62,8 @@ from asdf_settings.metadata import (
 import pplot
 
 
-# TODO: rewrite strings / rich printing in this module with better markup
+# TODO: rewrite strings / rich printing in this module with better or at least
+#  more consistent markup
 
 
 def find_and_offer_observations(
@@ -122,15 +123,8 @@ def find_and_offer_observations(
             "from the observation you want."
         )
         return tuple(results.values())[0], False
-
     if len(results) > 1:
-        obs_choice = Prompt.ask(
-            "Please select an observation (0 to exit, a for all)",
-            # 1-index for kindness
-            choices=[str(ix) for ix in range(len(results) + 1)] + ["a"],
-            default="1",
-            console=ASDF_CONSOLE,
-        )
+        obs_choice = offer_observation_choice(len(results))
         if obs_choice == "0":
             return reject_scan()
         if obs_choice != "a":
@@ -142,6 +136,18 @@ def find_and_offer_observations(
         ):
             return reject_scan()
         return tuple(results.values())[0], False
+
+
+# this method call is separated primarily so that it can be mocked under test
+def offer_observation_choice(number_of_observations):
+    """ask the user which observations they want to process"""
+    return Prompt.ask(
+        "Please select an observation (0 to exit, a for all)",
+        # 1-index for kindness
+        choices=[str(ix) for ix in range(number_of_observations + 1)] + ["a"],
+        default="1",
+        console=ASDF_CONSOLE,
+    )
 
 
 def is_feature_mismatch(metadata, field):

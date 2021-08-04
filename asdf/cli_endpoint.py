@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
