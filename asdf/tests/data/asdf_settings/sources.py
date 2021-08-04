@@ -1,4 +1,6 @@
 # must be True or False, no quotation marks
+from pathlib import Path
+
 USE_PUBLIC_WAYPOINTS = True
 PUBLIC_WAYPOINTS_URL = (
     "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json"
@@ -13,8 +15,7 @@ PIX_ROOTS = [
 
 # resolvers for asdf -a
 PATH_ABBREVIATIONS = {
-    "proj": "/project/m2020/mastcamz/surface/flight/products",
-    'scratch': "/scratch/cal_wg/flight/products/"
+    "proj": Path(__file__).parent.parent
 }
 DEFAULT_PRODUCT_SUBDIRECTORY = 'iof'
 

@@ -39,6 +39,13 @@ def disjoint(*sets):
     ]
 
 
+def constant(value):
+    def return_constant(*args, **kwargs):
+        return value
+
+    return return_constant
+
+
 def drop_variable_and_mismatched(df, mismatches) -> pd.DataFrame:
     variable_columns = [
         col for col in df.columns if re.match(RUNTIME_VARIABLE_COLUMNS, col)
@@ -146,3 +153,7 @@ def print_mismatches(absent_files, novel_files):
     rich.print("unique to old: ")
     for file in absent_files:
         rich.print(f"[italic]{file}")
+
+
+def return_first_choice(_, choices):
+    return choices[0]

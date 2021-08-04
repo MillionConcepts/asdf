@@ -131,11 +131,13 @@ def find_and_offer_observations(
             return tuple(results.values())[int(obs_choice) - 1], False
         return tuple(results.values()), True
     else:
-        if not Confirm.ask(
-            "Does this look ok?", default="Y", console=ASDF_CONSOLE
-        ):
+        if not confirm_observation():
             return reject_scan()
         return tuple(results.values())[0], False
+
+
+def confirm_observation():
+    return Confirm.ask("Does this look ok?", default="Y", console=ASDF_CONSOLE)
 
 
 # this method call is separated primarily so that it can be mocked under test
@@ -207,11 +209,14 @@ def input_roi_metadata(marslab_data, ci):
             continue
         if is_feature_mismatch(constants, field):
             continue
-        if ci(
-            metadata_choice_prompt,
-            Text(f"Is the value of {field} the same for all ROIs?"),
-            ("Yes", "No"),
-        ) == "Yes":
+        if (
+            ci(
+                metadata_choice_prompt,
+                Text(f"Is the value of {field} the same for all ROIs?"),
+                ("Yes", "No"),
+            )
+            == "Yes"
+        ):
             constants[field] = dispatched_metadata_prompt(field)
     # TODO: this might be confusing if all fields are constant for all ROIs,
     #  but this is probably a rare case.
@@ -388,7 +393,7 @@ def setup_reprocess(
                 "{}".format(miss_path),
             )
             analyses = analyses.drop(
-                analyses.loc[analyses['MARSLAB'].isin(misses)].index
+                analyses.loc[analyses["MARSLAB"].isin(misses)].index
             )
     if len(reprocess_pairs) == 0:
         sorry_analysis()
