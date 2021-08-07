@@ -1,7 +1,6 @@
 import datetime as dt
 import io
 import os
-import pickle
 from functools import partial
 from pathlib import Path
 
@@ -14,14 +13,12 @@ from matplotlib import pyplot as plt
 import asdf
 import asdf_settings
 from asdf.asdf_utils import (
-    dupe_df_block,
     load_roi_file,
     null_marslab_data_section,
-    check_and_drop_duplicate_columns,
     dashify,
-    NestingDict,
-    to_records,
 )
+from dustgoggles.pivot import dupe_df_block, check_and_drop_duplicate_columns
+from dustgoggles.structures import to_records, NestingDict
 from asdf.console import aprint
 from asdf.format import (
     melt_metadata,
@@ -32,7 +29,7 @@ from asdf.format import (
 )
 from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
-from asdf.scrape import bulk_scrape_metadata
+from asdf.labels import bulk_scrape_asdf_metadata
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
@@ -122,7 +119,9 @@ class ZcamBandSet(BandSet):
         self.metadata = self.metadata.astype(
             keyfilter(lambda key: key in self.metadata.columns, dtypes)
         )
-        headers = pd.DataFrame(bulk_scrape_metadata(self.metadata["PATH"]))
+        headers = pd.DataFrame(
+            bulk_scrape_asdf_metadata(self.metadata["PATH"])
+        )
         headers = headers.astype(
             keyfilter(lambda key: key in headers.columns, dtypes)
         )

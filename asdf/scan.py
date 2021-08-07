@@ -3,21 +3,24 @@ functions for running around the filesystem and mashing together big messes
 of products
 """
 import os
-import re
 from pathlib import Path
+import re
 from typing import Union
 from urllib.error import URLError
 
-import numpy as np
-import pandas as pd
 from astropy.io import fits
 from cytoolz.dicttoolz import valfilter
 from cytoolz.functoolz import curry
 from cytoolz.itertoolz import partition
+from dustgoggles.scrape import cached_ls, cached_exists
 from fs.osfs import OSFS
+import numpy as np
+import pandas as pd
 
 import asdf_settings as settings
-from asdf.asdf_utils import split_on, dir_fs, listify, pdstr
+from asdf.asdf_utils import dir_fs
+from dustgoggles.structures import listify
+from dustgoggles.pivot import split_on, pdstr
 from asdf.console import ASDFLOG
 from asdf.network import get_public_m20_waypoints
 from asdf.parse import (
@@ -28,18 +31,11 @@ from asdf.parse import (
     looks_like_marslab,
     looks_like_roi,
 )
-from asdf.scrape import (
-    cached_aux_skimmer,
-    cached_ls,
-    cached_exists,
-    is_pixel_map_heuristic,
-)
+from asdf.labels import cached_aux_skimmer, is_pixel_map_heuristic
 
 
 # TODO: make all the error-printing statements in this module more consistent
 #  with style in other modules
-
-
 def drop_mismatched_versions(siblings, base_version=None):
     if len(siblings["VERSION"].unique()) == 1:
         return siblings

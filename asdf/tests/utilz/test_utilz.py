@@ -96,7 +96,7 @@ def compare_browse_images(test_path, ref_path):
     if not (test_array.shape == ref_array.shape):
         problems.append("images are different sizes")
         return problems
-    diff = abs(test_array - ref_array)
+    diff = abs(test_array.astype(np.float32) - ref_array.astype(np.float32))
     if np.mean(diff) > 1e-5:
         problems.append("images differ by mean value > 1e-5")
     if diff[np.nonzero(diff)].size > 500:

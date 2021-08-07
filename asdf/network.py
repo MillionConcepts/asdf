@@ -30,7 +30,8 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 
 import asdf_settings as settings
-from asdf.asdf_utils import itemize_numpy, obfuscated_name, tar_bytes
+from asdf.asdf_utils import obfuscated_name, tar_bytes
+from dustgoggles.pivot import itemize_numpy
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
 from asdf.format import md5sum
 from asdf.zcam_bandset import ZcamBandSet

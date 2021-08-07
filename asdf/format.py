@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 import asdf_settings as settings
-from asdf.asdf_utils import NestingDict
+from dustgoggles.structures import NestingDict
 from asdf.console import ASDF_CONSOLE, aprint
 from asdf.parse import parse_pointing
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS

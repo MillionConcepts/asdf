@@ -1,5 +1,4 @@
 import pytest
-import rich.prompt
 
 import asdf.asdf_utils
 import asdf.chatter

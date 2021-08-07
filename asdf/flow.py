@@ -15,9 +15,9 @@ import pandas as pd
 from rich.rule import Rule
 
 from asdf.asdf_utils import (
-    catch_interaction,
     null_marslab_data_section,
 )
+from dustgoggles.func import catch_interaction
 from asdf.chatter import (
     input_roi_metadata,
     handle_map_checks,

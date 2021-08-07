@@ -12,7 +12,8 @@ from rich.prompt import PromptBase, Prompt, Confirm
 from rich.table import Table
 from rich.text import Text
 
-from asdf.asdf_utils import extract_constants
+from dustgoggles.pivot import extract_constants
+
 from asdf.console import aprint, ASDF_CONSOLE
 from asdf_settings.metadata import (
     ROI_METADATA_FIELD_PROMPTS,

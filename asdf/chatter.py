@@ -8,6 +8,7 @@ from typing import Callable
 import warnings
 
 from cytoolz.dicttoolz import valfilter
+from dustgoggles.scrape import cached_exists
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.poolutils import wait_for_it
 from pathos.multiprocessing import ProcessPool
@@ -15,7 +16,8 @@ from rich.prompt import Prompt, Confirm
 from rich.rule import Rule
 from rich.text import Text
 
-from asdf.asdf_utils import pass_parameters, dashify
+from asdf.asdf_utils import dashify
+from dustgoggles.func import pass_parameters
 from asdf.console import (
     ASDF_CONSOLE,
     ASDF_PROGRESS_SPIN,
@@ -51,7 +53,6 @@ from asdf.scan import (
     cluster_observations,
     find_matching_observations,
 )
-from asdf.scrape import cached_exists
 import asdf_settings as settings
 from asdf_settings.metadata import (
     ROI_METADATA_FIELDS,
