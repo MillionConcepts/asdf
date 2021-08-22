@@ -97,10 +97,14 @@ def compare_browse_images(test_path, ref_path):
         problems.append("images are different sizes")
         return problems
     diff = abs(test_array.astype(np.float32) - ref_array.astype(np.float32))
-    if np.mean(diff) > 1e-5:
-        problems.append("images differ by mean value > 1e-5")
+    if np.max(diff) > 2:
+        if np.mean(diff) > 1.5e-5:
+            problems.append(
+                f"images have pixels that differ by {np.max(diff)}, > 2,"
+                f" and images differ on average by {np.mean(diff)}, > 1.5e-5"
+            )
     if diff[np.nonzero(diff)].size > 500:
-        problems.append("images have > 500 mismatched pixels")
+        problems.append(f"images have > 500 mismatched pixels")
     return problems
 
 

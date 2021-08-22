@@ -42,7 +42,6 @@ def test_end_to_end_noninteractive(case_name, case, mocker):
     if ("ignore_unspecified_inputs" in case.keys()) and (
         "noninteractive" not in case["endpoint_kwargs"].keys()
     ):
-        # this may be happening too late.
         mocker.patch.object(asdf.flow, "name_prompt", constant("TEST"))
         mocker.patch.object(
             asdf.pretty, "metadata_open_prompt", constant("TEST")
