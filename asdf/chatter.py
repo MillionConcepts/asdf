@@ -10,7 +10,7 @@ import warnings
 from cytoolz.dicttoolz import valfilter
 from dustgoggles.scrape import cached_exists
 from marslab.compat.xcam import DERIVED_CAM_DICT
-from marslab.imgops.poolutils import wait_for_it
+from marslab.poolutils import wait_for_it
 from pathos.multiprocessing import ProcessPool
 from rich.prompt import Prompt, Confirm
 from rich.rule import Rule

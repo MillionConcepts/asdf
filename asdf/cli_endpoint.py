@@ -141,7 +141,7 @@ def insert_settings_module_path(config):
 
 def initialize_loggers():
     import logging
-    from marslab.imgops.bandset import log as bandlog
+    from marslab.bandset.bandset import log as bandlog
 
     for log in (bandlog, ASDFLOG):
         log.setLevel(logging.INFO)

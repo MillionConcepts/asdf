@@ -38,7 +38,7 @@ from marslab.compat.xcam import (
     BAND_TO_BAYER,
     count_rois_on_xcam_images,
 )
-from marslab.imgops.bandset import BandSet
+from marslab.bandset import BandSet
 from marslab.imgops.debayer import RGGB_PATTERN, mask_bayer_pixels
 from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.loaders import rasterio_load
