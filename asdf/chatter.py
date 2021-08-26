@@ -12,7 +12,6 @@ from dustgoggles.scrape import cached_exists
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.poolutils import wait_for_it
 from pathos.multiprocessing import ProcessPool
-from rich.prompt import Prompt, Confirm
 from rich.rule import Rule
 from rich.text import Text
 
@@ -39,6 +38,11 @@ from asdf.pretty import (
     style_prog,
     print_observation,
     metadata_choice_prompt,
+    confirm_observation,
+    offer_observation_choice,
+    tw,
+    confirm_fdsa_metadata,
+    confirm_fdsa_data,
 )
 from asdf.scan import (
     scan_zcam_files,
@@ -135,22 +139,6 @@ def find_and_offer_observations(
         if not confirm_observation():
             return reject_scan()
         return tuple(results.values())[0], False
-
-
-def confirm_observation():
-    return Confirm.ask("Does this look ok?", default="Y", console=ASDF_CONSOLE)
-
-
-# this method call is separated primarily so that it can be mocked under test
-def offer_observation_choice(number_of_observations):
-    """ask the user which observations they want to process"""
-    return Prompt.ask(
-        "Please select an observation (0 to exit, a for all)",
-        # 1-index for kindness
-        choices=[str(ix) for ix in range(number_of_observations + 1)] + ["a"],
-        default="1",
-        console=ASDF_CONSOLE,
-    )
 
 
 def is_feature_mismatch(metadata, field):
@@ -338,14 +326,7 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     )
     for _, row in ok_analyses.iterrows():
         aprint("* " + row["MARSLAB"] + "\n" + "* " + row["ROI"] + "\n")
-    if not Confirm.ask(
-        Text(
-            "Look for images to reprocess from metadata in these files?",
-            style="bold white on black",
-        ),
-        default="Y",
-        console=ASDF_CONSOLE,
-    ):
+    if not confirm_fdsa_metadata():
         aprint(
             "[deep_pink2 bold]\nHalting. If you didn't see the marslab/ROI "
             "files you wanted to, "
@@ -406,11 +387,7 @@ def setup_reprocess(
     for marslab, obs in reprocess_pairs.items():
         aprint("[white bold]" + marslab)
         print_observation(obs)
-    if not Confirm.ask(
-        "Proceed with reprocessing these observations?",
-        default="Y",
-        console=ASDF_CONSOLE,
-    ):
+    if not confirm_fdsa_data():
         aprint(
             "\nHalting. If you didn't see the products you wanted, check to "
             "make sure they're actually in the file system; if they are, try "
@@ -544,10 +521,6 @@ def pretty_plot_bandset(bandset, outpath):
         )
     aprint("wrote " + Path(plot_fn).name)
     bandset.local_files.append(plot_fn)
-
-
-def tw(text):
-    return Text(text, style="bold dark_orange")
 
 
 # TODO: improve structure
