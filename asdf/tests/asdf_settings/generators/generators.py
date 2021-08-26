@@ -3,6 +3,7 @@ this module holds functions for procedurally-generated sections of settings
 files, basically to enhance their readability. it specifically holds
 """
 from itertools import chain, product
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -107,3 +108,7 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
         )
 
     return do_bilateralfilter
+
+
+def glom(*paths):
+    return str(Path(*paths))

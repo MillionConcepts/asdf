@@ -12,27 +12,22 @@ from marslab.imgops.render import colormapped_plot, simple_figure
 # font settings for annotations on rapidlooks -- bear in mind that the
 # images are rendered at 275 dpi, so the sizes may be smaller than you
 # expect they should be
-WORKING = Path(__file__).parent
+WORKING_DIRECTORY = Path(__file__).parent
+FONT_PATH = glom(WORKING_DIRECTORY, "static/fonts")
 TITLE_FONT = mplf.FontProperties(
-    fname=str(
-        Path(
-            WORKING, str(Path(WORKING, "static/fonts/TitilliumWeb-Light.ttf"))
-        )
-    ),
-    size=11.2,
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=11.2
 )
-
 ANNOTATION_FONT = mplf.FontProperties(
-    fname=str(Path(WORKING, "static/fonts/TitilliumWeb-Light.ttf")), size=8.8
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=8.8
 )
 TICK_FONT = mplf.FontProperties(
-    fname=str(Path(WORKING, "static/fonts/TitilliumWeb-Light.ttf")), size=6
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=6
 )
 ROI_FONT = mplf.FontProperties(
-    fname=str(Path(WORKING, "static/fonts/TitilliumWeb-Light.ttf")), size=5
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=5
 )
 LEGEND_FONT = mplf.FontProperties(
-    fname=str(Path(WORKING, "static/fonts/TitilliumWeb-Light.ttf")), size=7
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=7
 )
 
 # positions of image title and remainder of annotation, in
