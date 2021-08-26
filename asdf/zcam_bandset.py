@@ -295,11 +295,12 @@ class ZcamBandSet(BandSet):
 
     def write_data_files(self, outpath=".", verbose=False, in_memory=False):
         if in_memory is False:
-            stem = str(Path(outpath, "data", self.name + self.suffix))
-            metadata_file = stem + "-marslab.csv"
-            extended_file = stem + "-marslab-extended.csv"
-            if not Path(outpath, "data").exists():
-                os.makedirs(Path(outpath, "data"))
+            datapath = Path(outpath, "data")
+            stem = f"_{self.name + self.suffix}.csv"
+            metadata_file = str(Path(datapath, f"marslab{stem}"))
+            extended_file = str(Path(datapath, f"marslab_extended{stem}"))
+            if not datapath.exists():
+                os.makedirs(datapath)
         else:
             metadata_file = io.BytesIO()
             extended_file = io.BytesIO()
@@ -329,7 +330,7 @@ class ZcamBandSet(BandSet):
             },
         }
         initial = eye[0].upper()
-        if not self.metadata['BAND'].str.startswith(initial).any():
+        if not self.metadata["BAND"].str.startswith(initial).any():
             return
         if initial + "0R" in self.metadata["BAND"].values:
             inst["bands"] = (initial + "0R", initial + "0G", initial + "0B")

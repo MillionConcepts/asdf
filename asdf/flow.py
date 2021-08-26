@@ -211,6 +211,8 @@ def asdf_body(
         threads=bandset.threads.get("save"),
         plain=save_plain_images,
     )
+    # set up thumbnail cache
+    thumbnail_staging = {}
     # generate rapidlooks
     if skip_rapidlooks and not upload:
         aprint(
@@ -248,12 +250,10 @@ def asdf_body(
                 "",
                 total=len(bandset.looks),
             )
-            save_images(outpath=Path(outpath, "browse"), prefix=bandset.name)
+            save_images(outpath=Path(outpath, "browse"), basename=bandset.name)
             prog.remove_task(ASDF_RPH.task_id)
         # keep images that are to be thumbnailed for upload, discard those
         # that are not; waste not memory, want not memory
-        # set up thumbnail cache
-        thumbnail_staging = {}
         pick_thumbs = keyfilter(
             partial(contains, settings.rapidlooks.THUMBNAILS))
         thumbnail_staging |= pick_thumbs(bandset.looks)
@@ -266,7 +266,7 @@ def asdf_body(
             bandset.make_context_images(verbose=True)
             save_images(
                 outpath=Path(outpath, "data"),
-                prefix=bandset.name + bandset.suffix,
+                basename=bandset.name + bandset.suffix,
             )
             if not (skip_rapidlooks and not upload):
                 thumbnail_staging |= pick_thumbs(bandset.looks)

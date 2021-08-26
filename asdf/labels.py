@@ -52,7 +52,7 @@ def aux_skim_header(label: Union[Path, str]) -> dict:
         for field, pattern in ASDF_METADATA_REGEX.items()
         if field in AUX_FIELDS
     }
-    skim["RMS"] = skim["RMC"][6]
+    skim["RSM"] = skim["RMC"][6]
     return skim
 
 

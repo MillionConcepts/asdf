@@ -35,7 +35,7 @@ def load_roi_file(
     roi_path,
     title="",
     outpath=".",
-    extension="-roi.fits.gz",
+    extension=".fits.gz",
     convert=False,
     verbose=True,
 ):
@@ -58,7 +58,7 @@ def load_roi_file(
         if verbose:
             aprint("loaded marslab ROI FITS file")
     # add optional reference (like pointing name)
-    roi_fits = add_ref_to_roi(title, roi_fits)
+    roi_fits = add_ref_to_roi("roi_" + title, roi_fits)
     # optionally resave
     # TODO: should we actually add feature names to the ROI files?
     #  so therefore wait to save until after grilling the user?
@@ -68,7 +68,7 @@ def load_roi_file(
     if convert:
         if not Path(outpath).exists():
             os.makedirs(outpath)
-        roi_fits_fn = Path(outpath, title + extension)
+        roi_fits_fn = Path(outpath, "roi_" + title + extension)
         if roi_fits.filename():
             if Path(roi_fits_fn).absolute() == Path(roi_fits.filename()):
                 roi_fits_fn = Path(str(roi_fits_fn) + ".tmp")

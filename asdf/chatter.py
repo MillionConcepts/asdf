@@ -332,7 +332,7 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     if len(ok_analyses) == 0:
         return sorry_analysis()
     aprint(
-        "\n[bold white] found {} usable ROI/marslab pairs:\n".format(
+        "\n[bold white] found {} usable ROI/marslab pair(s):\n".format(
             len(ok_analyses)
         )
     )
@@ -457,11 +457,11 @@ def collect_dispersed_metadata(metadata):
     return metadata
 
 
-def save_looks(bandset, outpath, prefix=None, threads=None, plain=False):
+def save_looks(bandset, outpath, basename=None, threads=None, plain=False):
     # TODO: decide if this and annotate_and_save_rapidlook() should live on
     #  zcambandset -- this is not urgent.
-    if prefix is None:
-        prefix = bandset.name
+    if basename is None:
+        basename = bandset.name
     pool = None
     results = {}
     # TODO: dispatch these cases
@@ -479,11 +479,11 @@ def save_looks(bandset, outpath, prefix=None, threads=None, plain=False):
             os.makedirs(image_path)
         if plain is True:
             filename = write_plain_image(
-                look, look_name, image_path, pool, prefix, results
+                look, look_name, image_path, pool, basename, results
             )
         else:
             filename = write_annotated_image(
-                bandset, look, look_name, image_path, pool, prefix, results
+                bandset, look, look_name, image_path, pool, basename, results
             )
         bandset.local_files.append(str(Path(image_path, filename)))
     if pool is not None:
@@ -492,8 +492,8 @@ def save_looks(bandset, outpath, prefix=None, threads=None, plain=False):
         wait_for_it(pool, results, ASDFLOG, "wrote ")
 
 
-def write_plain_image(look, look_name, outpath, pool, prefix, results):
-    filename = prefix + " " + look_name + "-plain.png"
+def write_plain_image(look, look_name, outpath, pool, basename, results):
+    filename = f"{look_name.replace(' ', '_')}_{basename}-plain.png"
     if pool is None:
         save_plainly(look, filename, outpath)
         ASDFLOG.info("wrote " + filename)
@@ -520,7 +520,7 @@ def write_annotated_image(
 def pretty_plot_bandset(bandset, outpath):
     aprint(Rule(" pretty-plotting data "))
     plot_fn = str(
-        Path(outpath, bandset.name + bandset.suffix + "-pretty-plot.png")
+        Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
     )
     from pplot.convert import scale_eyes
 

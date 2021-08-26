@@ -225,7 +225,7 @@ def bandset_gdrive_folder_names(bandset):
     obs_folder_name = (
         f"""{bandset.compact["SEQ_ID"].iloc[0]}"""
         + f""" {bandset.compact["NAME"].iloc[0]}"""
-        + f""" {"RMS " + str(bandset.compact["RMS"].iloc[0])}"""
+        + f""" {"RSM " + str(bandset.compact["RSM"].iloc[0])}"""
     )
     return sol_folder_name, obs_folder_name
 

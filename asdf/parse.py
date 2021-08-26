@@ -35,13 +35,12 @@ ZCAM_FN_PARSERS = {
 def parse_marslab_fn(fn):
     basename = Path(fn).name
     field_regexes = {
-        "SITE": r"SITE(\d+)",
-        "DRIVE": r"DRIVE(\d+)",
-        "RMS": r"RMS(\d+)",
+        # TODO: legacy support, remove RMS later
+        "RSM": r"(?:RMS|RSM)(\d+)",
         "SOL": r"SOL(\d+)",
-        "SEQ_ID": r"SEQID(zcam\d+)",
-        "ZOOM": r"ZOOM(\d+)",
-        "ANALYSIS_NAME": r"ZOOM\d+-(.*?)-(?=(marslab|roi))",
+        "SEQ_ID": r"(zcam\d+)",
+        # TODO: legacy support, remove marslab and roi later
+        "ANALYSIS_NAME": r"(.*?)-(?=(marslab|roi|csv|fits))",
     }
     parsedict = {}
     for field, regex in field_regexes.items():
@@ -57,7 +56,7 @@ def parse_pointing(sequence: Union[Mapping, pd.DataFrame]) -> dict:
     relations: every product with these values for these fields
     is in the same pointing, no product that does not have these
     values for these fields is in that pointing. the relaxed "binocular"
-    version of this allows RMS to differ for for observations in which
+    version of this allows RSM to differ for for observations in which
     the mast moves in the middle of a sequence to coregister eyes on the
     same target.
     """
@@ -69,22 +68,19 @@ def parse_pointing(sequence: Union[Mapping, pd.DataFrame]) -> dict:
         "SEQ_ID": row["SEQ_ID"].lower(),
         "SITE": row["RMC"][0],
         "DRIVE": row["RMC"][1],
-        "RMS": row["RMC"][6],
+        "RSM": row["RMC"][6],
         "ZOOM": row["ZOOM"],
     }
 
 
 def make_pointing_name(pointing):
-    fields = []
-    for key, value in parse_pointing(pointing.iloc[0]).items():
-        if key == "SOL":
-            fields.append("SOL"+ str(value).zfill(4))
-        elif key == "SEQ_ID":
-            fields.append("SEQID" + str(value))
-        else:
-            fields.append(key + str(value))
+    parsed = parse_pointing(pointing.iloc[0])
+    fields = [
+        "SOL" + str(parsed["SOL"]).zfill(4),
+        parsed["SEQ_ID"],
+        "RSM" + str(parsed["RSM"]),
+    ]
     pointing_name = "_".join(fields)
-    pointing_name = pointing_name.replace(".", "_")
     return pointing_name
 
 
@@ -133,12 +129,11 @@ def looks_like_marslab(fn):
     #  every file in the search path. where they are *not* being used to scan
     #  directories, they are probably being inappropriately used and some other
     #  functions should replace them.
-    return bool(Path(fn).name.endswith("-marslab.csv"))
+    return bool(
+        ("marslab" in fn) and not ("extended" in fn) and (fn.endswith(".csv"))
+    )
 
 
 def looks_like_roi(fn):
     # TODO: Fail back to interrogating properties of the file contents.
-    return bool(
-        Path(fn).name.endswith("-roi.fits")
-        or Path(fn).name.endswith("-roi.fits.gz")
-    )
+    return bool(("roi" in fn) and (".fits" in fn))

@@ -210,50 +210,50 @@ def cluster_observations(
             [format(sol, "0>4"), seq_id, product_type, thumb, producer]
         )
         # TODO: hideous logic
-        # handle simultaneous stereo / single-eye observation: simply split by RMS
+        # handle simultaneous stereo / single-eye observation: simply split by RSM
         if (group["FRAME_TYPE"] == "STEREO").all() or all_equal(
             products["FILTER"].str.slice(0, 1).values
         ):
-            rmsgroups = group.groupby(["RMS"])
-            for rms, rmsgroup in rmsgroups:
+            RSMgroups = group.groupby(["RSM"])
+            for RSM, RSMgroup in RSMgroups:
                 if target_file and (
-                    target_file not in rmsgroup["PATH"].values
+                    target_file not in RSMgroup["PATH"].values
                 ):
                     continue
-                versioned = drop_mismatched_versions(rmsgroup, base_version)
-                if len(versioned) != len(rmsgroup):
-                    rejected_version_count += len(rmsgroup) - len(versioned)
-                    rmsgroup = versioned
-                if not rmsgroup["FILTER"].duplicated().any():
-                    observations[name + "_RMS" + str(rms)] = rmsgroup
+                versioned = drop_mismatched_versions(RSMgroup, base_version)
+                if len(versioned) != len(RSMgroup):
+                    rejected_version_count += len(RSMgroup) - len(versioned)
+                    RSMgroup = versioned
+                if not RSMgroup["FILTER"].duplicated().any():
+                    observations[name + "_RSM" + str(RSM)] = RSMgroup
                 else:
                     parser_warnings.append(
                         "warning: an uncategorized issue may have prevented"
                         " me from correctly clustering  {}.".format(seq_id)
                     )
-                    rmsgroup = rmsgroup.drop_duplicates(subset="FILTER")
-                    if not rmsgroup["FILTER"].duplicated().any():
-                        observations[name + "_RMS" + str(rms)] = rmsgroup
+                    RSMgroup = RSMgroup.drop_duplicates(subset="FILTER")
+                    if not RSMgroup["FILTER"].duplicated().any():
+                        observations[name + "_RSM" + str(RSM)] = RSMgroup
         elif (group["FRAME_TYPE"] == "MONO").all():
-            # handle repointed-stereo-observation case: split by pairs of RMS
+            # handle repointed-stereo-observation case: split by pairs of RSM
             # TODO: this will currently fail if all filters from a single eye
             #  are missing
-            if len(group["RMS"].unique()) % 2 != 0:
+            if len(group["RSM"].unique()) % 2 != 0:
                 parser_warnings.append(
                     f"warning: {seq_id} has a mast movement pattern I cannot "
                     "interpret, or not all files from the observation are "
                     "currently present in the directory. files may not have "
                     "been chunked correctly."
                 )
-            for repoint in partition(2, group["RMS"].unique()):
-                observation = group.loc[group["RMS"].isin(repoint)]
+            for repoint in partition(2, group["RSM"].unique()):
+                observation = group.loc[group["RSM"].isin(repoint)]
                 if target_file and (
                     target_file not in observation["PATH"].values
                 ):
                     continue
                 versioned = drop_mismatched_versions(observation, base_version)
                 if not versioned["FILTER"].duplicated().any():
-                    observations[name + "_RMS" + str(repoint[0])] = versioned
+                    observations[name + "_RSM" + str(repoint[0])] = versioned
                 else:
                     parser_warnings.append(
                         "warning: an unknown windowing issue may have "
@@ -467,7 +467,7 @@ def add_effective_taus(metadata):
 
 def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
     stemmer = pdstr(
-        "replace", "(-roi.fits(?:.gz)?|-marslab.csv)", "", regex=True
+        "replace", "(roi|\.|fits|gz|marslab|csv)", "", regex=True
     )
     roi_stems = stemmer(roi["PATH"])
     marslab_stems = stemmer(marslab["PATH"])
@@ -514,9 +514,9 @@ def make_marslab_metadata_df(marslab_fn_list):
         axis=1,
     )
     marslab_df = marslab_df.dropna(
-        subset=["SOL", "SEQ_ID", "SITE", "DRIVE", "RMS", "ZOOM"]
+        subset=["SOL", "SEQ_ID", "RSM"]
     )
-    for field in ("SOL", "SITE", "DRIVE", "RMS", "ZOOM"):
+    for field in ("SOL", "RSM"):
         marslab_df[field] = marslab_df[field].astype("int16")
     marslab_df["SEQ_ID"] = marslab_df["SEQ_ID"].str.upper()
     return marslab_df
@@ -600,7 +600,7 @@ def find_matching_observations(analyses, search_dir, search_regex):
         ]
         clusters, _, _ = cluster_observations(sol_seq_files)
         matches = valfilter(
-            lambda df: analysis["RMS"] in df["RMS"].values, clusters
+            lambda df: analysis["RSM"] in df["RSM"].values, clusters
         )
         if len(matches) == 0:
             misses.append(analysis["MARSLAB"])

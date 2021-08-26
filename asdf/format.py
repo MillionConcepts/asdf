@@ -335,10 +335,10 @@ def remove_stretch_names(look_name):
     return look_name
 
 
-def construct_filename(look_name, prefix):
+def construct_filename(look_name, basename):
     if "band_depth" in look_name:
         look_name = rearrange_band_depth_for_filename(look_name)
-    filename = prefix + " " + look_name + ".png"
+    filename = f"{look_name.replace(' ', '_')}_{basename}.png"
     return filename
 
 
