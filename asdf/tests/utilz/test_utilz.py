@@ -1,22 +1,18 @@
 import re
-from functools import reduce
-from operator import and_
 
+from astropy.io import fits
+from cytoolz import valfilter
+from dustgoggles.func import disjoint, intersection
+from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
 import rich
 from PIL import Image
-from astropy.io import fits
-from cytoolz import valfilter
-from fs.osfs import OSFS
+
 
 RUNTIME_VARIABLE_COLUMNS = re.compile(
     r"(ASDF_VERSION|FILE_TIMESTAMP|CREATOR|.*_PATH)"
 )
-
-
-def intersection(*iterables):
-    return reduce(and_, [set(iterable) for iterable in iterables])
 
 
 def tree(root_path):
@@ -30,20 +26,6 @@ def record_mismatches(results, absent, novel):
     for file in novel:
         results[file] = "not found in reference"
     return results
-
-
-def disjoint(*sets):
-    shared = intersection(*sets)
-    return [
-        [file for file in this_set if file not in shared] for this_set in sets
-    ]
-
-
-def constant(value):
-    def return_constant(*args, **kwargs):
-        return value
-
-    return return_constant
 
 
 def drop_variable_and_mismatched(df, mismatches) -> pd.DataFrame:

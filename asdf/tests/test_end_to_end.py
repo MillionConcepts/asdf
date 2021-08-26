@@ -1,3 +1,4 @@
+from dustgoggles.func import constant
 import pytest
 
 import asdf.asdf_utils
@@ -8,7 +9,6 @@ import asdf.pretty
 from asdf.tests.data.test_cases import TEST_CASES, TEST_CASE_WORKING_DIRECTORY
 from asdf.tests.utilz.test_utilz import (
     compare_asdf_outputs,
-    constant,
     return_first_choice,
 )
 from asdf.console import ASDFLOG
@@ -20,7 +20,6 @@ e2e_cases = {
     for case_name, case in TEST_CASES.items()
     if (
         (case["type"] == "asdf e2e")
-        and ("noninteractive" not in case["endpoint_kwargs"].keys())
     )
 }
 
@@ -31,7 +30,7 @@ e2e_cases = {
 
 
 @pytest.mark.parametrize("case_name,case", e2e_cases.items())
-def test_end_to_end_noninteractive(case_name, case, mocker):
+def test_end_to_end(case_name, case, mocker):
     if "observation_choice" in case.keys():
         mocker.patch.object(
             asdf.chatter,
