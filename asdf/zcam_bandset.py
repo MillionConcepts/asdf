@@ -329,6 +329,8 @@ class ZcamBandSet(BandSet):
             },
         }
         initial = eye[0].upper()
+        if not self.metadata['BAND'].str.startswith(initial).any():
+            return
         if initial + "0R" in self.metadata["BAND"].values:
             inst["bands"] = (initial + "0R", initial + "0G", initial + "0B")
         else:
@@ -347,6 +349,8 @@ class ZcamBandSet(BandSet):
     def draw_eye_pixmaps(self, edgemaps, eye, verbose=False):
         # TODO: consider reorganizing this whole situation
         eye_pixmaps = self.get_pixmap_dict(eye)
+        if not eye_pixmaps:
+            return
         eye_pixmaps["flat"] = self.get_flattened_pixmap(eye)
         for name, pixmap in eye_pixmaps.items():
             self.render_pixmap_context(edgemaps, eye, pixmap, name, verbose)
