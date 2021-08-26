@@ -137,5 +137,21 @@ TEST_CASES = {
         "temp_output_path": Path(TEMP_OUTPUT_DIRECTORY, "0178"),
         "endpoint_kwargs": {"debug": True, "keep_thumbnails": True},
         "ignore_unspecified_inputs": True,
-    }
+    },
+    "bad_sel": {
+        "type": "asdf bad input",
+        "input_product_path": Path(REFERENCE_INPUT_DIRECTORY, "0086", "iof"),
+        "test_output_path": Path(TEST_OUTPUT_DIRECTORY, "0086_bad_sel"),
+        "roi_path": Path(ROI_DIRECTORY, "bad.sel"),
+        "endpoint_kwargs": {"noninteractive": True, "debug": True},
+        "we_should_mention": "something is wrong with the passed ROI file"
+    },
+    "zero_file": {
+        "type": "asdf bad input",
+        "input_product_path": Path(REFERENCE_INPUT_DIRECTORY, "0178_zero", "iof"),
+        "test_output_path": Path(TEST_OUTPUT_DIRECTORY, "0178_zero"),
+        "roi_path": Path(ROI_DIRECTORY, "bad.sel"),
+        "endpoint_kwargs": {"noninteractive": True, "debug": True, "keep_thumbnails": True},
+        "we_should_mention": "only 13 / 14 could be opened and read"
+    },
 }

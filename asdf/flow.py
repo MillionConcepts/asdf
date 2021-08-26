@@ -1,6 +1,7 @@
 """
 top-level handler loop for asdf / fdsa
 """
+import zlib
 from functools import partial
 from operator import contains
 import os
@@ -149,9 +150,16 @@ def asdf_body(
         # suffix goes on this filename as it is 'analysis' - specific
         # did we get a ROI file path? convert it if it's SEL, save to
         # .fits, load it; if it's already FITS, load it
-        roi_fits_fn, roi_input_fn = bandset.load_rois(
-            bandset.name + bandset.suffix, outpath, convert=True
-        )
+        try:
+            roi_fits_fn, roi_input_fn = bandset.load_rois(
+                bandset.name + bandset.suffix, outpath, convert=True
+            )
+        except (zlib.error, AttributeError, OSError) as error:
+            aprint(
+                f"[red bold]something is wrong with the passed ROI file: "
+                f"{error}. Terminating."
+            )
+            return
         if merspect is None:
             aprint("... counting ROIs ...")
             marslab_data = bandset.count_rois()

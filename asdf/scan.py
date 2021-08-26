@@ -89,12 +89,18 @@ def skim_products(
         except (FileNotFoundError, TypeError, KeyError):
             bad_files.append(product)
     if len(bad_files) > 0:
-        ASDFLOG.info(
-            "... {} / {} could be opened and read ...".format(
-                str(len(skim_results)),
-                str(len(products)),
-            )
+        ASDFLOG.warning(
+            f"... only {str(len(skim_results))} "
+            f"/ {str(len(products))} could be opened and read ..."
         )
+        if len(bad_files) < 20:
+            ASDFLOG.warning(
+                "couldn't open:\n" + ",".join([file for file in bad_files])
+            )
+        else:
+            ASDFLOG.warning(
+                "... suppressing corrupt file list due to length ..."
+            )
     return pd.concat(
         [
             products.loc[products["PATH"].isin(keep_paths)]
@@ -191,7 +197,7 @@ def cluster_observations(
         if keep_broadband is False:
             # TODO: this sequence id heuristic might be crappy
             if group["FILTER"].isin(("L0", "R0")).all() or (
-                    int(seq_id[4:]) > 5000
+                int(seq_id[4:]) > 5000
             ):
                 rejected_bb_count += len(group)
                 continue
@@ -205,14 +211,13 @@ def cluster_observations(
         )
         # TODO: hideous logic
         # handle simultaneous stereo / single-eye observation: simply split by RMS
-        if (
-                (group["FRAME_TYPE"] == "STEREO").all()
-                or all_equal(products['FILTER'].str.slice(0,1).values)
+        if (group["FRAME_TYPE"] == "STEREO").all() or all_equal(
+            products["FILTER"].str.slice(0, 1).values
         ):
             rmsgroups = group.groupby(["RMS"])
             for rms, rmsgroup in rmsgroups:
                 if target_file and (
-                        target_file not in rmsgroup["PATH"].values
+                    target_file not in rmsgroup["PATH"].values
                 ):
                     continue
                 versioned = drop_mismatched_versions(rmsgroup, base_version)
@@ -243,7 +248,7 @@ def cluster_observations(
             for repoint in partition(2, group["RMS"].unique()):
                 observation = group.loc[group["RMS"].isin(repoint)]
                 if target_file and (
-                        target_file not in observation["PATH"].values
+                    target_file not in observation["PATH"].values
                 ):
                     continue
                 versioned = drop_mismatched_versions(observation, base_version)
