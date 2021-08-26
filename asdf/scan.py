@@ -16,6 +16,7 @@ from dustgoggles.scrape import cached_ls, cached_exists
 from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
+from more_itertools import all_equal
 
 import asdf_settings as settings
 from asdf.asdf_utils import dir_fs
@@ -190,7 +191,7 @@ def cluster_observations(
         if keep_broadband is False:
             # TODO: this sequence id heuristic might be crappy
             if group["FILTER"].isin(("L0", "R0")).all() or (
-                int(seq_id[4:]) > 5000
+                    int(seq_id[4:]) > 5000
             ):
                 rejected_bb_count += len(group)
                 continue
@@ -202,14 +203,16 @@ def cluster_observations(
         name = "_".join(
             [format(sol, "0>4"), seq_id, product_type, thumb, producer]
         )
-
         # TODO: hideous logic
-        # handle non-repointed-observation case: simply split by RMS
-        if (group["FRAME_TYPE"] == "STEREO").all():
+        # handle simultaneous stereo / single-eye observation: simply split by RMS
+        if (
+                (group["FRAME_TYPE"] == "STEREO").all()
+                or all_equal(products['FILTER'].str.slice(0,1).values)
+        ):
             rmsgroups = group.groupby(["RMS"])
             for rms, rmsgroup in rmsgroups:
                 if target_file and (
-                    target_file not in rmsgroup["PATH"].values
+                        target_file not in rmsgroup["PATH"].values
                 ):
                     continue
                 versioned = drop_mismatched_versions(rmsgroup, base_version)
@@ -240,7 +243,7 @@ def cluster_observations(
             for repoint in partition(2, group["RMS"].unique()):
                 observation = group.loc[group["RMS"].isin(repoint)]
                 if target_file and (
-                    target_file not in observation["PATH"].values
+                        target_file not in observation["PATH"].values
                 ):
                     continue
                 versioned = drop_mismatched_versions(observation, base_version)
