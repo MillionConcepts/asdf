@@ -43,7 +43,7 @@ def drop_variable_and_mismatched(df, mismatches) -> pd.DataFrame:
     return df.drop(columns=(variable_columns + mismatched_columns))
 
 
-def compare_csv_files(test_path, ref_path):
+def compare_csv_files(test_path, ref_path, ignore_fields = None):
     problems = []
     test_df, ref_df = pd.read_csv(test_path), pd.read_csv(ref_path)
     test_mismatches, ref_mismatches = disjoint(test_df.columns, ref_df.columns)
@@ -61,6 +61,9 @@ def compare_csv_files(test_path, ref_path):
     ref_df_pruned = drop_variable_and_mismatched(
         ref_df, ref_mismatches
     ).sort_index(axis=1)
+    if ignore_fields is not None:
+        test_df_pruned = test_df_pruned.drop(columns=ignore_fields)
+        ref_df_pruned = ref_df_pruned.drop(columns=ignore_fields)
     diff = test_df_pruned == ref_df_pruned
     # remaining columns are completely equal -- quit
     if diff.all(axis=None):
@@ -112,10 +115,10 @@ def compare_roi_fits(test_path, ref_path):
     return problems
 
 
-def dispatched_asdf_comparison(file, test_fs, ref_fs):
+def dispatched_asdf_comparison(file, test_fs, ref_fs, ignore_fields=None):
     test_path, ref_path = (test_fs.getsyspath(file), ref_fs.getsyspath(file))
     if file.endswith("csv"):
-        return compare_csv_files(test_path, ref_path)
+        return compare_csv_files(test_path, ref_path, ignore_fields)
     if file.endswith("png"):
         return compare_browse_images(test_path, ref_path)
     if file.endswith(".fits.gz"):
@@ -123,7 +126,7 @@ def dispatched_asdf_comparison(file, test_fs, ref_fs):
     return [f"unknown file type"]
 
 
-def compare_asdf_outputs(test_root, ref_root):
+def compare_asdf_outputs(test_root, ref_root, ignore_fields=None):
     test, reference = tree(test_root), tree(ref_root)
     problems = {}
     novel_files, absent_files = disjoint(test, reference)
@@ -133,7 +136,7 @@ def compare_asdf_outputs(test_root, ref_root):
     # do comparisons between others
     for file in intersection(test, reference):
         problems[file] = dispatched_asdf_comparison(
-            file, OSFS(test_root), OSFS(ref_root)
+            file, OSFS(test_root), OSFS(ref_root), ignore_fields
         )
     return valfilter(lambda x: x != [], problems)
 
@@ -155,6 +158,13 @@ def return_first_choice(_, choices):
 # TODO: why is this nonsense necessary sometimes? track this down.
 def pretty_chatter_patch(obj, new):
     return (asdf.pretty, obj, new), (asdf.chatter, obj, new)
+
+
+def create_fdsa_e2e_mocks():
+    patch_specs = []
+    patch_specs += pretty_chatter_patch("confirm_fdsa_metadata", constant("Y"))
+    patch_specs += pretty_chatter_patch("confirm_fdsa_data", constant("Y"))
+    return [patch.object(*spec) for spec in patch_specs]
 
 
 def create_asdf_e2e_mocks(case):

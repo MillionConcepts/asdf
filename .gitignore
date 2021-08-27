@@ -160,5 +160,6 @@ vendor/
 /asdf/tests/data/e2e*
 /asdf/tests/data/input_products/*/
 /asdf/tests/data/reference_output/
+/asdf/tests/data/fdsa_test_output/
 /asdf/tests/data/rois/
 /asdf/tests/data/temp_output/
