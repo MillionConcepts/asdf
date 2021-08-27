@@ -102,8 +102,6 @@ def find_longest_filter(data):
     )
 
 
-
-
 def pretty_plot(
     data,
     scale_method="scale_to_avg",
@@ -120,7 +118,11 @@ def pretty_plot(
     credit="Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC",
     sym=None,
 ):
-    annotation_string = f"Sol{str(sol).zfill(3)} : {seq_id} : {target_name}"
+    if target_name.strip().strip("-") == "":
+        target_annotation = ""
+    else:
+        target_annotation = f" : {target_name}"
+    annotation_string = f"Sol{str(sol).zfill(3)} : {seq_id}{target_annotation}"
     assert (
         edge in ["left", "right", "top", "bottom"] for edge in plot_edges
     )  # Tests that the variable has a valid value
@@ -142,9 +144,17 @@ def pretty_plot(
             label = row["COLOR"]
         else:
             label = row["FEATURE"]
-            if (label == "rock") and not pd.isnull(row["MORPHOLOGY"]) and (row["MORPHOLOGY"] != "-"):
+            if (
+                (label == "rock")
+                and not pd.isnull(row["MORPHOLOGY"])
+                and (row["MORPHOLOGY"] != "-")
+            ):
                 label += f" ({row['MORPHOLOGY']})"
-            elif (label == "soil") and not pd.isnull(row["SOIL LOCATION"]) and (row["SOIL LOCATION"] != "-"):
+            elif (
+                (label == "soil")
+                and not pd.isnull(row["SOIL LOCATION"])
+                and (row["SOIL LOCATION"] != "-")
+            ):
                 label += f" ({row['SOIL LOCATION']})"
         roi_labels[row["COLOR"]] = label
     # adding this to slightly increase robustness
@@ -152,12 +162,14 @@ def pretty_plot(
         if (data[k] == "-").all():
             data = data.drop(k, axis=1)
     # path to file containing referenced font
-    titillium = Path(Path(__file__).parent.parent, "static/fonts/TitilliumWeb-Light.ttf")
+    titillium = Path(
+        Path(__file__).parent.parent, "static/fonts/TitilliumWeb-Light.ttf"
+    )
     # can also include other face properties, different fonts, etc.
     # TODO: possibly allow these to reference asdf_settings, or expose ability
     #  to pass these fontproperties as a dict
     label_fp = mplf.FontProperties(fname=titillium, size=20.5)
-    title_fp = mplf.FontProperties(fname=titillium, size=18) # TODO: not used
+    title_fp = mplf.FontProperties(fname=titillium, size=18)  # TODO: not used
     tick_fp = mplf.FontProperties(fname=titillium, size=15)
     legend_fp = mplf.FontProperties(fname=titillium, size=14)
     tick_minor_fp = mplf.FontProperties(fname=titillium, size=11)
