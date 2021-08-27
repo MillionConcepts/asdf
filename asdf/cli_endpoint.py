@@ -135,7 +135,6 @@ def perform_path_dump(dump_paths, is_multiple, observation):
 def insert_settings_module_path(config):
     if config is not None:
         import sys
-
         sys.path.insert(0, str(config))
 
 

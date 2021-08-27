@@ -1,14 +1,21 @@
+import os
 import re
+import shutil
+from unittest.mock import patch
 
 from astropy.io import fits
 from cytoolz import valfilter
-from dustgoggles.func import disjoint, intersection
+from dustgoggles.func import disjoint, intersection, constant
 from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
 import rich
 from PIL import Image
 
+import asdf.chatter
+import asdf.cli_endpoint
+import asdf.flow
+import asdf.pretty
 
 RUNTIME_VARIABLE_COLUMNS = re.compile(
     r"(ASDF_VERSION|FILE_TIMESTAMP|CREATOR|.*_PATH)"
@@ -22,9 +29,9 @@ def tree(root_path):
 
 def record_mismatches(results, absent, novel):
     for file in absent:
-        results[file] = "missing from output"
+        results[file] = ["missing from output"]
     for file in novel:
-        results[file] = "not found in reference"
+        results[file] = ["not found in reference"]
     return results
 
 
@@ -143,3 +150,72 @@ def print_mismatches(absent_files, novel_files):
 
 def return_first_choice(_, choices):
     return choices[0]
+
+
+# TODO: why is this nonsense necessary sometimes? track this down.
+def pretty_chatter_patch(obj, new):
+    return (asdf.pretty, obj, new), (asdf.chatter, obj, new)
+
+
+def create_asdf_e2e_mocks(case):
+    patch_specs = []
+    patch_specs += pretty_chatter_patch("confirm_observation", constant("Y"))
+    if "observation_choice" in case.keys():
+        patch_specs += pretty_chatter_patch(
+            "offer_observation_choice", constant(case["observation_choice"])
+        )
+    noninteractive = "noninteractive" not in case["endpoint_kwargs"].keys()
+    if not noninteractive:
+        oc = (
+            case["observation_choice"]
+            if case.get("observation_choice") is not None
+            else 1
+        )
+        patch_specs.append(
+            (asdf.chatter, "offer_observation_choice", constant(oc))
+        )
+    if ("ignore_unspecified_inputs" in case.keys()) and (
+        "noninteractive" not in case["endpoint_kwargs"].keys()
+    ):
+        patch_specs.append((asdf.flow, "name_prompt", constant("TEST")))
+        patch_specs.append(
+            (asdf.pretty, "metadata_open_prompt", constant("TEST"))
+        )
+        patch_specs += pretty_chatter_patch(
+            "metadata_choice_prompt", return_first_choice
+        )
+    return [patch.object(*spec) for spec in patch_specs]
+
+
+def regen_asdf_e2e_case(case):
+    if case["temp_output_path"].exists():
+        shutil.rmtree(case["temp_output_path"])
+    patches = create_asdf_e2e_mocks(case)
+    for e2e_patch in patches:
+        e2e_patch.start()
+    # note: don't necessarily need to use the test version of asdf_settings
+    # b/c threading is not an issue?
+    asdf.cli_endpoint.asdf_initiate(
+        case["input_product_path"],
+        case["roi_path"],
+        output=case["temp_output_path"],
+        **case["endpoint_kwargs"],
+    )
+    for e2e_patch in patches:
+        e2e_patch.stop()
+    if not case["reference_output_path"].exists():
+        return
+    problems = compare_asdf_outputs(
+        case["temp_output_path"], case["reference_output_path"]
+    )
+    if len(problems):
+        for file, file_problems in problems.items():
+            rich.print(f"[bold red] {file}:\n")
+            for file_problem in file_problems:
+                rich.print(f"[italic] {file_problem}")
+    # checksums = make_test_checksums(case, "temp_path")
+    #
+    # checksum_df = pd.DataFrame(checksums, columns=["file", "md5"])
+    # checksum_df.to_csv(
+    #     Path(case["temp_path"], case["checksum_path"].name), index=False
+    # )

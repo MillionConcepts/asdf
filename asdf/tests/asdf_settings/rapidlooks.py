@@ -5,7 +5,7 @@ from pathlib import Path
 import matplotlib.font_manager as mplf
 from scipy.ndimage import gaussian_filter
 
-from .generators import smoother, make_bilateralfilter
+from .generators import glom, smoother, make_bilateralfilter
 from marslab.imgops.imgutils import std_clip, normalize_range
 from marslab.imgops.render import colormapped_plot, simple_figure
 

@@ -15,7 +15,10 @@ from scipy.io import readsav
 from asdf.asdf_utils import load_roi_file
 from marslab.compat.mertools import MERSPECT_M20_COLOR_MAPPINGS
 
-roi_paths = {path.name: path for path in Path("data/sels").iterdir()}
+roi_paths = {
+    path.name: path
+    for path in Path(Path(__file__).parent, "data/sels").iterdir()
+}
 
 COLOR_TO_VALUE = {
     color: ix + 1 for ix, color in enumerate(MERSPECT_M20_COLOR_MAPPINGS)
