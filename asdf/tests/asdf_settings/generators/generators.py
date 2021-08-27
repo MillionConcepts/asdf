@@ -112,3 +112,5 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
 
 def glom(*paths):
     return str(Path(*paths))
+
+ASDF_MODULE_PATH = Path(sys.modules.get("asdf").__file__).parent

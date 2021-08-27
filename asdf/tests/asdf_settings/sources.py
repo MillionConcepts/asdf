@@ -33,6 +33,7 @@ DEFAULT_PRODUCT_SUBDIRECTORY = 'iof'
 # OBFUSCATE_THUMBNAIL_NAMES = True
 #
 # # debug-mode locations for testing uploads without dirtying live content
-# DEBUG_GOOGLE_SHEET_ID = "1G7T3Xb63wkdsOWJY4qaYDkFghjRqHvUaAwHpsBbrqSY"
+DEBUG_GOOGLE_SHEET_ID = "18r9wBG9rnVGQOv7XglqsZJmXK7ebBupLAJxHAIr_uH8"
 # DEBUG_METADATA_BACKUP_FOLDER_ID = "1pqP4Ohdsc8ACTh9EQ1HAvjFyL11fgiXE"
 # DEBUG_GOOGLE_DRIVE_ROOT = "1Fv7oKhwdz3pu4FCzvLVLUkcfx7VFX1Rx"
+
