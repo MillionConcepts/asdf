@@ -9,8 +9,11 @@ import pplot
 from pplot.convert import convert_for_plot
 
 
-def looks_like_marslab(fn):
-    return bool(str(fn).endswith('-marslab.csv'))
+def looks_like_marslab(path) -> bool:
+    fn = path.name
+    return bool(
+        ("marslab" in fn) and not ("extended" in fn) and (fn.endswith(".csv"))
+    )
 
 
 def directory_of(path):
