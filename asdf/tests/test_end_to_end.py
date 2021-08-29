@@ -9,7 +9,8 @@ import pytest
 # asdf_initiate
 # TODO: should I just mock the threads dict? is there anything else I ever
 #  actually need a special test settings module for?
-
+# TODO: pytest breaks this during collection, so...either edit collection,
+#  get rid of pytest, or mock the threads dict
 sys.path.insert(0, str(Path(__file__).parent))
 
 import asdf.asdf_utils

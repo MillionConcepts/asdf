@@ -2,6 +2,7 @@
 this module holds functions for procedurally-generated sections of settings
 files, basically to enhance their readability. it specifically holds
 """
+import sys
 from itertools import chain, product
 from pathlib import Path
 
@@ -102,6 +103,7 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
     that chokes on the gradual partial evaluation we use later
     in the pipeline, so we pre-bind arguments to it here in a closure.
     """
+
     def do_bilateralfilter(array):
         return cv2.bilateralFilter(
             array, d=d, sigmaColor=sigmaColor, sigmaSpace=sigmaSpace
@@ -112,5 +114,6 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
 
 def glom(*paths):
     return str(Path(*paths))
+
 
 ASDF_MODULE_PATH = Path(sys.modules.get("asdf").__file__).parent

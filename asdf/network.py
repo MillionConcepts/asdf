@@ -11,6 +11,7 @@ import time
 import urllib.request
 from collections.abc import Callable, MutableMapping
 from pathlib import Path
+import socket
 from typing import Any
 
 import boto3
@@ -28,6 +29,7 @@ from googleapiclient.errors import HttpError
 from oauth2client.service_account import ServiceAccountCredentials
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
+from urllib3.connection import BaseSSLError
 
 import asdf_settings as settings
 from asdf.asdf_utils import obfuscated_name, tar_bytes
@@ -39,8 +41,7 @@ from asdf.zcam_bandset import ZcamBandSet
 
 def get_public_m20_waypoints():
     waypoint_server_response = urllib.request.urlopen(
-        settings.sources.PUBLIC_WAYPOINTS_URL,
-        timeout=15
+        settings.sources.PUBLIC_WAYPOINTS_URL, timeout=15
     )
     return json.loads(waypoint_server_response.read())["features"]
 
@@ -323,9 +324,9 @@ def upload_bandset_to_gdrive(bandset, debug=False):
         ASDFLOG.info(f"uploading {file}")
         if "pixmap" in file:
             drivebot.cp(file, pixmap_folder_id)
-        elif 'data' in Path(file).parts:
+        elif "data" in Path(file).parts:
             drivebot.cp(file, data_folder_id)
-        elif 'browse' in Path(file).parts:
+        elif "browse" in Path(file).parts:
             drivebot.cp(file, browse_folder_id)
     url = f"https://drive.google.com/drive/folders/{obs_folder_id}"
     bandset.summary[
@@ -436,7 +437,7 @@ def upload_asdf_analysis(
         try:
             upload_bandset_to_gdrive(bandset, debug)
             aprint("completed Google Drive upload")
-        except pydrive2.files.ApiRequestError as api_error:
+        except (pydrive2.files.ApiRequestError, socket.timeout) as api_error:
             aprint(
                 ":confused_face: Sorry, couldn't upload files to drive: "
                 + str(api_error),
@@ -452,7 +453,12 @@ def upload_asdf_analysis(
             update_google_sheet(
                 bandset, sheet_backup_folder_id, sheet_id, sheetbot
             )
-        except gspread.exceptions.APIError as api_error:
+        except (
+            gspread.exceptions.APIError,
+            BaseSSLError,
+            socket.timeout,
+            gspread.exceptions.NoValidUrlKeyFound,
+        ) as api_error:
             aprint(
                 ":confused_face: Sorry, couldn't update online metadata: "
                 + str(api_error),
@@ -460,5 +466,3 @@ def upload_asdf_analysis(
             )
     aprint("... cleaning up trash ...")
     clear_google_drive_trash(debug)
-
-

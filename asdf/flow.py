@@ -76,11 +76,9 @@ def asdf_body(
         observation, roi_path, suffix, threads=settings.process.THREADS
     )
     bandset.metadata["CREATOR"] = os.getlogin()
-
     # where are we locally writing files? by default, directories separated
     # by user and sol.
     outpath = make_asdf_outpath(output, bandset)
-
     # dial out to other directories / servers for metadata that can't be
     # found in or derived from file headers
     bandset.metadata = collect_dispersed_metadata(bandset.metadata)
