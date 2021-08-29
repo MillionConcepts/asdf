@@ -75,7 +75,10 @@ def asdf_body(
     bandset = ZcamBandSet(
         observation, roi_path, suffix, threads=settings.process.THREADS
     )
-    bandset.metadata["CREATOR"] = os.getlogin()
+    if recreate_from:
+        bandset.metadata["CREATOR"] = str(prototype["CREATOR"].iloc[0])
+    else:
+        bandset.metadata["CREATOR"] = os.getlogin()
     # where are we locally writing files? by default, directories separated
     # by user and sol.
     outpath = make_asdf_outpath(output, bandset)
@@ -162,6 +165,8 @@ def asdf_body(
             aprint("... counting ROIs ...")
             marslab_data = bandset.count_rois()
             marslab_data["ROI_SOURCE"] = Path(roi_input_fn).name
+            if recreate_from:
+                marslab_data["ORIGINAL_ROI_SOURCE"] = prototype["ROI_SOURCE"]
         else:
             # TODO, maybe: remove this functionality
             #  allow user to override counting behavior with a MERspect file
@@ -253,7 +258,8 @@ def asdf_body(
         # keep images that are to be thumbnailed for upload, discard those
         # that are not; waste not memory, want not memory
         pick_thumbs = keyfilter(
-            partial(contains, settings.rapidlooks.THUMBNAILS))
+            partial(contains, settings.rapidlooks.THUMBNAILS)
+        )
         thumbnail_staging |= pick_thumbs(bandset.looks)
         bandset.purge("looks")
 
