@@ -22,7 +22,8 @@ def directory_of(path):
 def do_pplot(
         path_or_file,
         *,
-        recursive: "r" = False
+        recursive: "r" = False,
+        debug: "d" = False
 ):
     """
     non-interactive CLI to pretty-plot. generates .png files
@@ -55,7 +56,7 @@ def do_pplot(
                 if len(names) > 0:
                     titular_plot_target = names[0]
             plot_fn = str(marslab_file).replace(
-                "-marslab.csv", "-pretty-plot.png"
+                ".csv", ".png"
             )
             print("Writing " + plot_fn)
             marslab_spectra = convert_for_plot(str(marslab_file)).replace(
@@ -63,16 +64,27 @@ def do_pplot(
             )
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
+                if "SOLAR_ELEVATION" not in marslab.columns:
+                    solar_elevation = None
+                else:
+                    solar_elevation = marslab["SOLAR_ELEVATION"].iloc[0]
+                if "UNITS" in marslab.columns:
+                    units = marslab["UNITS"].iloc[0]
+                else:
+                    units = None
                 pplot.pplot_utils.pretty_plot(
                     marslab_spectra,
                     target_name=titular_plot_target,
                     sol=marslab["SOL"].iloc[0],
-                    solar_elevation=marslab["SOLAR_ELEVATION"].iloc[0],
+                    solar_elevation=solar_elevation,
+                    units=units,
                     seq_id=marslab["SEQ_ID"].iloc[0],
                     plot_fn=plot_fn,
                     underplot=None
                 )
         except (KeyError, ValueError) as error:
+            if debug is True:
+                raise
             print(
                 "couldn't plot "
                 + str(marslab_file)

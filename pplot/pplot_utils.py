@@ -107,6 +107,7 @@ def pretty_plot(
     scale_method="scale_to_avg",
     plot_fn=None,
     solar_elevation=None,
+    units=None,
     plot_width=15,
     plot_height=12,
     bgcolor="white",
@@ -179,12 +180,22 @@ def pretty_plot(
     # TODO: Handle the case where solar_elevation is not the same for all of
     #  the spectra in the input marslab file, e.g. a file composited across
     #  observations. Can fix the existence check and make sure solar_elevation
-    #  is an np.array but that will propagate to other things downstream...
+    #  is an np.array but that will create an interface hassle...
+
     theta_rad = (
         (90 - solar_elevation) * 2 * np.pi / 360
-        if solar_elevation
+        if solar_elevation is not None
         else 2 * np.pi
     )
+    if units is None:
+        photometric_scaling = np.cos(theta_rad)
+    else:
+        photometric_scaling = 1
+
+    if units is None and solar_elevation is None:
+        y_axis_units = "IOF"
+    else:
+        y_axis_units = "R* = IOF/cos(" r"$\theta$)"
 
     # Pre-define the plot extents so that they are easy to reuse
     lpad, rpad = (
@@ -198,7 +209,7 @@ def pretty_plot(
     available_filters = [
         k for k in data.keys() if k in DERIVED_CAM_DICT["ZCAM"]["filters"]
     ]
-    scale = 10 / np.cos(theta_rad)
+    scale = 10 / photometric_scaling
     datarange = [
         np.floor(0.25 * scale * np.nanmin(data[available_filters].values))
         / 10,
@@ -266,10 +277,7 @@ def pretty_plot(
         ax.grid(axis="x", alpha=0.2)
 
     ax.set_ylim(datarange)
-    ax.set_ylabel(
-        "R* = IOF/cos(" r"$\theta$)" if solar_elevation else "IOF",
-        fontproperties=label_fp,
-    )
+    ax.set_ylabel(y_axis_units, fontproperties=label_fp)
 
     # Set the ticks for the left yaxis
     ytick_pos = np.linspace(
@@ -307,7 +315,7 @@ def pretty_plot(
         # plot the errorbars
         ax.errorbar(
             filter_to_wavelength[notna_narrowband].values[0][ix],
-            data.iloc[i][notna_narrowband][ix] / np.cos(theta_rad),
+            data.iloc[i][notna_narrowband][ix] / photometric_scaling,
             yerr=data.iloc[i][[f"{f}_ERR" for f in notna_narrowband]][ix],
             fmt=f"",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
@@ -318,7 +326,7 @@ def pretty_plot(
         # plot the line
         ax.errorbar(
             filter_to_wavelength[notna_narrowband].values[0][ix],
-            data.iloc[i][notna_narrowband][ix] / np.cos(theta_rad),
+            data.iloc[i][notna_narrowband][ix] / photometric_scaling,
             yerr=data.iloc[i][[f"{f}_ERR" for f in notna_narrowband]][ix],
             fmt=f"-",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
@@ -330,7 +338,7 @@ def pretty_plot(
         # plot the symbols
         ax.scatter(
             filter_to_wavelength[notna_narrowband].values[0][ix],
-            data.iloc[i][notna_narrowband][ix] / np.cos(theta_rad),
+            data.iloc[i][notna_narrowband][ix] / photometric_scaling,
             marker=f"{symbol}",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             edgecolors="k",
@@ -357,7 +365,7 @@ def pretty_plot(
             try:
                 ax.errorbar(
                     filter_to_wavelength[bayer].values[0],
-                    data.iloc[i][bayer] / np.cos(theta_rad),
+                    data.iloc[i][bayer] / photometric_scaling,
                     yerr=data.iloc[i][[f"{bayer}_ERR"]],
                     fmt=f"{symbol}",
                     color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
