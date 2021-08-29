@@ -9,8 +9,7 @@ import pplot
 from pplot.convert import convert_for_plot
 
 
-def looks_like_marslab(path) -> bool:
-    fn = path.name
+def looks_like_marslab(fn: str) -> bool:
     return bool(
         ("marslab" in fn) and not ("extended" in fn) and (fn.endswith(".csv"))
     )
@@ -47,7 +46,7 @@ def do_pplot(
             filter(looks_like_marslab, tree.walk.files())
         )
     elif path.is_dir():
-        marslab_files = filter(looks_like_marslab, path.iterdir())
+        marslab_files = filter(looks_like_marslab, map(str, path.iterdir()))
     else:
         marslab_files = [path]
     for marslab_file in marslab_files:
