@@ -1,23 +1,13 @@
-from pathlib import Path
 import shutil
-import sys
 
 import pytest
-
-# because we need to import these modules to set up mocks, we have to mess
-# with the asdf_settings import here and can't do it by passing config to
-# asdf_initiate
-# TODO: should I just mock the threads dict? is there anything else I ever
-#  actually need a special test settings module for?
-# TODO: pytest breaks this during collection, so...either edit collection,
-#  get rid of pytest, or mock the threads dict
-sys.path.insert(0, str(Path(__file__).parent))
 
 import asdf.asdf_utils
 import asdf.chatter
 import asdf.cli_endpoint
 import asdf.flow
 import asdf.pretty
+import asdf_settings
 from asdf.console import ASDFLOG
 from asdf.tests.data.test_cases import TEST_CASES
 from asdf.tests.utilz.test_utilz import (
@@ -25,14 +15,14 @@ from asdf.tests.utilz.test_utilz import (
     create_asdf_e2e_mocks,
 )
 
+asdf_settings.process.THREADS = {"look": None, "save": None}
+
 ASDFLOG.setLevel("WARNING")
 
 e2e_cases = {
     case_name: case
     for case_name, case in TEST_CASES.items()
-    if (
-        (case["type"] == "asdf e2e")
-            )
+    if (case["type"] == "asdf e2e")
 }
 # TODO: add a suppress output option to asdf; the way I am using logging to
 #  control console output in asdf messes with pytest's log capturing pretty

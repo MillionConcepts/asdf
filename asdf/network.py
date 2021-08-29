@@ -162,14 +162,17 @@ def bind_asdf_bucket() -> Callable[Any, str]:
 def backup_data_to_s3(bandset, roi_fits_fn, debug_prefix=""):
     upload = bind_asdf_bucket()
     epoch = str(round(time.time()))
-    s3_prefix = "marslab/" + debug_prefix + epoch + "_" + os.getlogin() + "_"
-    marslab_stem = bandset.name + bandset.suffix
-    marslab_key = s3_prefix + marslab_stem + "-marslab.csv"
-    extended_key = s3_prefix + marslab_stem + "-marslab-extended.csv"
+    s3_prefix = f"marslab/{debug_prefix}" \
+                f"{str(bandset.compact['SOL'].iloc[0]).zfill(4)}" \
+                f"/{epoch}_{os.getlogin()}_"
+    marslab_key = f"{s3_prefix}marslab_{bandset.name + bandset.suffix}.csv"
+    extended_key = (
+        f"{s3_prefix}marslab_extended_{bandset.name + bandset.suffix}.csv"
+    )
     marslab, extended = bandset.write_data_files(in_memory=True)
     upload_hopper = [(marslab, marslab_key), (extended, extended_key)]
     if roi_fits_fn is not None:
-        feed_into_hopper(roi_fits_fn, s3_prefix, upload_hopper)
+        upload_hopper.append((roi_fits_fn, s3_prefix + Path(roi_fits_fn).name))
     for obj, key in upload_hopper:
         try:
             upload(obj, key)
@@ -177,6 +180,8 @@ def backup_data_to_s3(bandset, roi_fits_fn, debug_prefix=""):
             aprint(
                 "[bold red]sorry, couldn't upload a backup file: " + str(error)
             )
+    # note: return value currently used only in tests
+    return [key for obj, key in upload_hopper]
 
 
 # TODO: don't tar this
