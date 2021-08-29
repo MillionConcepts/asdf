@@ -90,6 +90,7 @@ ROI_METADATA_FIELD_CHOICES = {
         "abraded surface",
         "coating (not dust)",
         "clast/inclusion",
+        "tailings"
     ],
     "GRAIN SIZE": ["fine", "coarse", "mixed"],
     "SOIL LOCATION": [
