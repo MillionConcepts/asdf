@@ -1,4 +1,3 @@
-import os
 import re
 import shutil
 from unittest.mock import patch
@@ -46,6 +45,10 @@ def drop_variable_and_mismatched(df, mismatches) -> pd.DataFrame:
 def compare_csv_files(test_path, ref_path, ignore_fields = None):
     problems = []
     test_df, ref_df = pd.read_csv(test_path), pd.read_csv(ref_path)
+    if ignore_fields is not None:
+        for field in ignore_fields:
+            test_df = test_df.drop(columns=field, errors='ignore')
+            ref_df = ref_df.drop(columns=field, errors='ignore')
     test_mismatches, ref_mismatches = disjoint(test_df.columns, ref_df.columns)
     # are we missing, or have we added, entire columns?
     if len(test_mismatches + ref_mismatches):
@@ -61,9 +64,7 @@ def compare_csv_files(test_path, ref_path, ignore_fields = None):
     ref_df_pruned = drop_variable_and_mismatched(
         ref_df, ref_mismatches
     ).sort_index(axis=1)
-    if ignore_fields is not None:
-        test_df_pruned = test_df_pruned.drop(columns=ignore_fields)
-        ref_df_pruned = ref_df_pruned.drop(columns=ignore_fields)
+
     diff = test_df_pruned == ref_df_pruned
     # remaining columns are completely equal -- quit
     if diff.all(axis=None):

@@ -1,16 +1,6 @@
 import shutil
-from pathlib import Path
-import sys
 
 import pytest
-
-# because we need to import these modules to set up mocks, we have to mess
-# with the asdf_settings import here and can't do it by passing config to
-# asdf_initiate
-# TODO: should I just mock the threads dict? is there anything else I ever
-#  actually need a special test settings module for?
-
-sys.path.insert(0, str(Path(__file__).parent))
 
 import asdf.asdf_utils
 import asdf.chatter
@@ -23,8 +13,11 @@ from asdf.tests.utilz.test_utilz import (
     compare_asdf_outputs,
     create_fdsa_e2e_mocks,
 )
+import asdf_settings
 
 ASDFLOG.setLevel("WARNING")
+
+asdf_settings.process.THREADS = {"look": None, "save": None}
 
 e2e_cases = {
     case_name: case
@@ -56,7 +49,7 @@ def test_fdsa_e2e(case_name, case):
     if case["reference_output_path"].exists():
         problems = compare_asdf_outputs(
             case["fdsa_test_output_path"], case["reference_output_path"],
-            ignore_fields="ROI_SOURCE"
+            ignore_fields=["ROI_SOURCE", "ORIGINAL_ROI_SOURCE"]
         )
         if len(problems):
             raise ValueError(problems)

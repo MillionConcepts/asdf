@@ -15,8 +15,7 @@ from asdf.tests.utilz.test_utilz import regen_asdf_e2e_case
 e2e_cases = {
     case_name: case
     for case_name, case in TEST_CASES.items()
-    if case["type"] == "asdf e2e"
-    # if "zcam03110" in case_name
+    if (case["type"] == "asdf e2e")
 }
 
 for case_name, case in e2e_cases.items():
