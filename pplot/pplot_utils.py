@@ -258,15 +258,25 @@ def pretty_plot(
         fontproperties=tick_minor_fp,
     )
     # Set the major ticks of the top axis with the narrowband filters
-    narrowband = [
-        k for k in available_filters if ("0" not in k) and ("R1" not in k)
-    ]
+    # only graph L1 from L1/R1, if it's available
+    if "L1" in available_filters:
+        narrowband = [
+            k for k in available_filters if ("0" not in k) and ("R1" not in k)
+        ]
+    else:
+        narrowband = [k for k in available_filters if ("0" not in k)]
     prx.set_xticks(
         (filter_to_wavelength[narrowband].values[0] - datadomain[0])
         / (datadomain[1] - datadomain[0])
     )
+    if ("L1" in available_filters) and ("R1" in available_filters):
+        L1_R1_label = "L1\nR1"
+    elif "L1" in available_filters:
+        L1_R1_label = "L1"
+    else:
+        L1_R1_label = "R1"
     prx.set_xticklabels(
-        [k.replace("L1", "L1\nR1") for k in narrowband],
+        [k.replace("L1", L1_R1_label) for k in narrowband],
         fontproperties=tick_fp,
     )
 
