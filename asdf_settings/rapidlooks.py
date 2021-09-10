@@ -104,6 +104,7 @@ BANDMAP = (
     {"look": "band_depth", "bands": ("R1", "R4", "R2")},
     {"look": "band_depth", "bands": ("L4", "L2", "L3")},
     {"look": "band_depth", "bands": ("R1", "R5", "R3")},
+    {"look": "slope", "bands": ("L3", "L2")},
     {"look": "slope", "bands": ("R5", "R6")},
     {"look": "slope", "bands": ("R1", "R6")},
 )

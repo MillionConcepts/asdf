@@ -13,6 +13,7 @@ from marslab.compat.mertools import merspect_to_marslab
 from marslab.imgops.imgutils import mapfilter
 import matplotlib as mpl
 import pandas as pd
+from rasterio.errors import NotGeoreferencedWarning
 from rich.rule import Rule
 
 from asdf.asdf_utils import (
@@ -39,6 +40,8 @@ from asdf.network import upload_asdf_analysis
 from asdf.pretty import name_prompt
 from asdf.zcam_bandset import ZcamBandSet
 import asdf_settings as settings
+
+warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
 
 
 # TODO: add dry-run options for testing
@@ -70,12 +73,12 @@ def asdf_body(
         prototype = pd.read_csv(recreate_from)
         aprint("[italic hot_pink]... fdsa: loaded prototype marslab file ...")
     else:
-        prototype = None
+        prototype = pd.DataFrame()
     aprint("... scraping image file headers ...")
     bandset = ZcamBandSet(
         observation, roi_path, suffix, threads=settings.process.THREADS
     )
-    if recreate_from:
+    if recreate_from and ("CREATOR" in prototype.columns):
         bandset.metadata["CREATOR"] = str(prototype["CREATOR"].iloc[0])
     else:
         bandset.metadata["CREATOR"] = os.getlogin()
@@ -97,7 +100,7 @@ def asdf_body(
         "[bold green]NOTE: files will be written to {}".format(str(outpath))
     )
     # get observation name
-    if prototype is not None:
+    if recreate_from:
         aprint(
             "[hot_pink italic]fdsa: observation is named "
             + str(prototype["NAME"].iloc[0])
@@ -122,25 +125,20 @@ def asdf_body(
     if (not we_do_not_have_rois) or (not skip_rapidlooks) or upload:
         aprint(Rule(" loading images "))
         with console.status("", spinner="star"):
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                bandset.load("all")
-                aprint("... generating image checksums ...")
-                # TODO: make this more efficient with callbacks in the load
-                #  functions or explicitly passing filelikes or something
-                add_image_hashes(bandset)
+            bandset.load("all")
+            aprint("... generating image checksums ...")
+            # TODO: make this more efficient with callbacks in the load
+            #  functions or explicitly passing filelikes or something
+            add_image_hashes(bandset)
     # much safer and more consistent than any of the GUI backends
     mpl.use("agg")
     if skip_pixmaps is not True:
         aprint(Rule(" looking for pixel flag maps "))
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            with console.status("... handling flagmaps ...", spinner="star"):
-                handle_map_checks(bandset)
+        with console.status("... handling flagmaps ...", spinner="star"):
+            handle_map_checks(bandset)
     else:
         aprint(
-            "[dark_orange]skip-pixmaps flag active; skipping "
-            "pixmap handling"
+            "[dark_orange]skip-pixmaps flag active; skipping pixmap handling"
         )
     # handle ROI file conversion, ROI counting, user input per-ROI metadata
     roi_fits_fn = None
@@ -165,7 +163,7 @@ def asdf_body(
             aprint("... counting ROIs ...")
             marslab_data = bandset.count_rois()
             marslab_data["ROI_SOURCE"] = Path(roi_input_fn).name
-            if recreate_from:
+            if recreate_from and ("ROI_SOURCE" in prototype.columns):
                 marslab_data["ORIGINAL_ROI_SOURCE"] = prototype["ROI_SOURCE"]
         else:
             # TODO, maybe: remove this functionality
@@ -183,7 +181,7 @@ def asdf_body(
             aprint("... counting ROIs on pixel flag maps ...")
             bandset.count_pixmaps()
             complain_about_pixmap_counts(bandset.pixmap_counts)
-        if prototype is None:
+        if not recreate_from:
             # prompt users for info on each ROI
             marslab_data = input_roi_metadata(marslab_data, ci)
         else:

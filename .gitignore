@@ -162,3 +162,8 @@ vendor/
 /asdf/tests/data/reference_output/
 /asdf/tests/data/fdsa_test_output/
 /asdf/tests/data/temp_output/
+
+# scratch space etc.
+/rapid/data/
+/asdf/tests/asdftestlog.txt
+/asdf/tests/data/asdf_reference_inputs_outputs_8_29_2021.zip
