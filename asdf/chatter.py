@@ -329,11 +329,10 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     if not confirm_fdsa_metadata():
         aprint(
             "[deep_pink2 bold]\nHalting. If you didn't see the marslab/ROI "
-            "files you wanted to, "
-            " check to make sure they're actually in the search tree and have "
-            "matching names. If they are, try using different search "
-            "parameters or copying the files interest into separate "
-            "directories.",
+            "files you wanted to, check to make sure they're actually in "
+            "the search tree and have matching names. If they are, try using "
+            "different search parameters or copying the files of interest "
+            "into separate directories.",
         )
         return None
     return ok_analyses.reset_index(drop=True)
