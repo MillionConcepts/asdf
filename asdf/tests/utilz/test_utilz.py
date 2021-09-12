@@ -8,6 +8,7 @@ from dustgoggles.func import disjoint, intersection, constant
 from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
+import pandas.api.types
 import rich
 from PIL import Image
 
@@ -15,6 +16,7 @@ import asdf.chatter
 import asdf.cli_endpoint
 import asdf.flow
 import asdf.pretty
+from marslab.compat.xcam import numeric_columns
 
 RUNTIME_VARIABLE_COLUMNS = re.compile(
     r"(ASDF_VERSION|FILE_TIMESTAMP|CREATOR|.*_PATH)"
@@ -64,8 +66,20 @@ def compare_csv_files(test_path, ref_path, ignore_fields = None):
     ref_df_pruned = drop_variable_and_mismatched(
         ref_df, ref_mismatches
     ).sort_index(axis=1)
-
-    diff = test_df_pruned == ref_df_pruned
+    # pandas.api.types.is_numeric_dtype(data[col])
+    numeric = numeric_columns(test_df_pruned)
+    numeric_diff =np.isclose(
+        test_df_pruned[numeric].values,
+        ref_df_pruned[numeric].values
+    )
+    numeric_diff = pd.DataFrame(numeric_diff)
+    numeric_diff.columns = numeric
+    non_numeric = [
+        col for col in test_df_pruned.columns
+        if not pandas.api.types.is_numeric_dtype(test_df_pruned[col])
+    ]
+    non_numeric_diff = test_df_pruned[non_numeric] == ref_df_pruned[non_numeric]
+    diff = pd.concat([numeric_diff, non_numeric_diff])
     # remaining columns are completely equal -- quit
     if diff.all(axis=None):
         return problems
@@ -90,14 +104,12 @@ def compare_browse_images(test_path, ref_path):
         problems.append("images are different sizes")
         return problems
     diff = abs(test_array.astype(np.float32) - ref_array.astype(np.float32))
-    if np.max(diff) > 2:
-        if np.mean(diff) > 1.5e-5:
-            problems.append(
-                f"images have pixels that differ by {np.max(diff)}, > 2,"
-                f" and images differ on average by {np.mean(diff)}, > 1.5e-5"
-            )
-    if diff[np.nonzero(diff)].size > 500:
-        problems.append(f"images have > 500 mismatched pixels")
+    if np.mean(diff) > 1.5e-2:
+        problems.append(
+            f" images differ on average by {np.mean(diff)}, > 1.5e-2"
+        )
+    if diff[diff > 50].size > 500:
+        problems.append(f"images have > 500 pixels that differ by > 50")
     return problems
 
 
