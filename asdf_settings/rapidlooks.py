@@ -1,30 +1,33 @@
 # import statements -- don't mess with these
 from copy import deepcopy
+from pathlib import Path
 
 import matplotlib.font_manager as mplf
 from scipy.ndimage import gaussian_filter
 
-from .generators import smoother, make_bilateralfilter
+from .generators import glom, smoother, make_bilateralfilter
 from marslab.imgops.imgutils import std_clip, normalize_range
 from marslab.imgops.render import colormapped_plot, simple_figure
 
 # font settings for annotations on rapidlooks -- bear in mind that the
 # images are rendered at 275 dpi, so the sizes may be smaller than you
 # expect they should be
+WORKING_DIRECTORY = Path(__file__).parent
+FONT_PATH = glom(WORKING_DIRECTORY.parent, "static/fonts")
 TITLE_FONT = mplf.FontProperties(
-    fname="static/fonts/TitilliumWeb-Light.ttf", size=11.2
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=11.2
 )
 ANNOTATION_FONT = mplf.FontProperties(
-    fname="static/fonts/TitilliumWeb-Light.ttf", size=8.8
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=8.8
 )
 TICK_FONT = mplf.FontProperties(
-    fname="static/fonts/TitilliumWeb-Light.ttf", size=6
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=6
 )
 ROI_FONT = mplf.FontProperties(
-    fname="static/fonts/TitilliumWeb-Light.ttf", size=5
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=5
 )
 LEGEND_FONT = mplf.FontProperties(
-    fname="static/fonts/TitilliumWeb-Light.ttf", size=7
+    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=7
 )
 
 # positions of image title and remainder of annotation, in
@@ -51,7 +54,7 @@ BANDMAP_DEFAULTS = {
             "cmap": "orange_teal",
             "colorbar_fp": TICK_FONT,
             "render_colorbar": True,
-            "special_constants": [0]
+            "special_constants": [0],
         },
     },
 }
@@ -136,9 +139,7 @@ CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY"]
 # not doing this will tend to cause looks to be clobbered.
 
 MASKED_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
-SHADOWED_OPTIONS = {
-    "premask": {"sigma": (1, 0)}
-}
+SHADOWED_OPTIONS = {"premask": {"sigma": (1, 0)}}
 
 # sigma-invariant (non-merspect-style) dcs options
 INVARIANT_OPTIONS = {"sigma": None, "contrast_stretch": 1}

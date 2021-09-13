@@ -8,14 +8,15 @@ from typing import Callable
 import warnings
 
 from cytoolz.dicttoolz import valfilter
+from dustgoggles.scrape import cached_exists
 from marslab.compat.xcam import DERIVED_CAM_DICT
-from marslab.imgops.poolutils import wait_for_it
+from marslab.poolutils import wait_for_it
 from pathos.multiprocessing import ProcessPool
-from rich.prompt import Prompt, Confirm
 from rich.rule import Rule
 from rich.text import Text
 
-from asdf.asdf_utils import pass_parameters, dashify
+from asdf.asdf_utils import dashify
+from dustgoggles.func import pass_parameters
 from asdf.console import (
     ASDF_CONSOLE,
     ASDF_PROGRESS_SPIN,
@@ -37,6 +38,11 @@ from asdf.pretty import (
     style_prog,
     print_observation,
     metadata_choice_prompt,
+    confirm_observation,
+    offer_observation_choice,
+    tw,
+    confirm_fdsa_metadata,
+    confirm_fdsa_data,
 )
 from asdf.scan import (
     scan_zcam_files,
@@ -51,7 +57,6 @@ from asdf.scan import (
     cluster_observations,
     find_matching_observations,
 )
-from asdf.scrape import cached_exists
 import asdf_settings as settings
 from asdf_settings.metadata import (
     ROI_METADATA_FIELDS,
@@ -62,7 +67,8 @@ from asdf_settings.metadata import (
 import pplot
 
 
-# TODO: rewrite strings / rich printing in this module with better markup
+# TODO: rewrite strings / rich printing in this module with better or at least
+#  more consistent markup
 
 
 def find_and_offer_observations(
@@ -104,44 +110,33 @@ def find_and_offer_observations(
         for category in hidden_things:
             aprint(category, style="purple bold")
         aprint("\n")
-    if len(results) == 0:
+    if not len(results):
         aprint(
             "[bold red]Sorry, no usable observations found. :confused_face:"
         )
         return None, False
     if noninteractive:
-        if (len(results) > 1) and (noninteractive != "all"):
-            aprint(
-                "noninteractive mode; using #1. If this isn't the one you "
-                "wanted, please run asdf again and explicitly pass a file "
-                "from the observation you want."
-            )
-            return tuple(results.values())[0], False
-        if (len(results) > 1) and (noninteractive == "all"):
+        if noninteractive == "all":
             aprint(
                 "noninteractive-all mode; processing all observations.",
                 style="dark_orange bold",
             )
             return tuple(results.values()), True
-        return tuple(results.values())[0], False
-
-    if len(results) > 1:
-        obs_choice = Prompt.ask(
-            "Please select an observation (0 to exit, a for all)",
-            # 1-index for kindness
-            choices=[str(ix) for ix in range(len(results) + 1)] + ["a"],
-            default="1",
-            console=ASDF_CONSOLE,
+        aprint(
+            "noninteractive mode; using #1. If this isn't the one you "
+            "wanted, please run asdf again and explicitly pass a file "
+            "from the observation you want."
         )
+        return tuple(results.values())[0], False
+    if len(results) > 1:
+        obs_choice = offer_observation_choice(len(results))
         if obs_choice == "0":
             return reject_scan()
         if obs_choice != "a":
             return tuple(results.values())[int(obs_choice) - 1], False
         return tuple(results.values()), True
     else:
-        if not Confirm.ask(
-            "Does this look ok?", default="Y", console=ASDF_CONSOLE
-        ):
+        if not confirm_observation():
             return reject_scan()
         return tuple(results.values())[0], False
 
@@ -203,11 +198,14 @@ def input_roi_metadata(marslab_data, ci):
             continue
         if is_feature_mismatch(constants, field):
             continue
-        if ci(
-            metadata_choice_prompt,
-            Text(f"Is the value of {field} the same for all ROIs?"),
-            ("Yes", "No"),
-        ) == "Yes":
+        if (
+            ci(
+                metadata_choice_prompt,
+                Text(f"Is the value of {field} the same for all ROIs?"),
+                ("Yes", "No"),
+            )
+            == "Yes"
+        ):
             constants[field] = dispatched_metadata_prompt(field)
     # TODO: this might be confusing if all fields are constant for all ROIs,
     #  but this is probably a rare case.
@@ -322,27 +320,19 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     if len(ok_analyses) == 0:
         return sorry_analysis()
     aprint(
-        "\n[bold white] found {} usable ROI/marslab pairs:\n".format(
+        "\n[bold white] found {} usable ROI/marslab pair(s):\n".format(
             len(ok_analyses)
         )
     )
     for _, row in ok_analyses.iterrows():
         aprint("* " + row["MARSLAB"] + "\n" + "* " + row["ROI"] + "\n")
-    if not Confirm.ask(
-        Text(
-            "Look for images to reprocess from metadata in these files?",
-            style="bold white on black",
-        ),
-        default="Y",
-        console=ASDF_CONSOLE,
-    ):
+    if not confirm_fdsa_metadata():
         aprint(
             "[deep_pink2 bold]\nHalting. If you didn't see the marslab/ROI "
-            "files you wanted to, "
-            " check to make sure they're actually in the search tree and have "
-            "matching names. If they are, try using different search "
-            "parameters or copying the files interest into separate "
-            "directories.",
+            "files you wanted to, check to make sure they're actually in "
+            "the search tree and have matching names. If they are, try using "
+            "different search parameters or copying the files of interest "
+            "into separate directories.",
         )
         return None
     return ok_analyses.reset_index(drop=True)
@@ -384,7 +374,7 @@ def setup_reprocess(
                 "{}".format(miss_path),
             )
             analyses = analyses.drop(
-                analyses.loc[analyses['MARSLAB'].isin(misses)].index
+                analyses.loc[analyses["MARSLAB"].isin(misses)].index
             )
     if len(reprocess_pairs) == 0:
         sorry_analysis()
@@ -396,11 +386,7 @@ def setup_reprocess(
     for marslab, obs in reprocess_pairs.items():
         aprint("[white bold]" + marslab)
         print_observation(obs)
-    if not Confirm.ask(
-        "Proceed with reprocessing these observations?",
-        default="Y",
-        console=ASDF_CONSOLE,
-    ):
+    if not confirm_fdsa_data():
         aprint(
             "\nHalting. If you didn't see the products you wanted, check to "
             "make sure they're actually in the file system; if they are, try "
@@ -447,11 +433,11 @@ def collect_dispersed_metadata(metadata):
     return metadata
 
 
-def save_looks(bandset, outpath, prefix=None, threads=None, plain=False):
+def save_looks(bandset, outpath, basename=None, threads=None, plain=False):
     # TODO: decide if this and annotate_and_save_rapidlook() should live on
     #  zcambandset -- this is not urgent.
-    if prefix is None:
-        prefix = bandset.name
+    if basename is None:
+        basename = bandset.name
     pool = None
     results = {}
     # TODO: dispatch these cases
@@ -469,11 +455,11 @@ def save_looks(bandset, outpath, prefix=None, threads=None, plain=False):
             os.makedirs(image_path)
         if plain is True:
             filename = write_plain_image(
-                look, look_name, image_path, pool, prefix, results
+                look, look_name, image_path, pool, basename, results
             )
         else:
             filename = write_annotated_image(
-                bandset, look, look_name, image_path, pool, prefix, results
+                bandset, look, look_name, image_path, pool, basename, results
             )
         bandset.local_files.append(str(Path(image_path, filename)))
     if pool is not None:
@@ -482,8 +468,8 @@ def save_looks(bandset, outpath, prefix=None, threads=None, plain=False):
         wait_for_it(pool, results, ASDFLOG, "wrote ")
 
 
-def write_plain_image(look, look_name, outpath, pool, prefix, results):
-    filename = prefix + " " + look_name + "-plain.png"
+def write_plain_image(look, look_name, outpath, pool, basename, results):
+    filename = f"{look_name.replace(' ', '_')}_{basename}-plain.png"
     if pool is None:
         save_plainly(look, filename, outpath)
         ASDFLOG.info("wrote " + filename)
@@ -510,7 +496,7 @@ def write_annotated_image(
 def pretty_plot_bandset(bandset, outpath):
     aprint(Rule(" pretty-plotting data "))
     plot_fn = str(
-        Path(outpath, bandset.name + bandset.suffix + "-pretty-plot.png")
+        Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
     )
     from pplot.convert import scale_eyes
 
@@ -534,10 +520,6 @@ def pretty_plot_bandset(bandset, outpath):
         )
     aprint("wrote " + Path(plot_fn).name)
     bandset.local_files.append(plot_fn)
-
-
-def tw(text):
-    return Text(text, style="bold dark_orange")
 
 
 # TODO: improve structure

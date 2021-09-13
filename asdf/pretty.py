@@ -12,7 +12,8 @@ from rich.prompt import PromptBase, Prompt, Confirm
 from rich.table import Table
 from rich.text import Text
 
-from asdf.asdf_utils import extract_constants
+from dustgoggles.pivot import extract_constants
+
 from asdf.console import aprint, ASDF_CONSOLE
 from asdf_settings.metadata import (
     ROI_METADATA_FIELD_PROMPTS,
@@ -259,3 +260,42 @@ def print_scan_results(results):
     aprint("\n")
     for ix, observation in enumerate(results.values()):
         print_observation(observation, ix, is_multiple)
+
+
+def confirm_observation():
+    return Confirm.ask("Does this look ok?", default="Y", console=ASDF_CONSOLE)
+
+
+def offer_observation_choice(number_of_observations):
+    """ask the user which observations they want to process"""
+    return Prompt.ask(
+        "Please select an observation (0 to exit, a for all)",
+        # 1-index for kindness
+        choices=[str(ix) for ix in range(number_of_observations + 1)] + ["a"],
+        default="1",
+        console=ASDF_CONSOLE,
+    )
+
+
+def confirm_fdsa_metadata():
+    return Confirm.ask(
+        Text(
+            "Look for images to reprocess from metadata in these files?",
+            style="bold white on black",
+        ),
+        default="Y",
+        console=ASDF_CONSOLE,
+    )
+
+
+def confirm_fdsa_data():
+    return Confirm.ask(
+        "Proceed with reprocessing these observations?",
+        default="Y",
+        console=ASDF_CONSOLE,
+    )
+
+
+# TODO: this smells bad
+def tw(text):
+    return Text(text, style="bold dark_orange")

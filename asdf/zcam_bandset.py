@@ -1,7 +1,6 @@
 import datetime as dt
 import io
 import os
-import pickle
 from functools import partial
 from pathlib import Path
 
@@ -14,14 +13,12 @@ from matplotlib import pyplot as plt
 import asdf
 import asdf_settings
 from asdf.asdf_utils import (
-    dupe_df_block,
     load_roi_file,
     null_marslab_data_section,
-    check_and_drop_duplicate_columns,
     dashify,
-    NestingDict,
-    to_records,
 )
+from dustgoggles.pivot import dupe_df_block, check_and_drop_duplicate_columns
+from dustgoggles.structures import to_records, NestingDict
 from asdf.console import aprint
 from asdf.format import (
     melt_metadata,
@@ -32,7 +29,7 @@ from asdf.format import (
 )
 from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
-from asdf.scrape import bulk_scrape_metadata
+from asdf.labels import bulk_scrape_asdf_metadata
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
@@ -41,7 +38,7 @@ from marslab.compat.xcam import (
     BAND_TO_BAYER,
     count_rois_on_xcam_images,
 )
-from marslab.imgops.bandset import BandSet
+from marslab.bandset import BandSet
 from marslab.imgops.debayer import RGGB_PATTERN, mask_bayer_pixels
 from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.loaders import rasterio_load
@@ -122,7 +119,9 @@ class ZcamBandSet(BandSet):
         self.metadata = self.metadata.astype(
             keyfilter(lambda key: key in self.metadata.columns, dtypes)
         )
-        headers = pd.DataFrame(bulk_scrape_metadata(self.metadata["PATH"]))
+        headers = pd.DataFrame(
+            bulk_scrape_asdf_metadata(self.metadata["PATH"])
+        )
         headers = headers.astype(
             keyfilter(lambda key: key in headers.columns, dtypes)
         )
@@ -296,11 +295,12 @@ class ZcamBandSet(BandSet):
 
     def write_data_files(self, outpath=".", verbose=False, in_memory=False):
         if in_memory is False:
-            stem = str(Path(outpath, "data", self.name + self.suffix))
-            metadata_file = stem + "-marslab.csv"
-            extended_file = stem + "-marslab-extended.csv"
-            if not Path(outpath, "data").exists():
-                os.makedirs(Path(outpath, "data"))
+            datapath = Path(outpath, "data")
+            stem = f"_{self.name + self.suffix}.csv"
+            metadata_file = str(Path(datapath, f"marslab{stem}"))
+            extended_file = str(Path(datapath, f"marslab_extended{stem}"))
+            if not datapath.exists():
+                os.makedirs(datapath)
         else:
             metadata_file = io.BytesIO()
             extended_file = io.BytesIO()
@@ -330,6 +330,8 @@ class ZcamBandSet(BandSet):
             },
         }
         initial = eye[0].upper()
+        if not self.metadata["BAND"].str.startswith(initial).any():
+            return
         if initial + "0R" in self.metadata["BAND"].values:
             inst["bands"] = (initial + "0R", initial + "0G", initial + "0B")
         else:
@@ -348,6 +350,8 @@ class ZcamBandSet(BandSet):
     def draw_eye_pixmaps(self, edgemaps, eye, verbose=False):
         # TODO: consider reorganizing this whole situation
         eye_pixmaps = self.get_pixmap_dict(eye)
+        if not eye_pixmaps:
+            return
         eye_pixmaps["flat"] = self.get_flattened_pixmap(eye)
         for name, pixmap in eye_pixmaps.items():
             self.render_pixmap_context(edgemaps, eye, pixmap, name, verbose)

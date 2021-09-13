@@ -1,10 +1,10 @@
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
-# for the following function. They are not malformed type hints, but
+# for the following function. THEY ARE NOT MALFORMED TYPE HINTS, but
 # instructions to clize to create single-letter aliases for parameters in the
 # CLI. (--output, -o; etc.)
-def asdf_hello(
+def asdf_initiate(
     path,
     roi_path=None,
     *,
@@ -21,12 +21,11 @@ def asdf_hello(
     keep_caltarget: "kg" = False,
     keep_thumbnails: "kt" = False,
     recursive=False,
-    product_type: "t" = "",
     dump_paths: "dp" = "",
     save_plain_images=False,
     image_regex: "ir" = None,
     config=None,
-        skip_pixmaps: "sp"=False
+    skip_pixmaps: "sp" = False,
 ):
     """
     processes and archives everything
@@ -38,8 +37,8 @@ def asdf_hello(
     :param upload: upload metadata to google drive
     :param output: output path; default is "output/$username/$sol"
     :param abbreviate: pass abbreviated version of iof location:
-        sol,(optional) seq_id,(optional) root root_dir code, (optional)
-        product type
+        sol, seq_id, (optional) root root_dir code, (optional)
+        product type. root_dir defaults to "proj" and product type defaults to "iof"
         examples: (1) 36,03107,scratch,iof (2) 36,03107
     :param skip_rapidlooks: don't write default rapidlooks
     :param suffix: add suffix for this analysis/group of ROIs to data,
@@ -54,7 +53,6 @@ def asdf_hello(
     :param keep_caltarget: include frames from apparent caltarget observations
         in searches
     :param recursive: search all directories under the chosen path
-    :param product_type: filter files for a particular product type
     :param dump_paths: dump paths and quit after producing file list
     :param keep_thumbnails: include thumbnails in searches
     :param save_plain_images: save images without labels or borders
@@ -62,22 +60,26 @@ def asdf_hello(
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
-    console = ASDF_CONSOLE
+    console = ASDF_CONSOLE  # a rich.Console object with the asdf styleguide implemented
     with console.status(".. initializing ...", spinner="star"):
-        initialize_asdf(config)
+        initialize_loggers()
+        insert_settings_module_path(config)
         from asdf.flow import asdf_body
     # find all associated files and ask the user about them
-    if noninteractive_all:
+    if noninteractive_all:  # run all sequences without user input
         noninteractive = "all"
-    if abbreviate:
-        from asdf.format import handle_abbreviation
-        directory, seq_id = handle_abbreviation(*path.split(","))
+    if abbreviate:  # construct a path from the abbreviated template
+        from asdf.format import parse_abbreviated_inputs
+
+        # TODO: Accept separators other than commas and robustify against white space.
+        directory, seq_id = parse_abbreviated_inputs(*path.split(","))
         explicit_path = None
-    else:
+    else:  # use the path provided, willy-nilly
         directory = None
         seq_id = None
         explicit_path = path
     from asdf.chatter import find_and_offer_observations
+
     observation, is_multiple = find_and_offer_observations(
         root_dir=directory,
         explicit_path=explicit_path,
@@ -87,23 +89,14 @@ def asdf_hello(
         keep_caltarget=keep_caltarget,
         keep_thumbnails=keep_thumbnails,
         recursive=recursive,
-        target_product_type=product_type,
         regex_filter=image_regex,
     )
     if observation is None:
+        # meaningful log/output for this case was already provided by
+        # `find_and_offer_observation`
         return
     if dump_paths:
-        aprint("... dump_paths set, writing paths and exiting ...")
-        with open(dump_paths, "a+") as file:
-            if is_multiple:
-                for obs in observation:
-                    for path in obs["PATH"].values:
-                        file.write(path + "\n")
-                    file.write("\n\n")
-            else:
-                for path in observation["PATH"].values:
-                    file.write(path + "\n")
-            return
+        return perform_path_dump(dump_paths, is_multiple, observation)
     asdf_args = (
         roi_path,
         upload,
@@ -115,34 +108,46 @@ def asdf_hello(
         debug,
         console,
         save_plain_images,
-        skip_pixmaps
+        skip_pixmaps,
     )
     if is_multiple is not True:
         return asdf_body(observation, *asdf_args)
     for ix, obs in enumerate(observation):
         aprint(
-            "... processing observation "
-            + str(ix + 1)
-            + " of "
-            + str(len(observation))
-            + " ... ",
-            style="bold cyan1",
+            f"[bold cyan1]... processing observation {ix+1} of {len(observation)} ... "
         )
         asdf_body(obs, *asdf_args)
 
 
-def initialize_asdf(config):
+def perform_path_dump(dump_paths, is_multiple, observation):
+    aprint("... dump_paths set, writing paths and exiting ...")
+    with open(dump_paths, "a+") as file:
+        if is_multiple:
+            for obs in observation:
+                for path in obs["PATH"].values:
+                    file.write(path + "\n")
+                file.write("\n\n")
+        else:
+            for path in observation["PATH"].values:
+                file.write(path + "\n")
+
+
+def insert_settings_module_path(config):
+    if config is not None:
+        import sys
+        sys.path.insert(0, str(config))
+
+
+def initialize_loggers():
     import logging
-    from marslab.imgops.bandset import log as bandlog
+    from marslab.bandset.bandset import log as bandlog
+
     for log in (bandlog, ASDFLOG):
         log.setLevel(logging.INFO)
         log.addHandler(ASDF_RPH)
-    if config is not None:
-        import sys
-        sys.path.insert(0, config)
 
 
-def fdsa_hello(
+def fdsa_initiate(
     marslab_path,
     image_path,
     *,
@@ -155,8 +160,7 @@ def fdsa_hello(
     marslab_regex: "mr" = None,
     image_regex: "ir" = ".*IOF.*",
     config=None,
-    skip_pixmaps: "sp" = False
-
+    skip_pixmaps: "sp" = False,
 ):
     """reprocesses and archives everything"""
     console = ASDF_CONSOLE
@@ -164,11 +168,14 @@ def fdsa_hello(
     with console.status(
         "[deep_pink2 on black].. gnizilaitini ...", spinner="betaWave"
     ):
-        initialize_asdf(config)
+        initialize_loggers()
+        insert_settings_module_path(config)
         from asdf.flow import asdf_body
     from rich.rule import Rule
+
     aprint(Rule(" fdsa mode ", style="deep_pink2 blink"), style="FDSA")
     from asdf.chatter import setup_reprocess
+
     reprocess_pairs, analyses = setup_reprocess(
         marslab_path,
         image_path,
@@ -186,15 +193,14 @@ def fdsa_hello(
         roi_fn = analysis["ROI"]
         if marslab_fn != analysis["MARSLAB"]:
             aprint(
-                "\n[deep_pink2 bold italic]sorry, something has gone "
-                "wrong "
-                "matching {} to its observation... "
-                ":confused_face:".format(analysis["MARSLAB"])
+                f"\n[deep pink2 bold italic]sorry, something has gone wrong "
+                f"matching {analysis['MARSLAB']} to its observation... "
+                f":confused_face"
             )
             return
         aprint(
-            "\n[bold italic]... fdsa: processing observation "
-            "{} of {} ...".format(str(ix + 1), str(len(reprocess_pairs)))
+            f"\n[bold italic]... fdsa: processing observation {ix + 1} of "
+            f"{len(reprocess_pairs)}"
         )
         console.style = "none"
         asdf_body(
@@ -207,6 +213,6 @@ def fdsa_hello(
             console=console,
             recreate_from=marslab_fn,
             noninteractive=True,
-            skip_pixmaps=skip_pixmaps
+            skip_pixmaps=skip_pixmaps,
         )
         console.style = "FDSA"

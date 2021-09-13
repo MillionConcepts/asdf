@@ -12,9 +12,8 @@ def scale_eyes(data, method="scale_to_avg"):
     # This translation is done _in place_... which is maybe bad...
     #    but will be fine as long as you always restart + rerun
     # TODO: Remove duplicate functionality with marslab.compat.xcam
-    if not all(data["L1"].values) or not all(
-        data["R1"].values
-    ):  # shared filters don't exist
+    if np.isnan(data["L1"].values).any() or np.isnan(data["R1"].values).any():
+        # shared filters don't exist
         return data
     if method == "scale_to_left":
         # Scale the Right eye data to the Left eye at 800nm

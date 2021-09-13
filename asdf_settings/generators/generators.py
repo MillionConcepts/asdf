@@ -1,8 +1,12 @@
 """
 this module holds functions for procedurally-generated sections of settings
-files, basically to enhance their readability. it specifically holds
+files, basically to enhance their readability. it specifically holds things
+that are gibberish-y and hard to read. strong recommendation against messing
+with things in this module unless you're really sure about it.
 """
+import sys
 from itertools import chain, product
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -101,9 +105,17 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
     that chokes on the gradual partial evaluation we use later
     in the pipeline, so we pre-bind arguments to it here in a closure.
     """
+
     def do_bilateralfilter(array):
         return cv2.bilateralFilter(
             array, d=d, sigmaColor=sigmaColor, sigmaSpace=sigmaSpace
         )
 
     return do_bilateralfilter
+
+
+def glom(*paths):
+    return str(Path(*paths))
+
+
+ASDF_MODULE_PATH = Path(sys.modules.get("asdf").__file__).parent

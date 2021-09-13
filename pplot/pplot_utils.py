@@ -102,13 +102,12 @@ def find_longest_filter(data):
     )
 
 
-
-
 def pretty_plot(
     data,
     scale_method="scale_to_avg",
     plot_fn=None,
     solar_elevation=None,
+    units=None,
     plot_width=15,
     plot_height=12,
     bgcolor="white",
@@ -120,7 +119,11 @@ def pretty_plot(
     credit="Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC",
     sym=None,
 ):
-    annotation_string = f"Sol{str(sol).zfill(3)} : {seq_id} : {target_name}"
+    if target_name.strip().strip("-") == "":
+        target_annotation = ""
+    else:
+        target_annotation = f" : {target_name}"
+    annotation_string = f"Sol{str(sol).zfill(3)} : {seq_id}{target_annotation}"
     assert (
         edge in ["left", "right", "top", "bottom"] for edge in plot_edges
     )  # Tests that the variable has a valid value
@@ -142,9 +145,17 @@ def pretty_plot(
             label = row["COLOR"]
         else:
             label = row["FEATURE"]
-            if (label == "rock") and not pd.isnull(row["MORPHOLOGY"]) and (row["MORPHOLOGY"] != "-"):
+            if (
+                (label == "rock")
+                and not pd.isnull(row["MORPHOLOGY"])
+                and (row["MORPHOLOGY"] != "-")
+            ):
                 label += f" ({row['MORPHOLOGY']})"
-            elif (label == "soil") and not pd.isnull(row["SOIL LOCATION"]) and (row["SOIL LOCATION"] != "-"):
+            elif (
+                (label == "soil")
+                and not pd.isnull(row["SOIL LOCATION"])
+                and (row["SOIL LOCATION"] != "-")
+            ):
                 label += f" ({row['SOIL LOCATION']})"
         roi_labels[row["COLOR"]] = label
     # adding this to slightly increase robustness
@@ -152,12 +163,14 @@ def pretty_plot(
         if (data[k] == "-").all():
             data = data.drop(k, axis=1)
     # path to file containing referenced font
-    titillium = "static/fonts/TitilliumWeb-Light.ttf"
+    titillium = Path(
+        Path(__file__).parent.parent, "static/fonts/TitilliumWeb-Light.ttf"
+    )
     # can also include other face properties, different fonts, etc.
     # TODO: possibly allow these to reference asdf_settings, or expose ability
     #  to pass these fontproperties as a dict
     label_fp = mplf.FontProperties(fname=titillium, size=20.5)
-    title_fp = mplf.FontProperties(fname=titillium, size=18) # TODO: not used
+    title_fp = mplf.FontProperties(fname=titillium, size=18)  # TODO: not used
     tick_fp = mplf.FontProperties(fname=titillium, size=15)
     legend_fp = mplf.FontProperties(fname=titillium, size=14)
     tick_minor_fp = mplf.FontProperties(fname=titillium, size=11)
@@ -167,12 +180,22 @@ def pretty_plot(
     # TODO: Handle the case where solar_elevation is not the same for all of
     #  the spectra in the input marslab file, e.g. a file composited across
     #  observations. Can fix the existence check and make sure solar_elevation
-    #  is an np.array but that will propagate to other things downstream...
+    #  is an np.array but that will create an interface hassle...
+
     theta_rad = (
         (90 - solar_elevation) * 2 * np.pi / 360
-        if solar_elevation
+        if solar_elevation is not None
         else 2 * np.pi
     )
+    if units is None:
+        photometric_scaling = np.cos(theta_rad)
+    else:
+        photometric_scaling = 1
+
+    if units is None and solar_elevation is None:
+        y_axis_units = "IOF"
+    else:
+        y_axis_units = "R* = IOF/cos(" r"$\theta$)"
 
     # Pre-define the plot extents so that they are easy to reuse
     lpad, rpad = (
@@ -186,7 +209,7 @@ def pretty_plot(
     available_filters = [
         k for k in data.keys() if k in DERIVED_CAM_DICT["ZCAM"]["filters"]
     ]
-    scale = 10 / np.cos(theta_rad)
+    scale = 10 / photometric_scaling
     datarange = [
         np.floor(0.25 * scale * np.nanmin(data[available_filters].values))
         / 10,
@@ -235,15 +258,25 @@ def pretty_plot(
         fontproperties=tick_minor_fp,
     )
     # Set the major ticks of the top axis with the narrowband filters
-    narrowband = [
-        k for k in available_filters if ("0" not in k) and ("R1" not in k)
-    ]
+    # only graph L1 from L1/R1, if it's available
+    if "L1" in available_filters:
+        narrowband = [
+            k for k in available_filters if ("0" not in k) and ("R1" not in k)
+        ]
+    else:
+        narrowband = [k for k in available_filters if ("0" not in k)]
     prx.set_xticks(
         (filter_to_wavelength[narrowband].values[0] - datadomain[0])
         / (datadomain[1] - datadomain[0])
     )
+    if ("L1" in available_filters) and ("R1" in available_filters):
+        L1_R1_label = "L1\nR1"
+    elif "L1" in available_filters:
+        L1_R1_label = "L1"
+    else:
+        L1_R1_label = "R1"
     prx.set_xticklabels(
-        [k.replace("L1", "L1\nR1") for k in narrowband],
+        [k.replace("L1", L1_R1_label) for k in narrowband],
         fontproperties=tick_fp,
     )
 
@@ -254,10 +287,7 @@ def pretty_plot(
         ax.grid(axis="x", alpha=0.2)
 
     ax.set_ylim(datarange)
-    ax.set_ylabel(
-        "R* = IOF/cos(" r"$\theta$)" if solar_elevation else "IOF",
-        fontproperties=label_fp,
-    )
+    ax.set_ylabel(y_axis_units, fontproperties=label_fp)
 
     # Set the ticks for the left yaxis
     ytick_pos = np.linspace(
@@ -295,7 +325,7 @@ def pretty_plot(
         # plot the errorbars
         ax.errorbar(
             filter_to_wavelength[notna_narrowband].values[0][ix],
-            data.iloc[i][notna_narrowband][ix] / np.cos(theta_rad),
+            data.iloc[i][notna_narrowband][ix] / photometric_scaling,
             yerr=data.iloc[i][[f"{f}_ERR" for f in notna_narrowband]][ix],
             fmt=f"",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
@@ -306,7 +336,7 @@ def pretty_plot(
         # plot the line
         ax.errorbar(
             filter_to_wavelength[notna_narrowband].values[0][ix],
-            data.iloc[i][notna_narrowband][ix] / np.cos(theta_rad),
+            data.iloc[i][notna_narrowband][ix] / photometric_scaling,
             yerr=data.iloc[i][[f"{f}_ERR" for f in notna_narrowband]][ix],
             fmt=f"-",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
@@ -318,7 +348,7 @@ def pretty_plot(
         # plot the symbols
         ax.scatter(
             filter_to_wavelength[notna_narrowband].values[0][ix],
-            data.iloc[i][notna_narrowband][ix] / np.cos(theta_rad),
+            data.iloc[i][notna_narrowband][ix] / photometric_scaling,
             marker=f"{symbol}",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             edgecolors="k",
@@ -345,7 +375,7 @@ def pretty_plot(
             try:
                 ax.errorbar(
                     filter_to_wavelength[bayer].values[0],
-                    data.iloc[i][bayer] / np.cos(theta_rad),
+                    data.iloc[i][bayer] / photometric_scaling,
                     yerr=data.iloc[i][[f"{bayer}_ERR"]],
                     fmt=f"{symbol}",
                     color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],

@@ -90,6 +90,7 @@ ROI_METADATA_FIELD_CHOICES = {
         "abraded surface",
         "coating (not dust)",
         "clast/inclusion",
+        "tailings"
     ],
     "GRAIN SIZE": ["fine", "coarse", "mixed"],
     "SOIL LOCATION": [
@@ -111,8 +112,7 @@ ROI_METADATA_FIELD_CHOICES = {
     "DISTANCE": ["nearfield", "midfield", "farfield"],
 }
 
-# Columns of the compact -marslab.csv file. columns not here won't appear in
-# the compact version.
+# Only the columns listed here will appear in the compact -marslab.csv file.
 # Their order here is preserved in the .csv file.
 # *ROI_METADATA_FIELDS are the user-input fields defined above.
 # *FILTER_DATA_COLUMNS are the per-filter mean/std pixel count columns.
@@ -126,7 +126,7 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "LOCATION",
     "SITE",
     "DRIVE",
-    "RMS",
+    "RSM",
     "ZOOM",
     "L_S",
     "SCLK",
@@ -140,7 +140,10 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "ODOMETRY",
     "ROVER_ELEVATION",
     "TARGET_ELEVATION",
+    "CREATOR",
     "FILE_TIMESTAMP",
+    "ROI_SOURCE",
+    "ORIGINAL_ROI_SOURCE",
     "INSTRUMENT",
     "COMPRESSION",
     "COMPRESSION_QUALITY",
@@ -188,13 +191,15 @@ IOF_METADATA_REGEX = {
     r"?:\n|\r|.)*?INSTRUMENT_AZIMUTH ).*?([-\d\.]+)",
 }
 
+# Define the types of pixel flags that we care about
 PIXEL_FLAG_NAMES = ("bad", "no_signal", "nonlinear", "saturated", "hot")
 
+# Define the size, color, and symbol for flagged pixels
 PIXEL_FLAG_STYLE = (
     # (1, "#ff5fd7", "o"),
-    (1, "#aa5fd7", "3"),
-    (4, "#888888", "."),
-    (0.2, "#87ff00", "o"),
-    (7, "#00ffd7", "*"),
-    (5, "#d7af00", "|"),
+    (1, "#aa5fd7", "3"), # bad
+    (4, "#888888", "."), # no_signal
+    (0.2, "#87ff00", "o"), # nonlinear
+    (7, "#00ffd7", "*"), # saturated
+    (5, "#d7af00", "|"), # hot
 )

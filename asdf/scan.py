@@ -3,21 +3,25 @@ functions for running around the filesystem and mashing together big messes
 of products
 """
 import os
-import re
 from pathlib import Path
+import re
 from typing import Union
 from urllib.error import URLError
 
-import numpy as np
-import pandas as pd
 from astropy.io import fits
 from cytoolz.dicttoolz import valfilter
 from cytoolz.functoolz import curry
 from cytoolz.itertoolz import partition
+from dustgoggles.scrape import cached_ls, cached_exists
 from fs.osfs import OSFS
+import numpy as np
+import pandas as pd
+from more_itertools import all_equal
 
 import asdf_settings as settings
-from asdf.asdf_utils import split_on, dir_fs, listify, pdstr
+from asdf.asdf_utils import dir_fs
+from dustgoggles.structures import listify
+from dustgoggles.pivot import split_on, pdstr
 from asdf.console import ASDFLOG
 from asdf.network import get_public_m20_waypoints
 from asdf.parse import (
@@ -28,19 +32,11 @@ from asdf.parse import (
     looks_like_marslab,
     looks_like_roi,
 )
-from asdf.scrape import (
-    cached_aux_skimmer,
-    is_iof_est_heuristic,
-    cached_ls,
-    cached_exists,
-    is_pixel_map_heuristic,
-)
+from asdf.labels import cached_aux_skimmer, is_pixel_map_heuristic
 
 
 # TODO: make all the error-printing statements in this module more consistent
 #  with style in other modules
-
-
 def drop_mismatched_versions(siblings, base_version=None):
     if len(siblings["VERSION"].unique()) == 1:
         return siblings
@@ -93,12 +89,18 @@ def skim_products(
         except (FileNotFoundError, TypeError, KeyError):
             bad_files.append(product)
     if len(bad_files) > 0:
-        ASDFLOG.info(
-            "... {} / {} could be opened and read ...".format(
-                str(len(skim_results)),
-                str(len(products)),
-            )
+        ASDFLOG.warning(
+            f"... only {str(len(skim_results))} "
+            f"/ {str(len(products))} could be opened and read ..."
         )
+        if len(bad_files) < 20:
+            ASDFLOG.warning(
+                "couldn't open:\n" + ",".join([file for file in bad_files])
+            )
+        else:
+            ASDFLOG.warning(
+                "... suppressing corrupt file list due to length ..."
+            )
     return pd.concat(
         [
             products.loc[products["PATH"].isin(keep_paths)]
@@ -150,7 +152,6 @@ def scan_zcam_files(
     regex_filter=None,
     keep_thumbnails=False,
     recursive=False,
-    target_product_type=None,
 ):
 
     products = ls_zcam(root_dir, recursive, regex_filter)
@@ -173,27 +174,6 @@ def scan_zcam_files(
     if keep_thumbnails is False:
         field_filters["THUMBNAIL"] = "N"
     products = skim_products(products, field_filters)
-
-    if target_product_type:
-        target_product_type = target_product_type.upper()
-        if target_product_type in ("IOF", "IOF_EST"):
-            ioflikes = products.loc[products["PRODUCT_TYPE"] == "IOF"].copy()
-            # TODO: this may not be reliable or good, at least yet. probably
-            #  better to filter directories.
-            is_iof_est = ioflikes["PATH"].map(is_iof_est_heuristic)
-            if target_product_type == "IOF":
-                is_iof_est = ~is_iof_est
-            typeproducts = ioflikes[~is_iof_est]
-        else:
-            typeproducts = products.loc[
-                products["PRODUCT_TYPE"] == target_product_type
-            ].copy()
-        ASDFLOG.info(
-            "... {} / {} match the requested product type ...".format(
-                str(len(typeproducts)), str(len(products))
-            )
-        )
-        products = typeproducts
     if len(products) == 0:
         raise ValueError("sorry, no matching products found in path.")
     return products
@@ -229,50 +209,51 @@ def cluster_observations(
         name = "_".join(
             [format(sol, "0>4"), seq_id, product_type, thumb, producer]
         )
-
         # TODO: hideous logic
-        # handle non-repointed-observation case: simply split by RMS
-        if (group["FRAME_TYPE"] == "STEREO").all():
-            rmsgroups = group.groupby(["RMS"])
-            for rms, rmsgroup in rmsgroups:
+        # handle simultaneous stereo / single-eye observation: simply split by RSM
+        if (group["FRAME_TYPE"] == "STEREO").all() or all_equal(
+            products["FILTER"].str.slice(0, 1).values
+        ):
+            RSMgroups = group.groupby(["RSM"])
+            for RSM, RSMgroup in RSMgroups:
                 if target_file and (
-                    target_file not in rmsgroup["PATH"].values
+                    target_file not in RSMgroup["PATH"].values
                 ):
                     continue
-                versioned = drop_mismatched_versions(rmsgroup, base_version)
-                if len(versioned) != len(rmsgroup):
-                    rejected_version_count += len(rmsgroup) - len(versioned)
-                    rmsgroup = versioned
-                if not rmsgroup["FILTER"].duplicated().any():
-                    observations[name + "_RMS" + str(rms)] = rmsgroup
+                versioned = drop_mismatched_versions(RSMgroup, base_version)
+                if len(versioned) != len(RSMgroup):
+                    rejected_version_count += len(RSMgroup) - len(versioned)
+                    RSMgroup = versioned
+                if not RSMgroup["FILTER"].duplicated().any():
+                    observations[name + "_RSM" + str(RSM)] = RSMgroup
                 else:
                     parser_warnings.append(
                         "warning: an uncategorized issue may have prevented"
                         " me from correctly clustering  {}.".format(seq_id)
                     )
-                    rmsgroup = rmsgroup.drop_duplicates(subset="FILTER")
-                    if not rmsgroup["FILTER"].duplicated().any():
-                        observations[name + "_RMS" + str(rms)] = rmsgroup
+                    RSMgroup = RSMgroup.drop_duplicates(subset="FILTER")
+                    if not RSMgroup["FILTER"].duplicated().any():
+                        observations[name + "_RSM" + str(RSM)] = RSMgroup
         elif (group["FRAME_TYPE"] == "MONO").all():
-            # handle repointed-stereo-observation case: split by pairs of RMS
+            # handle repointed-stereo-observation case: split by pairs of RSM
             # TODO: this will currently fail if all filters from a single eye
             #  are missing
-
-            if len(group["RMS"].unique()) % 2 != 0:
+            if len(group["RSM"].unique()) % 2 != 0:
                 parser_warnings.append(
-                    "warning: {} has a mast movement pattern I cannot "
-                    "interpret. files may not have been chunked "
-                    "correctly.".format(seq_id)
+                    f"warning: {seq_id} has a mast movement pattern I cannot "
+                    "interpret, or not all files from the observation are "
+                    "currently present in the directory. files may not have "
+                    "been chunked correctly."
                 )
-            for repoint in partition(2, group["RMS"].unique()):
-                observation = group.loc[group["RMS"].isin(repoint)]
+            for repoint in partition(2, group["RSM"].unique()):
+                observation = group.loc[group["RSM"].isin(repoint)]
                 if target_file and (
                     target_file not in observation["PATH"].values
                 ):
                     continue
                 versioned = drop_mismatched_versions(observation, base_version)
                 if not versioned["FILTER"].duplicated().any():
-                    observations[name + "_RMS" + str(repoint[0])] = versioned
+                    observations[name + "_RSM" + str(repoint[0])] = versioned
                 else:
                     parser_warnings.append(
                         "warning: an unknown windowing issue may have "
@@ -486,7 +467,7 @@ def add_effective_taus(metadata):
 
 def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
     stemmer = pdstr(
-        "replace", "(-roi.fits(?:.gz)?|-marslab.csv)", "", regex=True
+        "replace", "(roi|\.|fits|gz|marslab|csv)", "", regex=True
     )
     roi_stems = stemmer(roi["PATH"])
     marslab_stems = stemmer(marslab["PATH"])
@@ -533,9 +514,9 @@ def make_marslab_metadata_df(marslab_fn_list):
         axis=1,
     )
     marslab_df = marslab_df.dropna(
-        subset=["SOL", "SEQ_ID", "SITE", "DRIVE", "RMS", "ZOOM"]
+        subset=["SOL", "SEQ_ID", "RSM"]
     )
-    for field in ("SOL", "SITE", "DRIVE", "RMS", "ZOOM"):
+    for field in ("SOL", "RSM"):
         marslab_df[field] = marslab_df[field].astype("int16")
     marslab_df["SEQ_ID"] = marslab_df["SEQ_ID"].str.upper()
     return marslab_df
@@ -619,7 +600,7 @@ def find_matching_observations(analyses, search_dir, search_regex):
         ]
         clusters, _, _ = cluster_observations(sol_seq_files)
         matches = valfilter(
-            lambda df: analysis["RMS"] in df["RMS"].values, clusters
+            lambda df: analysis["RSM"] in df["RSM"].values, clusters
         )
         if len(matches) == 0:
             misses.append(analysis["MARSLAB"])
