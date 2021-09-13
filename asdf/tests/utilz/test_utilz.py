@@ -51,6 +51,8 @@ def compare_csv_files(test_path, ref_path, ignore_fields = None):
         for field in ignore_fields:
             test_df = test_df.drop(columns=field, errors='ignore')
             ref_df = ref_df.drop(columns=field, errors='ignore')
+    ref_df = ref_df.replace('-', float('nan')).dropna(axis=1)
+    test_df = test_df.replace('-', float('nan')).dropna(axis=1)
     test_mismatches, ref_mismatches = disjoint(test_df.columns, ref_df.columns)
     # are we missing, or have we added, entire columns?
     if len(test_mismatches + ref_mismatches):
@@ -79,7 +81,7 @@ def compare_csv_files(test_path, ref_path, ignore_fields = None):
         if not pandas.api.types.is_numeric_dtype(test_df_pruned[col])
     ]
     non_numeric_diff = test_df_pruned[non_numeric] == ref_df_pruned[non_numeric]
-    diff = pd.concat([numeric_diff, non_numeric_diff])
+    diff = pd.concat([numeric_diff, non_numeric_diff], axis=1)
     # remaining columns are completely equal -- quit
     if diff.all(axis=None):
         return problems
