@@ -260,7 +260,7 @@ class ZcamBandSet(BandSet):
         if self.counts is None:
             self.counts = null_marslab_data_section()
         # "summary" values made from chronologically first image
-        summary = self.metadata.sort_values(by="SCLK").iloc[0].copy()
+        summary = self.metadata.sort_values(by=["SCLK", "BAND"]).iloc[0].copy()
         metadata_block = dupe_df_block(
             melt_metadata(self.metadata), len(self.counts.index)
         )
