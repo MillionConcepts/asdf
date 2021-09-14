@@ -110,6 +110,8 @@ def render_figure_labels(ax, title, annotation):
 
 def clean_sequence_id(seq_id):
     # Make sure that the sequence ID is in the proper format
+    if not seq_id:
+        return None
     if "ZCAM" in str(seq_id).upper():
         return seq_id.upper()
     seq_id = "ZCAM" + format(int(seq_id), "0>5")
