@@ -14,21 +14,12 @@ from marslab.imgops.render import colormapped_plot, simple_figure
 # expect they should be
 WORKING_DIRECTORY = Path(__file__).parent
 FONT_PATH = glom(WORKING_DIRECTORY.parent, "static/fonts")
-TITLE_FONT = mplf.FontProperties(
-    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=11.2
-)
-ANNOTATION_FONT = mplf.FontProperties(
-    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=8.8
-)
-TICK_FONT = mplf.FontProperties(
-    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=6
-)
-ROI_FONT = mplf.FontProperties(
-    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=5
-)
-LEGEND_FONT = mplf.FontProperties(
-    fname=glom(FONT_PATH, "TitilliumWeb-Light.ttf"), size=7
-)
+TITILLIUM = glom(FONT_PATH, "TitilliumWeb-Light.ttf")
+TITLE_FONT = mplf.FontProperties(fname=TITILLIUM, size=11.2)
+ANNOTATION_FONT = mplf.FontProperties(fname=TITILLIUM, size=8.8)
+TICK_FONT = mplf.FontProperties(fname=TITILLIUM, size=6)
+ROI_FONT = mplf.FontProperties(fname=TITILLIUM, size=5)
+LEGEND_FONT = mplf.FontProperties(fname=TITILLIUM, size=7)
 
 # positions of image title and remainder of annotation, in
 # percentage of plot height -- if you change font size, you
