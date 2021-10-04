@@ -16,6 +16,7 @@ from typing import Any
 
 import boto3
 import botocore.config
+from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import ClientError
 import gspread
 import pandas as pd
@@ -176,7 +177,7 @@ def backup_data_to_s3(bandset, roi_fits_fn, debug_prefix=""):
     for obj, key in upload_hopper:
         try:
             upload(obj, key)
-        except ClientError as error:
+        except (ClientError, S3UploadFailedError) as error:
             aprint(
                 "[bold red]sorry, couldn't upload a backup file: " + str(error)
             )
