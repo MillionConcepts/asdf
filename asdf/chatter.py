@@ -97,10 +97,11 @@ def find_and_offer_observations(
                 products, target_file, keep_broadband, keep_caltarget
             )
         except (ValueError, FileNotFoundError, PermissionError) as err:
+            return reject_scan(
+                f"{type(err)}: {err} :confused_face:\n"
+            )
+        finally:
             prog.remove_task(ASDF_RPH_SPIN.task_id)
-            aprint(str(err) + " :confused_face:", style="bold red")
-            return None, False
-        prog.remove_task(ASDF_RPH_SPIN.task_id)
     print_scan_results(results)
     if problems:
         for problem in problems:
@@ -111,10 +112,9 @@ def find_and_offer_observations(
             aprint(category, style="purple bold")
         aprint("\n")
     if not len(results):
-        aprint(
-            "[bold red]Sorry, no usable observations found. :confused_face:"
+        return reject_scan(
+            "Sorry, no usable observations found. :confused_face:\n"
         )
-        return None, False
     if noninteractive:
         if noninteractive == "all":
             aprint(
@@ -131,13 +131,19 @@ def find_and_offer_observations(
     if len(results) > 1:
         obs_choice = offer_observation_choice(len(results))
         if obs_choice == "0":
-            return reject_scan()
+            return reject_scan(
+                "halting due to user rejection of file list. If "
+                "[italic]asdf[/italic] didn't find what you expected, "
+            )
         if obs_choice != "a":
             return tuple(results.values())[int(obs_choice) - 1], False
         return tuple(results.values()), True
     else:
         if not confirm_observation():
-            return reject_scan()
+            return reject_scan(
+                "halting due to user rejection of file list. If "
+                "[italic]asdf[/italic] didn't find what you expected, "
+            )
         return tuple(results.values())[0], False
 
 
@@ -405,13 +411,13 @@ def sorry_analysis():
     return None
 
 
-def reject_scan():
+def reject_scan(msg):
     aprint(
-        "\nhalting due to user rejection of file list. If you didn't see the "
-        "products you wanted and you passed an abbreviated path, try passing "
-        "a full path instead. If all else fails, try copying the files you "
-        "want to work with into a separate root_dir.",
-        style="red bold",
+        f"[red bold]{msg}Try copying the specific files you want to work "
+        f"with into a separate directory and running [italic]asdf[/italic] on "
+        f"them there.\n"
+        f"If you passed an abbreviated (-a) path, you could instead try "
+        f"passing a full path to one of the files you want to work with."
     )
     return None, False
 
