@@ -98,7 +98,7 @@ def find_and_offer_observations(
             )
         except (ValueError, FileNotFoundError, PermissionError) as err:
             return reject_scan(
-                f"{type(err)}: {err} :confused_face:\n"
+                f"{err} :confused_face:\n"
             )
         finally:
             prog.remove_task(ASDF_RPH_SPIN.task_id)
@@ -112,8 +112,13 @@ def find_and_offer_observations(
             aprint(category, style="purple bold")
         aprint("\n")
     if not len(results):
+        suffix = ""
+        if problems:
+            if any(["cluster" in problem for problem in problems]):
+                suffix = "This observation seems to be too complicated for " \
+                         "the automated clustering algorithm. "
         return reject_scan(
-            "Sorry, no usable observations found. :confused_face:\n"
+            f"Sorry, no usable observations found. {suffix}:confused_face:\n"
         )
     if noninteractive:
         if noninteractive == "all":
