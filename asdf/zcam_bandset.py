@@ -1,6 +1,8 @@
 import datetime as dt
 import io
 import os
+import shutil
+from collections import MutableMapping
 from functools import partial
 from pathlib import Path
 
@@ -15,7 +17,7 @@ import asdf_settings
 from asdf.asdf_utils import (
     load_roi_file,
     null_marslab_data_section,
-    dashify,
+    dashify, save_roi_file,
 )
 from dustgoggles.pivot import dupe_df_block, check_and_drop_duplicate_columns
 from dustgoggles.structures import to_records, NestingDict
@@ -33,6 +35,7 @@ from asdf.labels import bulk_scrape_asdf_metadata
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
+from marslab.compat.sel_to_roi import is_sel_file
 from marslab.compat.xcam import (
     DERIVED_CAM_DICT,
     BAND_TO_BAYER,
@@ -112,7 +115,6 @@ class ZcamBandSet(BandSet):
             rois=rois,
             threads=threads,
         )
-
         # scrape headers for all desired metadata fields and derive values
         # from them as necessary
         dtypes = METADATA_DTYPES
@@ -162,22 +164,26 @@ class ZcamBandSet(BandSet):
                 ] = ix
         return True
 
-    def load_rois(self, title=None, outpath=None, convert=False):
+    def load_rois(self, title=None, outpath=".", save=False):
         if self.rois is None:
             aprint("No ROI data loaded.")
-            return "", ""
+            return
+        if isinstance(self.rois, MutableMapping):
+            aprint("ROIs appear to already be loaded; reinitialize to reload")
+            return
+        # store filename in input_rois
         input_rois = self.rois
         if title is None:
             title = self.name
-        roi_hdulist, roi_fn = load_roi_file(
-            self.rois,
-            title=title,
-            outpath=Path(outpath, "data"),
-            convert=convert,
-        )
-        self.rois = roi_hdulist
-        self.local_files.append(roi_fn)
-        return roi_fn, input_rois
+        self.rois = load_roi_file(self.rois, title=title)
+        if save is not True:
+            return
+        if is_sel_file(input_rois):
+            sel_fn = shutil.copy(input_rois, Path(outpath, "data"))
+            self.local_files.append(sel_fn)
+            aprint(f"wrote {input_rois} to {sel_fn}")
+        roi_fits_fn = save_roi_file(self.rois, outpath)
+        self.local_files.append(roi_fits_fn)
 
     def associate_pixmaps(self, pixmaps):
         for path in self.metadata["PATH"].unique():

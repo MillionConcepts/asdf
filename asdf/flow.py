@@ -141,7 +141,6 @@ def asdf_body(
             "[dark_orange]skip-pixmaps flag active; skipping pixmap handling"
         )
     # handle ROI file conversion, ROI counting, user input per-ROI metadata
-    roi_fits_fn = None
     if we_do_not_have_rois:
         marslab_data = null_marslab_data_section()
     else:
@@ -150,8 +149,9 @@ def asdf_body(
         # did we get a ROI file path? convert it if it's SEL, save to
         # .fits, load it; if it's already FITS, load it
         try:
-            roi_fits_fn, roi_input_fn = bandset.load_rois(
-                bandset.name + bandset.suffix, outpath, convert=True
+            roi_input_fn = bandset.rois
+            bandset.load_rois(
+                bandset.name + bandset.suffix, outpath, save=True
             )
         except (zlib.error, AttributeError, OSError) as error:
             aprint(
@@ -287,6 +287,6 @@ def asdf_body(
         thumbnails = make_rapidlook_thumbnails(
             thumbnail_staging, settings.rapidlooks.THUMBNAIL_SIZE
         )
-        upload_asdf_analysis(bandset, thumbnails, roi_fits_fn, debug)
+        upload_asdf_analysis(bandset, thumbnails, debug)
 
     aprint("\n:star: ... all done ... :star:", style="bold orchid1")

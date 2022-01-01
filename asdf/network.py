@@ -160,9 +160,10 @@ def bind_asdf_bucket() -> Callable[Any, str]:
     return upload_to_default_bucket
 
 
-def backup_data_to_s3(bandset, roi_fits_fn, debug_prefix=""):
+def backup_data_to_s3(bandset, debug_prefix=""):
     upload = bind_asdf_bucket()
     epoch = str(round(time.time()))
+    # TODO: why am I writing these like this?
     s3_prefix = f"marslab/{debug_prefix}" \
                 f"{str(bandset.compact['SOL'].iloc[0]).zfill(4)}" \
                 f"/{epoch}_{os.getlogin()}_"
@@ -172,8 +173,9 @@ def backup_data_to_s3(bandset, roi_fits_fn, debug_prefix=""):
     )
     marslab, extended = bandset.write_data_files(in_memory=True)
     upload_hopper = [(marslab, marslab_key), (extended, extended_key)]
-    if roi_fits_fn is not None:
-        upload_hopper.append((roi_fits_fn, s3_prefix + Path(roi_fits_fn).name))
+    for fn in bandset.local_files:
+        if Path(fn).suffix in (".fits", ".fits.gz", ".sel"):
+            upload_hopper.append((fn, s3_prefix + Path(fn).name))
     for obj, key in upload_hopper:
         try:
             upload(obj, key)
@@ -413,10 +415,11 @@ def clear_google_drive_trash(debug=False):
         prog.remove_task(task_id)
 
 
+# TODO: this and its precursors are excessively baroque. Consider turning
+#  bandset.local_files into a dictionary to simplify this?
 def upload_asdf_analysis(
     bandset: ZcamBandSet,
     thumbnails: MutableMapping,
-    roi_fits_fn: str,
     debug: bool = False,
 ):
     if debug is True:
@@ -432,7 +435,7 @@ def upload_asdf_analysis(
     with ASDF_CONSOLE.status(
         "... backing up marslab & ROI files ...", spinner="star"
     ):
-        backup_data_to_s3(bandset, roi_fits_fn, s3_debug_prefix)
+        backup_data_to_s3(bandset, s3_debug_prefix)
     aprint("completed marslab and ROI backup")
     aprint("... uploading files to Google Drive space ...")
     with ASDF_PROGRESS as prog:

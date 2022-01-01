@@ -31,17 +31,32 @@ def add_ref_to_roi(pointing_name, roi_fits):
     return roi_fits
 
 
-def load_roi_file(
-    roi_path,
-    title="",
-    outpath=".",
-    extension=".fits.gz",
-    convert=False,
-    verbose=True,
-):
+def save_roi_file(roi_fits, outpath=".", extension=".fits.gz", verbose=True):
+    # optionally resave
+    # TODO: should we actually add feature names to the ROI files?
+    #  so therefore wait to save until after grilling the user?
+    # TODO: this whole convert-while-loading logic is convoluted and needs
+    #  to be extracted from the loading loop. save and load functions should
+    #  be distinct.
+    if "IMAGEREF" in roi_fits[0].header.keys():
+        title = f"_{roi_fits[0].header['IMAGEREF']}"
+    else:
+        title = ""
+    if not Path(outpath).exists():
+        os.makedirs(outpath)
+    roi_fits_fn = Path(outpath, f"roi{title}{extension}")
+    zipfile = gzip.open(roi_fits_fn, mode='wb')
+    roi_fits.writeto(zipfile)
+    if verbose:
+        aprint("wrote " + str(roi_fits_fn))
+    return str(roi_fits_fn)
+
+
+def load_roi_file(roi_path, title="", verbose=True):
     # TODO: move this chatter elsewhere
     # if passed ROI file is a SEL, convert to marslab FITS
-    if is_sel_file(roi_path):
+    is_sel = is_sel_file(roi_path)
+    if is_sel:
         roi_fits = sel_to_roi(roi_path, "ZCAM")
         if verbose:
             aprint("loaded MERspect .sel file")
@@ -57,34 +72,9 @@ def load_roi_file(
             roi_fits = fits.open(roi_path)
         if verbose:
             aprint("loaded marslab ROI FITS file")
-    # add optional reference (like pointing name)
+    # add optional reference (like analysis name)
     roi_fits = add_ref_to_roi("roi_" + title, roi_fits)
-    # optionally resave
-    # TODO: should we actually add feature names to the ROI files?
-    #  so therefore wait to save until after grilling the user?
-    # TODO: this whole convert-while-loading logic is convoluted and needs
-    #  to be extracted from the loading loop. save and load functions should
-    #  be distinct.
-    if convert:
-        if not Path(outpath).exists():
-            os.makedirs(outpath)
-        roi_fits_fn = Path(outpath, "roi_" + title + extension)
-        if roi_fits.filename():
-            if Path(roi_fits_fn).absolute() == Path(roi_fits.filename()):
-                roi_fits_fn = Path(str(roi_fits_fn) + ".tmp")
-        zipfile = gzip.open(roi_fits_fn, mode='wb')
-        roi_fits.writeto(zipfile)
-        if roi_fits_fn.suffix == '.tmp':
-            roi_fits.close()
-            shutil.move(roi_fits_fn, str(roi_fits_fn)[:-4])
-            roi_fits_fn = Path(str(roi_fits_fn)[:-4])
-            roi_fits = fits.open(roi_fits_fn)
-        if verbose:
-            aprint("wrote " + str(roi_fits_fn))
-    else:
-        roi_fits_fn = None
-    # TODO: returning the filename like this is sort of clumsy
-    return roi_fits, str(roi_fits_fn)
+    return roi_fits
 
 
 def null_marslab_data_section():
