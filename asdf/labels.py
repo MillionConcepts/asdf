@@ -53,6 +53,7 @@ def aux_skim_header(label: Union[Path, str]) -> dict:
         if field in AUX_FIELDS
     }
     skim["RSM"] = skim["RMC"][6]
+    skim["SUBFRAME"] = scrape_subframe(label_text)
     return skim
 
 

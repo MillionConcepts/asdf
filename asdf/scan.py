@@ -3,6 +3,8 @@ functions for running around the filesystem and mashing together big messes
 of products
 """
 import os
+from functools import reduce
+from operator import mul
 from pathlib import Path
 import re
 from typing import Union
@@ -200,49 +202,55 @@ def cluster_observations(
     base_version = None
     observations = {}
     parser_warnings = []
-    rejected_bb_count, rejected_cal_count, rejected_version_count = (0, 0, 0)
+    rejects = {cause: 0 for cause in ("bb", "cal", "frame", "version")}
     for group_ix, group in groups:
         sol, seq_id, product_type, thumb, producer = group_ix
         if keep_broadband is False:
-            # TODO: this sequence id heuristic might be crappy
             if group["FILTER"].isin(("L0", "R0")).all() or (
                 int(seq_id[4:]) > 5000
             ):
-                rejected_bb_count += len(group)
+                rejects["bb"] += len(group)
                 continue
         if keep_caltarget is False:
-            # TODO: this sequence id heuristic might be crappy
             if int(seq_id[4:]) < 3100:
-                rejected_cal_count += len(group)
+                rejects["cal"] += len(group)
                 continue
+        # drop off-size subframes -- focus(?) frames, etc.
+        frame_sizes = group["SUBFRAME"].map(
+            lambda seq: seq[2:]
+        ).map(lambda pair: reduce(mul, pair))
+        if not all_equal(frame_sizes.values):
+            smaller = frame_sizes.loc[frame_sizes != frame_sizes.max()]
+            rejects["frame"] += len(smaller)
+            group = group.drop(smaller.index)
         name = "_".join(
             [format(sol, "0>4"), seq_id, product_type, thumb, producer]
         )
         # TODO: hideous logic
-        # handle simultaneous stereo / single-eye observation: simply split by RSM
+        # handle simultaneous stereo or single-eye observations: group by RSM
         if (group["FRAME_TYPE"] == "STEREO").all() or all_equal(
             products["FILTER"].str.slice(0, 1).values
         ):
-            RSMgroups = group.groupby(["RSM"])
-            for RSM, RSMgroup in RSMgroups:
+            rsm_groups = group.groupby(["RSM"])
+            for RSM, rsm_group in rsm_groups:
                 if target_file and (
-                    target_file not in RSMgroup["PATH"].values
+                    target_file not in rsm_group["PATH"].values
                 ):
                     continue
-                versioned = drop_mismatched_versions(RSMgroup, base_version)
-                if len(versioned) != len(RSMgroup):
-                    rejected_version_count += len(RSMgroup) - len(versioned)
-                    RSMgroup = versioned
-                if not RSMgroup["FILTER"].duplicated().any():
-                    observations[name + "_RSM" + str(RSM)] = RSMgroup
+                versioned = drop_mismatched_versions(rsm_group, base_version)
+                if len(versioned) != len(rsm_group):
+                    rejects["version"] += len(rsm_group) - len(versioned)
+                    rsm_group = versioned
+                if not rsm_group["FILTER"].duplicated().any():
+                    observations[name + "_RSM" + str(RSM)] = rsm_group
                 else:
                     parser_warnings.append(
                         "warning: an uncategorized issue may have prevented"
                         " me from correctly clustering  {}.".format(seq_id)
                     )
-                    RSMgroup = RSMgroup.drop_duplicates(subset="FILTER")
-                    if not RSMgroup["FILTER"].duplicated().any():
-                        observations[name + "_RSM" + str(RSM)] = RSMgroup
+                    rsm_group = rsm_group.drop_duplicates(subset="FILTER")
+                    if not rsm_group["FILTER"].duplicated().any():
+                        observations[name + "_RSM" + str(RSM)] = rsm_group
         elif (group["FRAME_TYPE"] == "MONO").all():
             # handle repointed-stereo-observation case: split by pairs of RSM
             # TODO: this will currently fail if all filters from a single eye
@@ -277,10 +285,11 @@ def cluster_observations(
             )
     hidden_things = []
     for count, line in zip(
-        (rejected_bb_count, rejected_cal_count, rejected_version_count),
+        (rejects["bb"], rejects["cal"], rejects["frame"], rejects["version"]),
         (
             "from broadband-only sequences",
             "from caltarget observations",
+            "with off-size subframes",
             "of lower/mismatched versions",
         ),
     ):
@@ -616,6 +625,9 @@ def find_matching_observations(analyses, search_dir, search_regex):
                 == analysis[["SOL", "SEQ_ID"]]
             ).all(axis=1)
         ]
+        # TODO: is this a bad idea? should we just pull filenames out of the
+        #  marslab files, chopping off versions? or do we want this to be
+        #  robust to even changes in naming conventions ... ?
         clusters, _, _ = cluster_observations(
             sol_seq_files, keep_caltarget=True, keep_broadband=True
         )

@@ -39,12 +39,12 @@ def save_roi_file(roi_fits, outpath=".", extension=".fits.gz", verbose=True):
     #  to be extracted from the loading loop. save and load functions should
     #  be distinct.
     if "IMAGEREF" in roi_fits[0].header.keys():
-        title = f"_{roi_fits[0].header['IMAGEREF']}"
+        title = f"{roi_fits[0].header['IMAGEREF']}"
     else:
-        title = ""
+        title = "roi"
     if not Path(outpath).exists():
         os.makedirs(outpath)
-    roi_fits_fn = Path(outpath, f"roi{title}{extension}")
+    roi_fits_fn = Path(outpath, f"{title}{extension}")
     zipfile = gzip.open(roi_fits_fn, mode='wb')
     roi_fits.writeto(zipfile)
     if verbose:

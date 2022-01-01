@@ -182,7 +182,7 @@ class ZcamBandSet(BandSet):
             sel_fn = shutil.copy(input_rois, Path(outpath, "data"))
             self.local_files.append(sel_fn)
             aprint(f"wrote {input_rois} to {sel_fn}")
-        roi_fits_fn = save_roi_file(self.rois, outpath)
+        roi_fits_fn = save_roi_file(self.rois, Path(outpath, "data"))
         self.local_files.append(roi_fits_fn)
 
     def associate_pixmaps(self, pixmaps):
