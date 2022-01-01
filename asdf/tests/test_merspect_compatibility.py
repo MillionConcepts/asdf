@@ -38,11 +38,9 @@ def test_roi_sel_roundtrip(_, roi_path):
         "left": np.flipud(sav["lseltemp"]),
         "right": np.flipud(sav["rseltemp"]),
     }
-    load_roi_file(roi_path, title="tmp", outpath=".", convert=True)
-    roi_fits = fits.open("roi_tmp.fits.gz")
+    roi_fits = load_roi_file(roi_path, title="tmp")
     for roi in roi_fits:
         eye = roi.header["EYE"]
         color_ix = COLOR_TO_VALUE[roi.header["NAME"]]
         roi_pixels = np.nonzero(roi.data)
         assert np.all(sav_arrays[eye][roi_pixels] == color_ix)
-    os.unlink("roi_tmp.fits.gz")
