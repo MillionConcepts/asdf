@@ -30,9 +30,9 @@ def compile_looks():
     rapidlooks = settings.generators.look_assembler.RAPIDLOOKS
     # interleave 'hard' rapidlooks for efficiency
     return (
-        rapidlooks[slice(None, None, 3)]
-        + rapidlooks[slice(1, None, 3)]
-        + rapidlooks[slice(2, None, 3)]
+            rapidlooks[slice(None, None, 3)]
+            + rapidlooks[slice(1, None, 3)]
+            + rapidlooks[slice(2, None, 3)]
     )
 
 
@@ -108,6 +108,7 @@ def render_figure_labels(ax, title, annotation):
         fontproperties=settings.rapidlooks.ANNOTATION_FONT,
     )
 
+
 def clean_sequence_id(seq_id):
     # Make sure that the sequence ID is in the proper format
     if not seq_id:
@@ -117,11 +118,12 @@ def clean_sequence_id(seq_id):
     seq_id = "ZCAM" + format(int(seq_id), "0>5")
     return seq_id
 
+
 def parse_abbreviated_inputs(
-    sol,
-    seq_id,
-    root_path_abbreviation=None,
-    product_subdirectory=None,
+        sol,
+        seq_id,
+        root_path_abbreviation=None,
+        product_subdirectory=None,
 ):
     """Commonly used directory paths have standard abbreviations which are
     defined in asdf_settings.sources. Defining them in settings rather than
@@ -304,8 +306,8 @@ def drop_excess_stats(compact):
         if "_" not in column:
             continue
         if (
-            column.split("_")[0] in filts
-            and column.split("_")[1] not in COMPACT_MARSLAB_STATS
+                column.split("_")[0] in filts
+                and column.split("_")[1] not in COMPACT_MARSLAB_STATS
         ):
             compact = compact.drop(column, axis=1)
     return compact
