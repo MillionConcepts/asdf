@@ -161,6 +161,7 @@ def fdsa_initiate(
     image_regex: "ir" = ".*IOF.*",
     config=None,
     skip_pixmaps: "sp" = False,
+    do_empties: "de" = True
 ):
     """reprocesses and archives everything"""
     console = ASDF_CONSOLE
@@ -183,6 +184,7 @@ def fdsa_initiate(
         seq_id,
         marslab_regex=marslab_regex,
         image_regex=image_regex,
+        do_empties=do_empties
     )
     if reprocess_pairs is None:
         return

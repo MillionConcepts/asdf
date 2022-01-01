@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable
 import warnings
 
+import pandas as pd
 from cytoolz.dicttoolz import valfilter
 from dustgoggles.scrape import cached_exists
 from marslab.compat.xcam import DERIVED_CAM_DICT
@@ -259,7 +260,9 @@ def handle_map_checks(bandset):
     bandset.load_pixmaps(verbose=True)
 
 
-def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
+def loudly_ingest_analyses(
+        path, sol=None, seq_id=None, file_regex=None, do_empties = True
+):
     ASDF_CONSOLE.style = "FDSA"
     if not cached_exists(path):
         aprint("[hot_pink bold]sorry, {} does not exist.".format(str(path)))
@@ -289,9 +292,9 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
     marslab = prune_analysis_df(marslab, sol, seq_id, file_regex)
     roi = prune_analysis_df(roi, sol, seq_id, file_regex)
     aprint(
-        "[italic bright_green]{} ROI and {} marslab files in path "
-        "[dark_turquoise]matched[/dark_turquoise] sol, "
-        "seq_id, and regex filters".format(str(len(roi)), str(len(marslab)))
+        f"[italic bright_green]{len(roi)} ROI and {len(marslab)} marslab "
+        f"files in path [dark_turquoise]matched[/dark_turquoise] sol, seq_id, "
+        f"and regex filters"
     )
     if (len(roi) == 0) or (len(marslab) == 0):
         return sorry_analysis()
@@ -299,7 +302,15 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
         "\n[hot_pink italic bold underline]... "
         "clustering ROI and metadata files ..."
     )
-    analyses, lonely_marslab, lonely_roi = cluster_analyses(marslab, roi)
+    analyses, lonely_marslab, empty_marslab, lonely_roi = cluster_analyses(
+        marslab, roi
+    )
+    if len(empty_marslab) > 0:
+        ASDF_CONSOLE.style = "FDSA.warning"
+        aprint(
+            "[bold]warning: these -marslab.csv files contain no data: "
+            "\n\n[/bold]" + "\n".join(empty_marslab["PATH"]) + "\n"
+        )
     if len(lonely_marslab) > 0:
         ASDF_CONSOLE.style = "FDSA.warning"
         aprint(
@@ -315,28 +326,49 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
             ),
             style="slate_blue1",
         )
-
-    if len(analyses) == 0:
-        return sorry_analysis()
-    ok_analyses, bad_analyses = compare_roi_colors(analyses)
-    if len(bad_analyses) > 0:
-        ASDF_CONSOLE.style = "FDSA.warning"
+    if (do_empties == "only") and (len(analyses) > 0):
         aprint(
-            "\n\n[bold]warning: these pairs of ROI/marslab files did not have "
-            "matching colors:\n",
+            "\n[bold dark_orange]note: do_empties = 'only' passed, ignoring "
+            "all non-empty marslab files"
         )
-        for badmars, badroi in bad_analyses[["MARSLAB", "ROI"]].values:
-            aprint(badmars + ", " + badroi)
-    ASDF_CONSOLE.style = "FDSA"
-    if len(ok_analyses) == 0:
+        analyses = analyses.drop(analyses.index)
+    elif (do_empties is False) and (len(empty_marslab) > 0):
+        aprint(
+            "\n[bold dark_orange]note: do_empties = False passed, ignoring "
+            "all empty marslab files"
+        )
+        empty_marslab = empty_marslab.drop(empty_marslab.index)
+    if len(analyses) + len(empty_marslab) == 0:
         return sorry_analysis()
-    aprint(
-        "\n[bold white] found {} usable ROI/marslab pair(s):\n".format(
-            len(ok_analyses)
+    if len(analyses) > 0:
+        aprint(
+            "\n[hot_pink italic bold underline]... "
+            "checking marslab/ROI pairs for matching colors ..."
         )
+        analyses, bad_analyses = compare_roi_colors(analyses)
+        if len(bad_analyses) > 0:
+            ASDF_CONSOLE.style = "FDSA.warning"
+            aprint(
+                "\n\n[bold]warning: these pairs of ROI/marslab files did not "
+                "have matching colors:\n",
+            )
+            for badmars, badroi in bad_analyses[["MARSLAB", "ROI"]].values:
+                aprint(badmars + ", " + badroi)
+    ASDF_CONSOLE.style = "FDSA"
+    if len(analyses) + len(empty_marslab) == 0:
+        return sorry_analysis()
+    message = f"\n[bold white] found {len(analyses)} usable " \
+              f"ROI/marslab pair(s) "
+    if len(empty_marslab) > 0:
+        message += f"and {len(empty_marslab)} empty marslab files"
+    aprint(message + ":\n")
+    empty_marslab['MARSLAB'] = empty_marslab['PATH']
+    empty_marslab['ROI'] = None
+    analyses = pd.concat(
+        [analyses, empty_marslab[analyses.columns]]
     )
-    for _, row in ok_analyses.iterrows():
-        aprint("* " + row["MARSLAB"] + "\n" + "* " + row["ROI"] + "\n")
+    for _, row in analyses.iterrows():
+        aprint(f"* {row['MARSLAB']}\n* {row['ROI']}\n")
     if not confirm_fdsa_metadata():
         aprint(
             "[deep_pink2 bold]\nHalting. If you didn't see the marslab/ROI "
@@ -346,7 +378,7 @@ def loudly_ingest_analyses(path, sol=None, seq_id=None, file_regex=None):
             "into separate directories.",
         )
         return None
-    return ok_analyses.reset_index(drop=True)
+    return analyses.reset_index(drop=True)
 
 
 def setup_reprocess(
@@ -356,8 +388,11 @@ def setup_reprocess(
     seq_id=None,
     marslab_regex=None,
     image_regex=None,
+    do_empties=True
 ):
-    analyses = loudly_ingest_analyses(marslab_path, sol, seq_id, marslab_regex)
+    analyses = loudly_ingest_analyses(
+        marslab_path, sol, seq_id, marslab_regex, do_empties
+    )
     if analyses is None:
         return None, None
     aprint(Rule(" finding observational data ", style="deep_pink2 blink"))
@@ -381,8 +416,7 @@ def setup_reprocess(
     if misses:
         for miss_path in misses:
             aprint(
-                "[slate_blue1]no matching observations in path for "
-                "{}".format(miss_path),
+                f"[slate_blue1]no matching observations for {miss_path}"
             )
             analyses = analyses.drop(
                 analyses.loc[analyses["MARSLAB"].isin(misses)].index
@@ -390,8 +424,8 @@ def setup_reprocess(
     if len(reprocess_pairs) == 0:
         sorry_analysis()
     aprint(
-        "[bold white]found {} observation-metadata pair(s) for "
-        "reprocessing.\n".format(str(len(reprocess_pairs)))
+        f"[bold white]found {len(reprocess_pairs)} observation-metadata "
+        f"pair(s) for reprocessing.\n"
     )
 
     for marslab, obs in reprocess_pairs.items():

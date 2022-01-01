@@ -40,7 +40,7 @@ def parse_marslab_fn(fn):
         "SOL": r"SOL(\d+)",
         "SEQ_ID": r"(zcam\d+)",
         # TODO: legacy support, remove marslab and roi later
-        "ANALYSIS_NAME": r"(.*?)-(?=(marslab|roi|csv|fits))",
+        "ANALYSIS_NAME": r".*?-(.*?)-(?=(marslab|roi|csv|fits))",
     }
     parsedict = {}
     for field, regex in field_regexes.items():

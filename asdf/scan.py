@@ -95,7 +95,7 @@ def skim_products(
         )
         if len(bad_files) < 20:
             ASDFLOG.warning(
-                "couldn't open:\n" + ",".join([file for file in bad_files])
+                "couldn't open:\n" + ", ".join([file for file in bad_files])
             )
         else:
             ASDFLOG.warning(
@@ -128,10 +128,19 @@ def ls_zcam(root_dir, recursive, file_regex):
         )
         if len(matches) != len(files):
             ASDFLOG.info(
-                "... {} / {} matching regex {} ...".format(
-                    str(len(matches)), str(len(files)), file_regex
-                )
+                f"... {len(matches)} / {len(files)} "
+                f"matching regex {file_regex} ..."
             )
+        files = matches
+    matches = [
+        file for file in files
+        if not re.match(r".*\.(xml|lbl)$", str(file), re.I)
+    ]
+    if len(matches) != len(files):
+        ASDFLOG.info(
+            f"... {len(matches)} / {len(files)} "
+            f"are not detached label files ..."
+        )
         files = matches
     products = tuple(filter(None, map(parse_zcam_fn, files)))
     if products:
@@ -282,7 +291,7 @@ def cluster_observations(
     return observations, parser_warnings, hidden_things
 
 
-def find_matching_pixmap(product_path):
+def find_matching_pixmap(product_path, code="pix_map"):
     # look where we are, look in ../pix_map, look in hardcoded roots --
     # like the /scratch directories on islamorada; they don't live in /project.
     # or whatever you define locally.
@@ -290,9 +299,9 @@ def find_matching_pixmap(product_path):
     product_path = Path(product_path)
     product_dir = product_path.parent
     sol_dir = product_dir.parent
-    search_dirs = [Path(sol_dir, "pix_map")]
+    search_dirs = [Path(sol_dir, code)]
     search_dirs += [
-        Path(root, sol_dir.name, "pix_map")
+        Path(root, sol_dir.name, code)
         for root in settings.sources.PIX_ROOTS
     ]
     search_dirs = set(search_dirs)
@@ -310,7 +319,9 @@ def find_matching_pixmap(product_path):
     if len(possible_pixmaps) == 0:
         return None, match_warnings
     # check 2: are they pixmaps?
-    possible_pixmaps = list(filter(is_pixel_map_heuristic, possible_pixmaps))
+    # TODO: gross hack
+    if code == "PIX_MAP":
+        possible_pixmaps = list(filter(is_pixel_map_heuristic, possible_pixmaps))
     # TODO: find an actual way to associate these across versions --
     #  even adding a version number check will inappropriately reject
     #  many pixmaps because they do not increment the version numbers
@@ -366,12 +377,12 @@ def match_in_dirs(search_dirs, product_path, predicate=None):
     return possible_matches
 
 
-def find_obs_pixmaps(product_paths):
+def find_obs_pixmaps(product_paths, code="pix_map"):
     all_match_warnings = []
     pixmaps = {}
     for path in product_paths:
         path = Path(path)
-        pixmap, match_warnings = find_matching_pixmap(path)
+        pixmap, match_warnings = find_matching_pixmap(path, code=code)
         if pixmap is not None:
             pixmaps[str(path)] = str(pixmap)
         all_match_warnings += match_warnings
@@ -465,6 +476,10 @@ def add_effective_taus(metadata):
     return metadata
 
 
+def is_marslab_empty(marslab_path: Union[str, Path]) -> bool:
+    return pd.read_csv(marslab_path)['COLOR'].iloc[0] == '-'
+
+
 def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
     stemmer = pdstr(
         "replace", "(roi|\.|fits|gz|marslab|csv)", "", regex=True
@@ -474,6 +489,9 @@ def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
 
     paired_marslab, lonely_marslab = split_on(
         marslab, marslab_stems.isin(roi_stems)
+    )
+    empty_marslab, lonely_marslab = split_on(
+        lonely_marslab, lonely_marslab['PATH'].map(is_marslab_empty)
     )
     paired_roi, lonely_roi = split_on(roi, roi_stems.isin(marslab_stems))
     paired_marslab = (
@@ -501,7 +519,7 @@ def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
     analysis_df = pd.concat(
         [marslab_path, roi_path, paired_roi.iloc[:, 1:]], axis=1
     )
-    return analysis_df, lonely_marslab, lonely_roi
+    return analysis_df, lonely_marslab, empty_marslab, lonely_roi
 
 
 def make_marslab_metadata_df(marslab_fn_list):
@@ -598,7 +616,9 @@ def find_matching_observations(analyses, search_dir, search_regex):
                 == analysis[["SOL", "SEQ_ID"]]
             ).all(axis=1)
         ]
-        clusters, _, _ = cluster_observations(sol_seq_files)
+        clusters, _, _ = cluster_observations(
+            sol_seq_files, keep_caltarget=True, keep_broadband=True
+        )
         matches = valfilter(
             lambda df: analysis["RSM"] in df["RSM"].values, clusters
         )

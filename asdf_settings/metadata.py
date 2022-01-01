@@ -148,6 +148,10 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "COMPRESSION",
     "COMPRESSION_QUALITY",
     *FILTER_DATA_COLUMNS,
+    "ROW",
+    "COLUMN",
+    "DET_RAD",
+    "DET_THETA"
 )
 
 # statistical columns we add along with mean value to FILTER_DATA_COLUMNS

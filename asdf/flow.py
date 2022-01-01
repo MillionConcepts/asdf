@@ -158,6 +158,8 @@ def asdf_body(
                 f"[red bold]something is wrong with the passed ROI file: "
                 f"{error}. Terminating."
             )
+            if debug is True:
+                raise
             return
         if merspect is None:
             aprint("... counting ROIs ...")
@@ -212,6 +214,11 @@ def asdf_body(
         threads=bandset.threads.get("save"),
         plain=save_plain_images,
     )
+    # keep images that are to be thumbnailed for upload, discard those
+    # that are not; waste not memory, want not memory
+    pick_thumbs = keyfilter(
+        partial(contains, settings.rapidlooks.THUMBNAILS)
+    )
     # set up thumbnail cache
     thumbnail_staging = {}
     # generate rapidlooks
@@ -253,11 +260,6 @@ def asdf_body(
             )
             save_images(outpath=Path(outpath, "browse"), basename=bandset.name)
             prog.remove_task(ASDF_RPH.task_id)
-        # keep images that are to be thumbnailed for upload, discard those
-        # that are not; waste not memory, want not memory
-        pick_thumbs = keyfilter(
-            partial(contains, settings.rapidlooks.THUMBNAILS)
-        )
         thumbnail_staging |= pick_thumbs(bandset.looks)
         bandset.purge("looks")
 
