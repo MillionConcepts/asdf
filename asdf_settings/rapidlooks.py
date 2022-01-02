@@ -3,6 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import matplotlib.font_manager as mplf
+from numpy import clip
 from scipy.ndimage import gaussian_filter
 
 from .generators import glom, smoother, make_bilateralfilter
@@ -70,6 +71,13 @@ ENHANCED_DEFAULTS = {
     "plotter": {"function": simple_figure},
 }
 
+# default settings for rgb bandmap looks
+RGB_BANDMAP_DEFAULTS = {
+    "look": "nested_composite",
+    "params": {"special_constants": [0]},
+    "plotter": {"function": simple_figure},
+}
+
 # default settings for natural color looks
 NATURAL_DEFAULTS = {
     "name": "natural color {bands}",
@@ -118,10 +126,42 @@ STRETCHY = (
     {"bands": ("L0R", "L0G", "L0B")},
     {"bands": ("R6", "R3", "R1")},
 )
+# RGB_BANDMAP_DEFAULTS are added to these
+RGB_BANDMAP = [
+    {
+        "name": "rgb bandmap type 1",
+        "params": {
+            "red": {
+                "look": "ratio",
+                "bands": ("R0R", "R1"),
+                "limiter": {
+                    "function": clip,
+                    "params": {"a_min": 0.9, "a_max": 1.15},
+                },
+            },
+            "green": {
+                "look": "band_depth",
+                "bands": ("R1", "R5", "R3"),
+                "limiter": {
+                    "function": clip,
+                    "params": {"a_min": 0.02, "a_max": 0.1},
+                },
+            },
+            "blue": {
+                "look": "ratio",
+                "bands": ("R1", "R5"),
+                "limiter": {
+                    "function": clip,
+                    "params": {"a_min": 1.05, "a_max": 1.15},
+                },
+            },
+        },
+    }
+]
 
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
-CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY"]
+CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
 #############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################

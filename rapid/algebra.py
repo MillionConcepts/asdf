@@ -42,6 +42,7 @@ def starmap_matching(function_mapping, object_mapping):
     # i consider a dictionary comprehension unreadable here
     evaluated_functions = {}
     for name, func in function_mapping.items():
+        # TODO: this skips kwonlyargs, use inspect.signature
         relevant_objects = {
             name: obj
             for name, obj in object_mapping.items()

@@ -30,9 +30,9 @@ def compile_looks():
     rapidlooks = settings.generators.look_assembler.RAPIDLOOKS
     # interleave 'hard' rapidlooks for efficiency
     return (
-            rapidlooks[slice(None, None, 3)]
-            + rapidlooks[slice(1, None, 3)]
-            + rapidlooks[slice(2, None, 3)]
+        rapidlooks[slice(None, None, 3)]
+        + rapidlooks[slice(1, None, 3)]
+        + rapidlooks[slice(2, None, 3)]
     )
 
 
@@ -54,12 +54,14 @@ def make_asdf_outpath(output, bandset):
     return outpath
 
 
-def make_pointing_annotation(pointing):
-    return ", ".join(
-        key.lower() + " " + str(value)
-        for key, value in parse_pointing(pointing).items()
+def make_bandset_annotation(metadata):
+    line = metadata.iloc[0]
+    return (
+        f"{line['NAME']}, "
+        f"sol {line['SOL']}, "
+        f"seq_id {line['SEQ_ID'][4:]}, "
+        f"rsm {line['RSM']}"
     )
-
 
 def save_plainly(look, filename, outpath):
     if isinstance(look, matplotlib.figure.Figure):
@@ -120,10 +122,10 @@ def clean_sequence_id(seq_id):
 
 
 def parse_abbreviated_inputs(
-        sol,
-        seq_id,
-        root_path_abbreviation=None,
-        product_subdirectory=None,
+    sol,
+    seq_id,
+    root_path_abbreviation=None,
+    product_subdirectory=None,
 ):
     """Commonly used directory paths have standard abbreviations which are
     defined in asdf_settings.sources. Defining them in settings rather than
@@ -138,7 +140,9 @@ def parse_abbreviated_inputs(
     # default path root and subdirectory, which can be overridden
     if root_path_abbreviation:
         try:
-            path_root = settings.sources.PATH_ABBREVIATIONS[root_path_abbreviation]
+            path_root = settings.sources.PATH_ABBREVIATIONS[
+                root_path_abbreviation
+            ]
         except KeyError:
             source_names = ", ".join(
                 settings.sources.PATH_ABBREVIATIONS.keys()
@@ -306,8 +310,8 @@ def drop_excess_stats(compact):
         if "_" not in column:
             continue
         if (
-                column.split("_")[0] in filts
-                and column.split("_")[1] not in COMPACT_MARSLAB_STATS
+            column.split("_")[0] in filts
+            and column.split("_")[1] not in COMPACT_MARSLAB_STATS
         ):
             compact = compact.drop(column, axis=1)
     return compact
@@ -352,7 +356,7 @@ def construct_title_and_annotation(bandset, look_name):
     title = insert_wavelengths_into_text(title)
     annotation = "\n".join(
         (
-            make_pointing_annotation(bandset.metadata),
+            make_bandset_annotation(bandset.metadata),
             settings.rapidlooks.CREDIT_TEXT,
         )
     )
