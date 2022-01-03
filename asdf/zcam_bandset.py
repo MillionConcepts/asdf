@@ -178,6 +178,8 @@ class ZcamBandSet(BandSet):
         self.rois = load_roi_file(self.rois, title=title)
         if save is not True:
             return
+        if not Path(outpath, "data").exists():
+            os.makedirs(Path(outpath, "data"))
         if is_sel_file(input_rois):
             sel_fn = shutil.copy(input_rois, Path(outpath, "data"))
             self.local_files.append(sel_fn)
