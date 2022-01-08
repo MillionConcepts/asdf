@@ -71,6 +71,27 @@ import pplot
 # TODO: rewrite strings / rich printing in this module with better or at least
 #  more consistent markup
 
+def get_scan_results(
+    explicit_path, keep_broadband, keep_caltarget, root_dir, scan_kwargs
+):
+    with ASDF_PROGRESS_SPIN as prog:
+        ASDF_RPH_SPIN.task_id = prog.add_task(" ... scanning files ...")
+        style_prog(prog, "green")
+        try:
+            root_dir, target_file = preprocess_scan_path(
+                root_dir, explicit_path
+            )
+            products = scan_zcam_files(root_dir, **scan_kwargs)
+            aprint(" ... chunking products into observations ...")
+            results, problems, hidden = cluster_observations(
+                products, target_file, keep_broadband, keep_caltarget
+            )
+        except (ValueError, FileNotFoundError, PermissionError) as err:
+            return reject_scan(f"{err} :confused_face:\n")
+        finally:
+            prog.remove_task(ASDF_RPH_SPIN.task_id)
+    return results, problems, hidden
+
 
 def find_and_offer_observations(
     root_dir,
@@ -85,32 +106,15 @@ def find_and_offer_observations(
     console; ask the user to select a observation if there is more than one;
     ask the user to confirm the observation if there is only one.
     """
-    with ASDF_PROGRESS_SPIN as prog:
-        ASDF_RPH_SPIN.task_id = prog.add_task(" ... scanning files ...")
-        style_prog(prog, "green")
-        try:
-            root_dir, target_file = preprocess_scan_path(
-                root_dir, explicit_path
-            )
-            products = scan_zcam_files(root_dir, **scan_kwargs)
-            aprint(" ... chunking products into observations ...")
-            results, problems, hidden_things = cluster_observations(
-                products, target_file, keep_broadband, keep_caltarget
-            )
-        except (ValueError, FileNotFoundError, PermissionError) as err:
-            return reject_scan(
-                f"{err} :confused_face:\n"
-            )
-        finally:
-            prog.remove_task(ASDF_RPH_SPIN.task_id)
+    results, problems, hidden = get_scan_results(
+        explicit_path, keep_broadband, keep_caltarget, root_dir, scan_kwargs
+    )
     print_scan_results(results)
-    if problems:
-        for problem in problems:
-            aprint(problem, style="dark_orange bold")
-        aprint("\n")
-    if hidden_things:
-        for category in hidden_things:
-            aprint(category, style="purple bold")
+    for category, color in zip((problems, hidden), ("dark_orange", "purple")):
+        if len(category) == 0:
+            continue
+        for subcategory in category:
+            aprint(subcategory, style=f"{color} bold")
         aprint("\n")
     if not len(results):
         suffix = ""
@@ -151,6 +155,7 @@ def find_and_offer_observations(
                 "[italic]asdf[/italic] didn't find what you expected, "
             )
         return tuple(results.values())[0], False
+
 
 
 def is_feature_mismatch(metadata, field):

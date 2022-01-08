@@ -199,11 +199,12 @@ def cluster_observations(
     groups = products.groupby(
         ["SOL", "SEQ_ID", "PRODUCT_TYPE", "THUMBNAIL", "PRODUCER"]
     )
-    base_version = None
     observations = {}
     parser_warnings = []
     rejects = {cause: 0 for cause in ("bb", "cal", "frame", "version")}
     for group_ix, group in groups:
+        if target_file and (target_file not in group["PATH"].values):
+            continue
         sol, seq_id, product_type, thumb, producer = group_ix
         if keep_broadband is False:
             if group["FILTER"].isin(("L0", "R0")).all() or (
@@ -233,11 +234,7 @@ def cluster_observations(
         ):
             rsm_groups = group.groupby(["RSM"])
             for RSM, rsm_group in rsm_groups:
-                if target_file and (
-                    target_file not in rsm_group["PATH"].values
-                ):
-                    continue
-                versioned = drop_mismatched_versions(rsm_group, base_version)
+                versioned = drop_mismatched_versions(rsm_group)
                 if len(versioned) != len(rsm_group):
                     rejects["version"] += len(rsm_group) - len(versioned)
                     rsm_group = versioned
@@ -245,8 +242,8 @@ def cluster_observations(
                     observations[name + "_RSM" + str(RSM)] = rsm_group
                 else:
                     parser_warnings.append(
-                        "warning: an uncategorized issue may have prevented"
-                        " me from correctly clustering  {}.".format(seq_id)
+                        f"warning: an uncategorized issue may have prevented "
+                        f"me from correctly clustering {seq_id}."
                     )
                     rsm_group = rsm_group.drop_duplicates(subset="FILTER")
                     if not rsm_group["FILTER"].duplicated().any():
@@ -258,30 +255,24 @@ def cluster_observations(
             if len(group["RSM"].unique()) % 2 != 0:
                 parser_warnings.append(
                     f"warning: {seq_id} has a mast movement pattern I cannot "
-                    "interpret, or not all files from the observation are "
-                    "currently present in the directory. files may not have "
-                    "been chunked correctly."
+                    f"interpret, or not all files from the observation are "
+                    f"currently present in the directory. files may not have "
+                    f"been chunked correctly."
                 )
             for repoint in partition(2, group["RSM"].unique()):
                 observation = group.loc[group["RSM"].isin(repoint)]
-                if target_file and (
-                    target_file not in observation["PATH"].values
-                ):
-                    continue
-                versioned = drop_mismatched_versions(observation, base_version)
+                versioned = drop_mismatched_versions(observation)
                 if not versioned["FILTER"].duplicated().any():
                     observations[name + "_RSM" + str(repoint[0])] = versioned
                 else:
                     parser_warnings.append(
-                        "warning: an unknown windowing issue may have "
-                        "prevented me from correctly clustering {}.".format(
-                            seq_id
-                        )
+                        f"warning: an unknown windowing issue may have "
+                        f"prevented me from correctly clustering {seq_id}."
                     )
         else:
             parser_warnings.append(
-                "warning: MONO and STEREO mixed in {}; could not be "
-                "clustered.".format(seq_id)
+                f"warning: MONO and STEREO mixed in {seq_id}; could not be "
+                f"clustered."
             )
     hidden_things = []
     for count, line in zip(
@@ -294,9 +285,7 @@ def cluster_observations(
         ),
     ):
         if count > 0:
-            hidden_things.append(
-                "({} file(s) {} hidden)".format(str(count), line)
-            )
+            hidden_things.append(f"({count} file(s) {line} hidden)")
     return observations, parser_warnings, hidden_things
 
 
