@@ -21,7 +21,6 @@ EMPTY_METADATA_FIELDS = ["NOTES"]
 # we don't ask users about these, or even generate them, but do repopulate
 # them during FDSA runs.
 LEGACY_METADATA_FIELDS = [
-    "LANDFORM TYPE",
     "SOIL COLOR",
     "LANDFORM TYPE",
     "WORKSPACE",

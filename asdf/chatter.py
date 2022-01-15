@@ -335,7 +335,7 @@ def loudly_ingest_analyses(
         f"files in path [dark_turquoise]matched[/dark_turquoise] sol, seq_id, "
         f"and regex filters"
     )
-    if (len(roi) == 0) or (len(marslab) == 0):
+    if len(marslab) == 0:
         return sorry_analysis()
     aprint(
         "\n[hot_pink italic bold underline]... "
