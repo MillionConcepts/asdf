@@ -16,24 +16,27 @@ LOCATION_TABLE = {
 # these are always generated blank and intended to be populated manually when
 # needed. we don't actually ask the user about them. they will, however,
 # repopulate from saved files using fdsa.
-EMPTY_METADATA_FIELDS = [
-    "SCAM_LIBS",
-    "SCAM_VISIR",
-    "SCAM_RMI",
-    "SCAM_RAMAN",
-    "PIXL",
-    "SHERLOC",
-    "WATSON",
-    "NOTES",
+EMPTY_METADATA_FIELDS = ["NOTES"]
+
+# we don't ask users about these, or even generate them, but do repopulate
+# them during FDSA runs.
+LEGACY_METADATA_FIELDS = [
+    "LANDFORM TYPE",
+    "SOIL COLOR",
+    "LANDFORM TYPE",
+    "WORKSPACE",
+    "TARGET",
+    "DISTANCE",
 ]
 
 # fields relevant only to specific feature types. users will only be queried
 # about these fields if they have set FEATURE = the key of the list. Don't put
 # these before the FEATURE query or they'll never be asked about.
 FEATURE_EXCLUSIVE_ROI_FIELDS = {
-    "rock": ["MORPHOLOGY", "FLOAT", "ROCK SURFACE"],
-    "soil": ["GRAIN SIZE", "SOIL LOCATION", "SOIL COLOR"],
-    "landform": ["LANDFORM TYPE"],
+    # similarly, for the special MEMBER selection behavior to work, FORMATION
+    # needs to come before MEMBER in this list.
+    "rock": ["FORMATION", "MEMBER", "MORPHOLOGY", "FLOAT", "ROCK SURFACE"],
+    "soil": ["GRAIN SIZE", "SOIL LOCATION"],
 }
 # don't mess with this statement if you want to be able to use exclusive_fields
 # later. it pulls all the lists out of FEATURE_EXCLUSIVE_ROI_FIELDS
@@ -46,11 +49,9 @@ exclusive_fields = list(
 ROI_METADATA_FIELDS = (
     "FEATURE",
     *exclusive_fields,
-    "TARGET",
-    "DISTANCE",
-    "WORKSPACE",
     "DESCRIPTION",
     *EMPTY_METADATA_FIELDS,
+    *LEGACY_METADATA_FIELDS,
 )
 
 # special prompt text for these
@@ -59,28 +60,29 @@ ROI_METADATA_FIELDS = (
 ROI_METADATA_FIELD_PROMPTS = {
     "FLOAT": "Is / are the rock(s) associated with {title} ROI(s) a {field}?",
     "FEATURE": "What category of {field} is / are {title} ROI(s)?",
-    "DESCRIPTION": "Enter any additional {field} {title} ROI(s) require(s) "
+    "DESCRIPTION": "Enter any additional {field} for {title} ROI(s)"
     "(press Enter to skip)",
     "MORPHOLOGY": "Which named {field} type do / does the rock in {title} "
     "ROI(s) belong to?",
     "TARGET": "What named {field} do / does {title} ROI(s) cover? "
     "(press Enter to skip)",
-    "DISTANCE": "What {field} category do / does {title} ROI(s) fall into?",
-    "WORKSPACE": "What {field} is / are {title} ROI(s) in? (press Enter to "
-    "skip)",
+    "GRAIN SIZE": "What is the {field} of the soil in {title} ROI? Skip if "
+    "the soil is too distant to tell. (press Enter to skip)",
+    "FORMATION": "What {field} do / does {title} ROI(s) belong to?",
+    "MEMBER": "What {field} of their parent formation do / does {title} ROIs "
+    "belong to?",
 }
 
 # restrictions, if any, on value choices for these fields.
 ROI_METADATA_FIELD_CHOICES = {
-    "FEATURE": [
-        "rock",
-        "soil",
-        "landform",
-        "pebble",
-        "hardware",
-    ],
+    "FEATURE": ["rock", "soil", "pebble", "hardware"],
     "FLOAT": ["float", "in-place", "unclear"],
     "MORPHOLOGY": ["pitted", "paver", "massive", "layered"],
+    "FORMATION": ["Maaz", "Seitah"],
+    "MEMBER": {
+        "Maaz": ["Chal", "Nataani", "Rochette", "Artuby", "Roubion"],
+        "Seitah": ["Content", "Bastide", "Issole"],
+    },
     "ROCK SURFACE": [
         "bright natural surface",
         "dark natural surface",
@@ -90,26 +92,22 @@ ROI_METADATA_FIELD_CHOICES = {
         "abraded surface",
         "coating (not dust)",
         "clast/inclusion",
-        "tailings"
+        "tailings",
     ],
-    "GRAIN SIZE": ["fine", "coarse", "mixed"],
+    "GRAIN SIZE": [
+        "fine (grains not resolvable)",
+        "coarse (grains resolvable)",
+        "mixed",
+    ],
     "SOIL LOCATION": [
         "undisturbed regolith",
         "on rock",
-        "wheel track/disturbed surface",
-        "bedform slope",
-        "bedform crest",
-        "bedform trough",
+        "wheel track compressed",
+        "wheel track disturbed",
+        "disturbed surface (not wheel track)",
+        "bedform crest/slope",
         "on hardware",
     ],
-    "SOIL COLOR": [
-        "bright/dusty",
-        "dark/neutral",
-        "blueish/purplish",
-        "reddish/orangeish",
-    ],
-    "LANDFORM TYPE": ["delta", "remnant", "Jezero rim"],
-    "DISTANCE": ["nearfield", "midfield", "farfield"],
 }
 
 # Only the columns listed here will appear in the compact -marslab.csv file.
@@ -151,7 +149,7 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "ROW",
     "COLUMN",
     "DET_RAD",
-    "DET_THETA"
+    "DET_THETA",
 )
 
 # statistical columns we add along with mean value to FILTER_DATA_COLUMNS
@@ -201,9 +199,9 @@ PIXEL_FLAG_NAMES = ("bad", "no_signal", "nonlinear", "saturated", "hot")
 # Define the size, color, and symbol for flagged pixels
 PIXEL_FLAG_STYLE = (
     # (1, "#ff5fd7", "o"),
-    (1, "#aa5fd7", "3"), # bad
-    (4, "#888888", "."), # no_signal
-    (0.2, "#87ff00", "o"), # nonlinear
-    (7, "#00ffd7", "*"), # saturated
-    (5, "#d7af00", "|"), # hot
+    (1, "#aa5fd7", "3"),  # bad
+    (4, "#888888", "."),  # no_signal
+    (0.2, "#87ff00", "o"),  # nonlinear
+    (7, "#00ffd7", "*"),  # saturated
+    (5, "#d7af00", "|"),  # hot
 )

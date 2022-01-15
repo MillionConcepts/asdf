@@ -129,7 +129,10 @@ STRETCHY = (
 # RGB_BANDMAP_DEFAULTS are added to these
 RGB_BANDMAP = [
     {
-        "name": "rgb bandmap type 1",
+        # TODO: try switching to sigma / percentile
+        # TODO: is there some better idea than the single quote thing?
+        # placing single quotes causes asdf to print the title verbatim
+        "name": "'mafic bandmap: R0R/R1 BD910 R1/R5'",
         "params": {
             "red": {
                 "look": "ratio",

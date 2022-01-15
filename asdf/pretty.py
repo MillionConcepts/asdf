@@ -5,6 +5,7 @@ in this module
 
 import os.path
 from types import MappingProxyType
+from typing import Optional, Sequence
 
 import pandas as pd
 from rich.highlighter import Highlighter
@@ -175,10 +176,16 @@ def metadata_open_prompt(text) -> str:
     return Prompt.ask(text, console=ASDF_CONSOLE)
 
 
-def dispatched_metadata_prompt(field: str, title: str = None) -> str:
+def dispatched_metadata_prompt(
+    field: str,
+    title: str = None,
+    sideload_options: Optional[Sequence[str]] = None,
+) -> str:
     """
     ask user for the value of a metadata field. calls specific functions as
-    necessary to provide sensical and grammatically correct prompts
+    necessary to provide sensical and grammatically correct prompts.
+    sideload_options interrupts flow to modify available options based on
+    other questions (MEMBERs of a FORMATION, for instance)
     """
     if field.upper() in ROI_METADATA_FIELD_PROMPTS.keys():
         text = format_metadata_prompt(
@@ -186,6 +193,8 @@ def dispatched_metadata_prompt(field: str, title: str = None) -> str:
         )
     else:
         text = generic_metadata_prompt_text(field, title)
+    if sideload_options is not None:
+        return metadata_choice_prompt(text, sideload_options)
     if field.upper() in ROI_METADATA_FIELD_CHOICES.keys():
         return metadata_choice_prompt(
             text, ROI_METADATA_FIELD_CHOICES[field.upper()]

@@ -158,7 +158,7 @@ def fdsa_initiate(
     seq_id: "i" = "",
     sol: "l" = "",
     marslab_regex: "mr" = None,
-    image_regex: "ir" = ".*IOF.*",
+    image_regex: "ir" = ".*IOF_N.*",
     config=None,
     skip_pixmaps: "sp" = False,
     do_empties: "de" = True

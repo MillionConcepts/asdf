@@ -64,12 +64,15 @@ from asdf_settings.metadata import (
     FEATURE_EXCLUSIVE_ROI_FIELDS,
     EMPTY_METADATA_FIELDS,
     PIXEL_FLAG_NAMES,
+    ROI_METADATA_FIELD_CHOICES,
+    LEGACY_METADATA_FIELDS,
 )
 import pplot
 
 
 # TODO: rewrite strings / rich printing in this module with better or at least
 #  more consistent markup
+
 
 def get_scan_results(
     explicit_path, keep_broadband, keep_caltarget, root_dir, scan_kwargs
@@ -106,6 +109,8 @@ def find_and_offer_observations(
     console; ask the user to select a observation if there is more than one;
     ask the user to confirm the observation if there is only one.
     """
+    # TODO: pass polite error message rather than not-enough-values traceback
+    #  when no results are found in a directory
     results, problems, hidden = get_scan_results(
         explicit_path, keep_broadband, keep_caltarget, root_dir, scan_kwargs
     )
@@ -120,8 +125,10 @@ def find_and_offer_observations(
         suffix = ""
         if problems:
             if any(["cluster" in problem for problem in problems]):
-                suffix = "This observation seems to be too complicated for " \
-                         "the automated clustering algorithm. "
+                suffix = (
+                    "This observation seems to be too complicated for "
+                    "the automated clustering algorithm. "
+                )
         return reject_scan(
             f"Sorry, no usable observations found. {suffix}:confused_face:\n"
         )
@@ -157,7 +164,6 @@ def find_and_offer_observations(
         return tuple(results.values())[0], False
 
 
-
 def is_feature_mismatch(metadata, field):
     if field not in list(
         chain.from_iterable(FEATURE_EXCLUSIVE_ROI_FIELDS.values())
@@ -190,7 +196,10 @@ def ask_user_about_roi(
     metadata_fields = list(ROI_METADATA_FIELDS)
     roi_metadata = {}
     for field in metadata_fields:
-        # fill 'empty' fields like notes and coordinated observations
+        # ignore legacy fields
+        if field in LEGACY_METADATA_FIELDS:
+            continue
+        # fill 'empty' fields like notes
         if field in EMPTY_METADATA_FIELDS:
             roi_metadata[field] = ""
             continue
@@ -203,27 +212,52 @@ def ask_user_about_roi(
         if field in constants.keys():
             roi_metadata[field] = constants[field]
             continue
-        roi_metadata[field] = ci(dispatched_metadata_prompt, field, roi_title)
+        # sideloaded options for flowdown from within-category choices.
+        # currently used only for FORMATION / MEMBER.
+        # TODO: kind of a hack.
+        options = None
+        if field == "MEMBER":
+            if "FORMATION" not in roi_metadata.keys():
+                continue
+            options = ROI_METADATA_FIELD_CHOICES["MEMBER"].get(
+                roi_metadata["FORMATION"]
+            )
+            if options is None:
+                continue
+        roi_metadata[field] = ci(
+            dispatched_metadata_prompt, field, roi_title, options
+        )
     return roi_metadata
 
 
 def input_roi_metadata(marslab_data, ci):
     constants = {}
     for field in ROI_METADATA_FIELDS:
-        # TODO: this may be sloppy
-        if field in EMPTY_METADATA_FIELDS:
+        # TODO: this may all be excessively sloppy
+        options = None
+        if field in chain.from_iterable(
+            [EMPTY_METADATA_FIELDS + LEGACY_METADATA_FIELDS]
+        ):
             continue
         if is_feature_mismatch(constants, field):
             continue
-        if (
-            ci(
-                metadata_choice_prompt,
-                Text(f"Is the value of {field} the same for all ROIs?"),
-                ("Yes", "No"),
+        if field == "MEMBER":
+            if "FORMATION" not in constants.keys():
+                continue
+            options = ROI_METADATA_FIELD_CHOICES["MEMBER"].get(
+                constants["FORMATION"]
             )
-            == "Yes"
-        ):
-            constants[field] = dispatched_metadata_prompt(field)
+            if options is None:
+                continue
+        constant_query = ci(
+            metadata_choice_prompt,
+            Text(f"Is the value of {field} the same for all ROIs?"),
+            ("Yes", "No"),
+        )
+        if constant_query == "Yes":
+            constants[field] = dispatched_metadata_prompt(
+                field, sideload_options=options
+            )
     # TODO: this might be confusing if all fields are constant for all ROIs,
     #  but this is probably a rare case.
     for region in marslab_data["COLOR"]:
@@ -266,7 +300,7 @@ def handle_map_checks(bandset):
 
 
 def loudly_ingest_analyses(
-        path, sol=None, seq_id=None, file_regex=None, do_empties = True
+    path, sol=None, seq_id=None, file_regex=None, do_empties=True
 ):
     ASDF_CONSOLE.style = "FDSA"
     if not cached_exists(path):
@@ -362,16 +396,15 @@ def loudly_ingest_analyses(
     ASDF_CONSOLE.style = "FDSA"
     if len(analyses) + len(empty_marslab) == 0:
         return sorry_analysis()
-    message = f"\n[bold white] found {len(analyses)} usable " \
-              f"ROI/marslab pair(s) "
+    message = (
+        f"\n[bold white] found {len(analyses)} usable " f"ROI/marslab pair(s) "
+    )
     if len(empty_marslab) > 0:
         message += f"and {len(empty_marslab)} empty marslab files"
     aprint(message + ":\n")
-    empty_marslab['MARSLAB'] = empty_marslab['PATH']
-    empty_marslab['ROI'] = None
-    analyses = pd.concat(
-        [analyses, empty_marslab[analyses.columns]]
-    )
+    empty_marslab["MARSLAB"] = empty_marslab["PATH"]
+    empty_marslab["ROI"] = None
+    analyses = pd.concat([analyses, empty_marslab[analyses.columns]])
     for _, row in analyses.iterrows():
         aprint(f"* {row['MARSLAB']}\n* {row['ROI']}\n")
     if not confirm_fdsa_metadata():
@@ -393,7 +426,7 @@ def setup_reprocess(
     seq_id=None,
     marslab_regex=None,
     image_regex=None,
-    do_empties=True
+    do_empties=True,
 ):
     analyses = loudly_ingest_analyses(
         marslab_path, sol, seq_id, marslab_regex, do_empties
@@ -420,9 +453,7 @@ def setup_reprocess(
             aprint(pw, style="purple bold")
     if misses:
         for miss_path in misses:
-            aprint(
-                f"[slate_blue1]no matching observations for {miss_path}"
-            )
+            aprint(f"[slate_blue1]no matching observations for {miss_path}")
             analyses = analyses.drop(
                 analyses.loc[analyses["MARSLAB"].isin(misses)].index
             )
@@ -594,23 +625,31 @@ def fdsa_insert(marslab_data, prototype):
         fields_skipped = Text("")
         for field in ROI_METADATA_FIELDS:
             if field not in prototype.columns:
+                if field in LEGACY_METADATA_FIELDS:
+                    # who cares!
+                    continue
                 fields_skipped.append(
-                    "note: no {} field in this marslab file, probably from an "
-                    "earlier asdf version\n".format(field)
+                    f"note: no {field} field in this marslab file, probably "
+                    f"from an earlier asdf version\n"
                 )
                 marslab_data[field] = ""
                 continue
             proto_value = proto_slice[field].iloc[0]
+            use_message = f" {field} "
+            if field in LEGACY_METADATA_FIELDS:
+                if proto_value == "-":
+                    continue
+                use_message += "(retained legacy field) "
             fields_used.append_text(
-                Text(" " + field + " ", style="default bold")
+                Text(use_message, style="default bold")
             ).append_text(Text(str(proto_value), style="bold hot_pink"))
-
             marslab_data.loc[
                 marslab_data["COLOR"] == color, field
             ] = proto_value
         aprint(colorize_merspect_roi_name(color).append_text(fields_used))
         if fields_skipped:
             aprint(fields_skipped)
+
     return marslab_data
 
 

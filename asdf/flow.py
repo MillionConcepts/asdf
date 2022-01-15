@@ -96,9 +96,7 @@ def asdf_body(
     ci = partial(catch_interaction, noninteractive)
 
     # tell user where we're putting stuff
-    aprint(
-        "[bold green]NOTE: files will be written to {}".format(str(outpath))
-    )
+    aprint(f"[bold green]NOTE: files will be written to {outpath}")
     # get observation name
     if recreate_from:
         aprint(
@@ -110,8 +108,8 @@ def asdf_body(
             analysis = str(prototype["ANALYSIS_NAME"].iloc[0])
             if analysis != "-":
                 aprint(
-                    "[hot_pink italic]fdsa: ROI set / analysis name is "
-                    + analysis
+                    f"[hot_pink italic]fdsa: ROI set / analysis name is "
+                    f"{analysis}"
                 )
                 bandset.suffix = f"-{analysis}"
                 bandset.metadata["ANALYSIS_NAME"] = analysis

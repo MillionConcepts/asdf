@@ -346,14 +346,26 @@ def remove_stretch_names(look_name):
 def construct_filename(look_name, basename):
     if "band_depth" in look_name:
         look_name = rearrange_band_depth_for_filename(look_name)
-    filename = f"{look_name.replace(' ', '_')}_{basename}.png"
+    filename = f"{look_name}_{basename}.png"
+    # remove or underscore single-quotes added to escape verbatim names in
+    # annotations, spaces and commas and slashes and semicolons that have
+    # whatever purpose
+    filename = re.sub(r"([ \\/;:,])", "_", filename)
+    filename = re.sub(r"([\n'])", "", filename)
     return filename
 
 
+# TODO, maybe: this will fail or behave weirdly if people add band names,
+#  especially spurious ones, to rapidlook names: perhaps people just shouldn't
+#  do that
 def construct_title_and_annotation(bandset, look_name):
-    # aggressively remove names of stretches &c
-    title = remove_stretch_names(look_name)
-    title = insert_wavelengths_into_text(title)
+    # permit verbatim titles
+    if look_name[0] == "'":
+        title = look_name.strip("'")
+    else:
+        # aggressively remove names of stretches &c
+        title = remove_stretch_names(look_name)
+        title = insert_wavelengths_into_text(title)
     annotation = "\n".join(
         (
             make_bandset_annotation(bandset.metadata),
