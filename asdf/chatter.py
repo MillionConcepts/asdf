@@ -114,6 +114,10 @@ def find_and_offer_observations(
     results, problems, hidden = get_scan_results(
         explicit_path, keep_broadband, keep_caltarget, root_dir, scan_kwargs
     )
+    # meaningful error message for this case should have been printed in
+    # get_scan_results
+    if results is None:
+        return None, None
     print_scan_results(results)
     for category, color in zip((problems, hidden), ("dark_orange", "purple")):
         if len(category) == 0:
@@ -494,7 +498,7 @@ def reject_scan(msg):
         f"If you passed an abbreviated (-a) path, you could instead try "
         f"passing a full path to one of the files you want to work with."
     )
-    return None, False
+    return None, None, None
 
 
 def collect_dispersed_metadata(metadata):

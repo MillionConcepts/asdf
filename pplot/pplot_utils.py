@@ -119,11 +119,17 @@ def pretty_plot(
     credit="Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC",
     sym=None,
 ):
-    if target_name.strip().strip("-") == "":
-        target_annotation = ""
-    else:
-        target_annotation = f" : {target_name}"
-    annotation_string = f"Sol{str(sol).zfill(3)} : {seq_id}{target_annotation}"
+    from numbers import Integral
+    annotation_parts = []
+    if isinstance(sol, (str, Integral)):
+        if sol:
+            annotation_parts.append(f"Sol{str(sol).zfill(3)}")
+    if isinstance(seq_id, str, ):
+        if seq_id:
+            annotation_parts.append(seq_id)
+    if not (target_name.strip().strip("-") == ""):
+        annotation_parts.append(target_name)
+    annotation_string = " : ".join(annotation_parts)
     assert (
         edge in ["left", "right", "top", "bottom"] for edge in plot_edges
     )  # Tests that the variable has a valid value
@@ -140,7 +146,7 @@ def pretty_plot(
     # Remap the colors to feature names; add morphology / soil location when
     # available
     roi_labels = {}
-    for _, row in data.iterrows():
+    for row_ix, row in data.iterrows():
         if pd.isnull(row["FEATURE"]) or (row["FEATURE"] == "-"):
             label = row["COLOR"]
         else:
@@ -157,7 +163,7 @@ def pretty_plot(
                 and (row["SOIL LOCATION"] != "-")
             ):
                 label += f" ({row['SOIL LOCATION']})"
-        roi_labels[row["COLOR"]] = label
+        roi_labels[row_ix] = label
     # adding this to slightly increase robustness
     for k in data.keys():
         if (data[k] == "-").all():
@@ -358,13 +364,11 @@ def pretty_plot(
             label=(
                 "\n".join(
                     textwrap.wrap(
-                        roi_labels[data["COLOR"].values[i]],
+                        roi_labels[i],
                         width=20,
                         break_long_words=False,
                     )
                 )
-                if data["COLOR"].values[i] in roi_labels.keys()
-                else data["COLOR"].values[i]
             ),
         )
 

@@ -7,15 +7,14 @@ from functools import partial
 from hashlib import md5
 from pathlib import Path
 
+import asdf_settings as settings
 import matplotlib.figure
 import numpy as np
 import pandas as pd
-
-import asdf_settings as settings
-from dustgoggles.structures import NestingDict
 from asdf.console import ASDF_CONSOLE, aprint
-from asdf.parse import parse_pointing
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
+from dustgoggles.structures import NestingDict
+
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.imgutils import absolutely_destroy
 from marslab.imgops.regions import count_rois_on_image, roi_stats
@@ -62,6 +61,7 @@ def make_bandset_annotation(metadata):
         f"seq_id {line['SEQ_ID'][4:]}, "
         f"rsm {line['RSM']}"
     )
+
 
 def save_plainly(look, filename, outpath):
     if isinstance(look, matplotlib.figure.Figure):

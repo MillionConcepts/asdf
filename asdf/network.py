@@ -10,6 +10,7 @@ import os
 import time
 import urllib.request
 from collections.abc import Callable, MutableMapping
+from numbers import Number
 from pathlib import Path
 import socket
 from typing import Any
@@ -79,6 +80,11 @@ def get_google_sheet(
     return pd.DataFrame()
 
 
+def stringify_unspreadsheetly_values(obj: Any):
+    spreadsheetly_types = (Number, dt.datetime, str)
+    return obj if isinstance(obj, spreadsheetly_types) else str(obj)
+
+
 def post_google_sheet(
     dataframe,
     sheet_id,
@@ -91,7 +97,10 @@ def post_google_sheet(
     spreadsheet = credentials.open_by_key(sheet_id)
     return spreadsheet.worksheets()[worksheet_ix].update(
         [dataframe.columns.values.tolist()]
-        + dataframe.fillna("-").values.tolist()
+        + dataframe.fillna("-")
+        .applymap(stringify_unspreadsheetly_values)
+        .values.tolist(),
+        value_input_option="USER_ENTERED"
     )
 
 
@@ -164,9 +173,11 @@ def backup_data_to_s3(bandset, debug_prefix=""):
     upload = bind_asdf_bucket()
     epoch = str(round(time.time()))
     # TODO: why am I writing these like this?
-    s3_prefix = f"marslab/{debug_prefix}" \
-                f"{str(bandset.compact['SOL'].iloc[0]).zfill(4)}" \
-                f"/{epoch}_{os.getlogin()}_"
+    s3_prefix = (
+        f"marslab/{debug_prefix}"
+        f"{str(bandset.compact['SOL'].iloc[0]).zfill(4)}"
+        f"/{epoch}_{os.getlogin()}_"
+    )
     marslab_key = f"{s3_prefix}marslab_{bandset.name + bandset.suffix}.csv"
     extended_key = (
         f"{s3_prefix}marslab_extended_{bandset.name + bandset.suffix}.csv"
@@ -359,7 +370,7 @@ def update_google_sheet(bandset, folder_id, sheet_id, sheetbot):
             style="bold dark_orange",
         )
         new_sheet = (
-            bandset.summary.copy().T.applymap(itemize_numpy).fillna("-")
+            pd.DataFrame(bandset.summary).T.applymap(itemize_numpy).fillna("-")
         )
         post_google_sheet(new_sheet, sheet_id, sheetbot)
     else:

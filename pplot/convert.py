@@ -38,9 +38,10 @@ def scale_eyes(data, method="scale_to_avg"):
             for k in data.keys():
                 if (
                     ("R" in k)
-                    and (not "ERR" in k)
-                    and (not "L0" in k)
-                    and (not "RMS" in k)
+                    and ("ERR" not in k)
+                    and ("L0" not in k)
+                    and ("RSM" not in k)
+                    and ("SOL" not in k)
                     and len(k) <= 3
                 ):
                     # Scale R to L in place
@@ -48,9 +49,10 @@ def scale_eyes(data, method="scale_to_avg"):
                     data.loc[i, k] = data.iloc[i][k] * right_scale
                 elif (
                     ("L" in k)
-                    and (not "ERR" in k)
-                    and (not "R0" in k)
-                    and (not "RMS" in k)
+                    and ("ERR" not in k)
+                    and ("R0" not in k)
+                    and ("RSM" not in k)
+                    and ("SOL" not in k)
                     and len(k) <= 3
                 ):
                     # data.iloc[i][k] = data.iloc[i][k] * left_scale # bad

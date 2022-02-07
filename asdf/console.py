@@ -43,7 +43,7 @@ class ASDFGH(RegexHighlighter):
         r"(?P<id>(zcam|ZCAM)\d\d\d\d\d)",
         r"(?P<id>(sol|SOL)\d{2,4})",
         r"(?P<selection>\(\d{1,3}\))",
-        r"(?P<marslab>(-roi.fits)|(-marslab.*csv))",
+        r"(?P<marslab>(.*roi.*fits.*)|(.*marslab.*csv))",
     ]
 
 
