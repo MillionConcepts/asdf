@@ -90,7 +90,8 @@ def get_scan_results(
                 products, target_file, keep_broadband, keep_caltarget
             )
         except (ValueError, FileNotFoundError, PermissionError) as err:
-            return reject_scan(f"{err} :confused_face:\n")
+            # TODO: silly hack, fix signatures
+            return list(reject_scan(f"{err} :confused_face:\n")) + [None]
         finally:
             prog.remove_task(ASDF_RPH_SPIN.task_id)
     return results, problems, hidden
