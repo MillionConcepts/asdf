@@ -2,7 +2,7 @@ import datetime as dt
 import io
 import os
 import shutil
-from collections import MutableMapping
+from collections.abc import MutableMapping
 from functools import partial
 from pathlib import Path
 

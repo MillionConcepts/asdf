@@ -498,7 +498,7 @@ def reject_scan(msg):
         f"If you passed an abbreviated (-a) path, you could instead try "
         f"passing a full path to one of the files you want to work with."
     )
-    return None, None, None
+    return None, None
 
 
 def collect_dispersed_metadata(metadata):

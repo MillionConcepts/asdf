@@ -21,7 +21,7 @@ EMPTY_METADATA_FIELDS = ["NOTES"]
 # we don't ask users about these, or even generate them, but do repopulate
 # them during FDSA runs.
 LEGACY_METADATA_FIELDS = [
-    "SOIL COLOR",
+    "SOIL_COLOR",
     "LANDFORM TYPE",
     "WORKSPACE",
     "TARGET",
@@ -34,8 +34,8 @@ LEGACY_METADATA_FIELDS = [
 FEATURE_EXCLUSIVE_ROI_FIELDS = {
     # similarly, for the special MEMBER selection behavior to work, FORMATION
     # needs to come before MEMBER in this list.
-    "rock": ["FORMATION", "MEMBER", "MORPHOLOGY", "FLOAT", "ROCK SURFACE"],
-    "soil": ["GRAIN SIZE", "SOIL LOCATION"],
+    "rock": ["FORMATION", "MEMBER", "MORPHOLOGY", "FLOAT", "ROCK_SURFACE"],
+    "soil": ["GRAIN_SIZE", "SOIL_LOCATION"],
 }
 # don't mess with this statement if you want to be able to use exclusive_fields
 # later. it pulls all the lists out of FEATURE_EXCLUSIVE_ROI_FIELDS
@@ -65,7 +65,7 @@ ROI_METADATA_FIELD_PROMPTS = {
     "ROI(s) belong to?",
     "TARGET": "What named {field} do / does {title} ROI(s) cover? "
     "(press Enter to skip)",
-    "GRAIN SIZE": "What is the {field} of the soil in {title} ROI? Skip if "
+    "GRAIN_SIZE": "What is the {field} of the soil in {title} ROI? Skip if "
     "the soil is too distant to tell. (press Enter to skip)",
     "FORMATION": "What {field} do / does {title} ROI(s) belong to?",
     "MEMBER": "What {field} of their parent formation do / does {title} ROIs "
@@ -82,7 +82,7 @@ ROI_METADATA_FIELD_CHOICES = {
         "Maaz": ["Chal", "Nataani", "Rochette", "Artuby", "Roubion"],
         "Seitah": ["Content", "Bastide", "Issole"],
     },
-    "ROCK SURFACE": [
+    "ROCK_SURFACE": [
         "bright natural surface",
         "dark natural surface",
         "thick dust",
@@ -93,12 +93,12 @@ ROI_METADATA_FIELD_CHOICES = {
         "clast/inclusion",
         "tailings",
     ],
-    "GRAIN SIZE": [
+    "GRAIN_SIZE": [
         "fine (grains not resolvable)",
         "coarse (grains resolvable)",
         "mixed",
     ],
-    "SOIL LOCATION": [
+    "SOIL_LOCATION": [
         "undisturbed regolith",
         "on rock",
         "wheel track compressed",

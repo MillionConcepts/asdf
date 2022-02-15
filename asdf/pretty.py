@@ -247,8 +247,8 @@ def print_observation(observation, ix=0, is_multiple=False):
     headline.append_text(Text("\n")).append_text(tailtext)
     table.add_column(headline)
     camhighlight = M20CameraHighlighter()
-    for row in printframe.to_records(index=False):
-        table.add_row(row[0], camhighlight(row[1]))
+    for _, row in printframe.iterrows():
+        table.add_row(row['FILTER'], camhighlight(row['PATH']))
     aprint(table)
     aprint("\n")
 

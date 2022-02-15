@@ -164,7 +164,6 @@ def scan_zcam_files(
     keep_thumbnails=False,
     recursive=False,
 ):
-
     products = ls_zcam(root_dir, recursive, regex_filter)
     if products is None:
         raise ValueError(

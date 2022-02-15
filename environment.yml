@@ -27,6 +27,8 @@ dependencies:
   - sympy
   - pytest
   - pydrive2
+  - more-itertools
+  - cytoolz
   - pip:
       - git+https://github.com/MillionConcepts/dustgoggles.git
       - git+https://github.com/MillionConcepts/pdr.git

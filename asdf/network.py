@@ -13,7 +13,7 @@ from collections.abc import Callable, MutableMapping
 from numbers import Number
 from pathlib import Path
 import socket
-from typing import Any
+from typing import Any, Union
 
 import boto3
 import botocore.config
@@ -159,7 +159,7 @@ def make_asdf_s3_client():
     )
 
 
-def bind_asdf_bucket() -> Callable[Any, str]:
+def bind_asdf_bucket() -> Callable[[Any, str], Union[ClientError, bool]]:
     client = make_asdf_s3_client()
     bucket = settings.sources.BACKUP_BUCKET
 

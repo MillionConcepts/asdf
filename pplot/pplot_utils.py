@@ -159,10 +159,10 @@ def pretty_plot(
                 label += f" ({row['MORPHOLOGY']})"
             elif (
                 (label == "soil")
-                and not pd.isnull(row["SOIL LOCATION"])
-                and (row["SOIL LOCATION"] != "-")
+                and not pd.isnull(row["SOIL_LOCATION"])
+                and (row["SOIL_LOCATION"] != "-")
             ):
-                label += f" ({row['SOIL LOCATION']})"
+                label += f" ({row['SOIL_LOCATION']})"
         roi_labels[row_ix] = label
     # adding this to slightly increase robustness
     for k in data.keys():
