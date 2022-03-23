@@ -473,6 +473,8 @@ def upload_asdf_analysis(
             update_google_sheet(
                 bandset, sheet_backup_folder_id, sheet_id, sheetbot
             )
+        # TODO: list values are working oddly in new version,. not inportant
+        #  in prod right not but should be regularized.
         except (
             gspread.exceptions.APIError,
             BaseSSLError,

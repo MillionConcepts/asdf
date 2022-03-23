@@ -109,7 +109,7 @@ def skim_products(
             .drop("PATH", axis=1)
             .reset_index(drop=True),
             pd.DataFrame(skim_results),
-            pd.Series(keep_paths, name="PATH"),
+            pd.Series(keep_paths, name="PATH", dtype=str),
         ],
         axis=1,
     )
