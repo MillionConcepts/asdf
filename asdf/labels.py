@@ -52,6 +52,12 @@ def aux_skim_header(label: Union[Path, str]) -> dict:
         for field, pattern in ASDF_METADATA_REGEX.items()
         if field in AUX_FIELDS
     }
+    # for labels with (overflow?) line breaks
+    # TODO: is this multiline rep dangerous?
+    if skim.get("RMC") is None:
+        skim["RMC"] = scrape(
+            r"(?<=ROVER_MOTION_COUNTER ).*(\((?:.|\n)+?\))"
+        )
     skim["RSM"] = skim["RMC"][6]
     skim["SUBFRAME"] = scrape_subframe(label_text)
     return skim
