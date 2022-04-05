@@ -187,7 +187,7 @@ IOF_METADATA_FIELDS = {
     # prior version cut the milliseconds, but I think unnecessarily
     "IMAGE_TIME": "IMAGE_TIME",
     "LTST": "LOCAL_TRUE_SOLAR_TIME",
-    "LMST": "LOCAL_MEAN_SOLAR_TIME",
+    "LMST": {"keys": ("LOCAL_MEAN_SOLAR_TIME",), "regex": r"\d\d:.*"},
     # prior version cut the milliseconds, but I think unnecessarily
     "PRODUCT_CREATION_TIME": "PRODUCT_CREATION_TIME",
     "L_S": "SOLAR_LONGITUDE",

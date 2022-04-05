@@ -8,6 +8,7 @@ import string
 from pathlib import Path
 
 import pandas as pd
+from cytoolz import keyfilter
 from fs.osfs import OSFS
 
 from asdf.console import aprint
@@ -97,3 +98,7 @@ def tar_bytes(filename):
     fits_tar.close()
     tarbuffer.seek(0)
     return tarbuffer
+
+
+def cast_to_reference(df, reference):
+    return df.astype(keyfilter(lambda key: key in df.columns, reference))

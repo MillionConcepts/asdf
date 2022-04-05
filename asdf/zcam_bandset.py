@@ -2,6 +2,7 @@ import datetime as dt
 import io
 import os
 import shutil
+import warnings
 from collections.abc import MutableMapping
 from functools import partial
 from pathlib import Path
@@ -17,7 +18,7 @@ import asdf_settings
 from asdf.asdf_utils import (
     load_roi_file,
     null_marslab_data_section,
-    dashify, save_roi_file,
+    dashify, save_roi_file, cast_to_reference,
 )
 from dustgoggles.pivot import dupe_df_block, check_and_drop_duplicate_columns
 from dustgoggles.structures import to_records, NestingDict
@@ -50,6 +51,7 @@ from marslab.imgops.regions import (
     draw_edgemaps_on_image,
     draw_edgemaps_on_axis,
 )
+
 
 def polish_metadata(metadata, creation_time):
     metadata["FILE_TIMESTAMP"] = creation_time
@@ -113,26 +115,22 @@ class ZcamBandSet(BandSet):
             rois=rois,
             threads=threads,
         )
-
-        # initialize pdr.Data objects to read metadata from files
-        for path in self.metadata["PATH"]:
-            self.precached[path] = pdr.Data(path, label_fn=path)
-        # scrape headers for all desired metadata fields and derive values
-        # from them as necessary
-        dtypes = METADATA_DTYPES
-        self.metadata = self.metadata.astype(
-            keyfilter(lambda key: key in self.metadata.columns, dtypes)
-        )
-        headers = pd.DataFrame(bulk_scrape_asdf_metadata(self.precached))
-        headers = headers.astype(
-            keyfilter(lambda key: key in headers.columns, dtypes)
-        )
+        # convert metadata dataframe to specified dtypes
+        self.metadata = cast_to_reference(self.metadata, METADATA_DTYPES)
+        # initialize pdr.Data objects to read metadata from files and later
+        # load images (if relevant)
+        for path in self.metadata["PATH"].unique():
+            self.precached[path] = pdr.Data(
+                path, label_fn=path, skip_existence_check=True
+            )
+        # scrape headers for all desired metadata fields
+        headers = self._get_headers_from_precached_metadata()
         self.metadata = pd.concat(
             [self.metadata, headers], axis=1, join="inner"
         )
-        # todo: maybe add some checks here, it's a headache
-        concat = pd.concat((self.metadata, headers), axis=1)
-        self.metadata = concat.iloc[:, ~concat.columns.duplicated()].copy()
+        self.metadata = self.metadata.iloc[
+            :, ~self.metadata.columns.duplicated()
+        ].copy()
         self.metadata = add_derived_illumination_geometry(self.metadata)
         self.name = make_pointing_name(self.metadata)
         # TODO: this is horrible, refactor this garbage attribute
@@ -144,6 +142,17 @@ class ZcamBandSet(BandSet):
         self.local_files = []
         # a slightly goofy holding location for things like google drive ids
         self.remote_resource_id = None
+
+    def _get_headers_from_precached_metadata(self):
+        headers = pd.DataFrame(bulk_scrape_asdf_metadata(self.precached))
+        headers = cast_to_reference(headers, METADATA_DTYPES)
+        # dupe rows as necessary to recreate bayer pixels w/out reading
+        # files with pdr.Data again or setting up some silly cache
+        header_rows = []
+        for _, row in self.metadata.iterrows():
+            match = headers.loc[headers['PATH'] == row['PATH']]
+            header_rows.append(match)
+        return pd.concat(header_rows).reset_index(drop=True)
 
     def check_onboard_debayer(self, *, fix_metadata=False):
         """
@@ -204,12 +213,20 @@ class ZcamBandSet(BandSet):
             if not row["PIXMAP_PATH"]:
                 continue
             band = row["BAND"]
-            # the pixmaps do not have separate bayer channels
-            if band[0:2] in ("L0", "R0"):
-                band = band[0:2]
+            # TODO: the L0/R0 pixmaps now, at least sometimes, have
+            #  meaningfully separate bayer channels. verify that this is
+            #  consistent.
             if band in self.pixmaps.keys():
                 continue
-            self.pixmaps[band] = pdr.open(row["PIXMAP_PATH"]).IMAGE
+            # don't open each clear filter three times
+            band = band[0:2] if band[0:2] in ("L0", "R0") else band
+            pixmap = pdr.open(row["PIXMAP_PATH"]).IMAGE
+            if len(pixmap.shape) == 3:
+                for band_ix, pixel in zip((0, 1, 2), ("R", "G", "B")):
+                    self.pixmaps[band + pixel] = pixmap[band_ix]
+            else:
+                self.pixmaps[band] = pixmap
+
             if verbose:
                 aprint("loaded " + row["PIXMAP_PATH"])
 
@@ -362,7 +379,10 @@ class ZcamBandSet(BandSet):
         eye_pixmaps = self.get_pixmap_dict(eye)
         if not eye_pixmaps:
             return
-        eye_pixmaps["flat"] = self.get_flattened_pixmap(eye)
+        eye_pixmaps["flat"] = self.flatten_pixmaps(eye_pixmaps)
+        eye_pixmaps["narrow"] = self.flatten_pixmaps(
+            keyfilter(lambda k: (k[1] != "0") and (k != "flat"), eye_pixmaps)
+        )
         for name, pixmap in eye_pixmaps.items():
             self.render_pixmap_context(edgemaps, eye, pixmap, name, verbose)
 
@@ -399,46 +419,52 @@ class ZcamBandSet(BandSet):
         )
         if name == "flat":
             name = eye
+        elif name == "narrow":
+            name = eye + "_narrow"
         self.looks[f"pixmap context image {name}"] = context
         if verbose:
             aprint(f"generated context pixmap {name}")
 
-    def get_flattened_pixmap(self, eye):
+    @staticmethod
+    def flatten_pixmaps(pixmaps):
         """
         get 'worst' flag value of pixel across all bands, masking
         wrong-element bayer pixels (both because they are frequently off-scale
         due to gain and because they will never be counted and are thus
         irrelevant)
         """
-        eye_pixmaps = self.get_pixmap_dict(eye)
         # for each x, y position, find the 'worst' flag value of any pixel
         # we used across all bands. note that order doesn't matter.
-        pixmap_cube = np.dstack(tuple(eye_pixmaps.values()))
-        flat_eye_pixmap = np.max(pixmap_cube, axis=2)
-        return flat_eye_pixmap
+        pixmap_cube = np.dstack(tuple(pixmaps.values()))
+        return np.max(pixmap_cube, axis=2)
 
     def get_pixmap_dict(self, eye):
         eye_pixmaps = {}
         for band, pixmap in keyfilter(
             lambda key: key.startswith(eye[0].upper()), self.pixmaps
         ).items():
-            # use all pixels from broadband, bayer-transparent, or
-            # onboard-debayered frames
-            if (
-                band.endswith("0")
-                or (self.check_onboard_debayer() is True)
-                or (BAND_TO_BAYER["ZCAM"][band] is None)
-            ):
-                eye_pixmaps[band] = pixmap
-            # otherwise mask bayer pixels
-            else:
-                self.make_db_masks(pixmap.shape)
+            # use all pixels from bayer-transparent and onboard-debayered
+            # frames; otherwise mask bayer_pixels
+            do_mask = (
+                (self.check_onboard_debayer() is False)
+                and (BAND_TO_BAYER["ZCAM"][band] is not None)
+            )
+            eye_pixmaps = self._add_pixmaps(eye_pixmaps, band, pixmap, do_mask)
+        return eye_pixmaps
+
+    def _add_pixmaps(self, pixmap_cache, band, pixmap, do_mask):
+        if band in ("L0", "R0"):
+            bands = (band + color for color in ("R", "G", "B"))
+        else:
+            bands = (band,)
+        for band in bands:
+            if do_mask is True:
                 pixel = BAND_TO_BAYER["ZCAM"][band]
-                dbpixmap = mask_bayer_pixels(
+                pixmap = mask_bayer_pixels(
                     pixmap, pixel, masks=self.bayer_info["masks"]
                 )
-                eye_pixmaps[band] = dbpixmap
-        return eye_pixmaps
+            pixmap_cache[band] = pixmap
+        return pixmap_cache
 
     def make_context_images(self, verbose=False):
         # TODO: automatically try to count ROIs and stuff? maybe?
@@ -456,8 +482,11 @@ class ZcamBandSet(BandSet):
             return
         if verbose:
             aprint("... making pixmap context images ...")
-        for eye in ("left", "right"):
-            self.draw_eye_pixmaps(edgemaps, eye, verbose)
+        # suppress irrelevant warnings from matplotlib about figure count
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for eye in ("left", "right"):
+                self.draw_eye_pixmaps(edgemaps, eye, verbose)
 
     def titular_target(self):
         """

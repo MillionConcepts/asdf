@@ -77,6 +77,7 @@ def bulk_scrape_asdf_metadata(
     for path, data in data_cache.items():
         scraped = scrape_asdf_metadata(data.metadata, IOF_METADATA_FIELDS)
         scraped["PATH"] = path
+        scraped["IOF_FILE"] = Path(path).name
         bulk_scraped.append(scraped)
     return bulk_scraped
 

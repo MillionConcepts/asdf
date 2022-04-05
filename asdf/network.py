@@ -33,7 +33,11 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from urllib3.connection import BaseSSLError
 
-import asdf_settings as settings
+from asdf_settings.sources import PUBLIC_WAYPOINTS_URL, AWS_REGION, \
+    AWS_IAM_SECRETS_FILE, BACKUP_BUCKET, OBFUSCATE_THUMBNAIL_NAMES, \
+    GOOGLE_CLIENT_SECRETS_FILE, GOOGLE_DRIVE_ROOT, DEBUG_GOOGLE_DRIVE_ROOT, \
+    DEBUG_GOOGLE_SHEET_ID, DEBUG_METADATA_BACKUP_FOLDER_ID, GOOGLE_SHEET_ID, \
+    METADATA_BACKUP_FOLDER_ID, GOOGLE_DRIVE_TRASH
 from asdf.asdf_utils import obfuscated_name, tar_bytes
 from dustgoggles.pivot import itemize_numpy
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
@@ -43,7 +47,7 @@ from asdf.zcam_bandset import ZcamBandSet
 
 def get_public_m20_waypoints():
     waypoint_server_response = urllib.request.urlopen(
-        settings.sources.PUBLIC_WAYPOINTS_URL, timeout=15
+        PUBLIC_WAYPOINTS_URL, timeout=15
     )
     return json.loads(waypoint_server_response.read())["features"]
 
@@ -148,9 +152,9 @@ def upload_s3(
 
 def make_asdf_s3_client():
     aws_config = botocore.config.Config(
-        region_name=settings.sources.AWS_REGION
+        region_name=AWS_REGION
     )
-    secrets = pd.read_csv(settings.sources.AWS_IAM_SECRETS_FILE).iloc[0]
+    secrets = pd.read_csv(AWS_IAM_SECRETS_FILE).iloc[0]
     return boto3.client(
         "s3",
         aws_access_key_id=secrets["Access key ID"],
@@ -161,7 +165,7 @@ def make_asdf_s3_client():
 
 def bind_asdf_bucket() -> Callable[[Any, str], Union[ClientError, bool]]:
     client = make_asdf_s3_client()
-    bucket = settings.sources.BACKUP_BUCKET
+    bucket = BACKUP_BUCKET
 
     def upload_to_default_bucket(obj, key, pass_string=False):
         return upload_s3(bucket, obj, key, client, pass_string)
@@ -210,13 +214,11 @@ def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
         return {}
     aprint("... uploading thumbnails ...")
     upload = bind_asdf_bucket()
-    bucket_url = (
-        "https://" + settings.sources.BACKUP_BUCKET + ".s3.amazonaws.com/"
-    )
+    bucket_url = f"https://{BACKUP_BUCKET}.s3.amazonaws.com/"
     links = {}
     for name, image_buffer in thumbnails.items():
         try:
-            if settings.sources.OBFUSCATE_THUMBNAIL_NAMES is True:
+            if OBFUSCATE_THUMBNAIL_NAMES is True:
                 key = "thumb/" + debug_prefix + obfuscated_name()
             else:
                 key = "thumb/" + name + "_thumb_" + pointing_name
@@ -235,7 +237,7 @@ def make_asdf_pydrive_client():
     gauth = GoogleAuth()
     scope = ["https://www.googleapis.com/auth/drive"]
     gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        settings.sources.GOOGLE_CLIENT_SECRETS_FILE, scope
+        GOOGLE_CLIENT_SECRETS_FILE, scope
     )
     return DriveBot(gauth)
 
@@ -255,11 +257,6 @@ class DriveBot(GoogleDrive):
     convenience wrapper adding abstract pseudo-filesystem operations to
     a pydrive2 GoogleDrive object
     """
-
-    # TODO: maybe consider doing this with one of the fs contrib things
-    #  instead? so you can have a single gdrive / s3 interface? or perhaps
-    #  combining it in some way with google sheets, maybe even dropping to
-    #  lower-level API functions? or perhaps not.
     def mkdir(self, folder_name, parent_id):
         gdrive_folder = self.CreateFile(
             {
@@ -314,9 +311,9 @@ def upload_bandset_to_gdrive(bandset, debug=False):
     bandset.local_files.reverse()
     # id of root folder
     if debug is True:
-        root = settings.sources.DEBUG_GOOGLE_DRIVE_ROOT
+        root = DEBUG_GOOGLE_DRIVE_ROOT
     else:
-        root = settings.sources.GOOGLE_DRIVE_ROOT
+        root = GOOGLE_DRIVE_ROOT
     drivebot = make_asdf_pydrive_client()
     ASDFLOG.info("checking folder structure")
     sol_folder_name, obs_folder_name = bandset_gdrive_folder_names(bandset)
@@ -406,7 +403,7 @@ def upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails):
 
 
 def clear_google_drive_trash(debug=False):
-    trash = settings.sources.GOOGLE_DRIVE_TRASH
+    trash = GOOGLE_DRIVE_TRASH
     if trash is None:
         return
     drivebot = make_asdf_pydrive_client()
@@ -434,14 +431,14 @@ def upload_asdf_analysis(
     debug: bool = False,
 ):
     if debug is True:
-        sheet_id = settings.sources.DEBUG_GOOGLE_SHEET_ID
+        sheet_id = DEBUG_GOOGLE_SHEET_ID
         sheet_backup_folder_id = (
-            settings.sources.DEBUG_METADATA_BACKUP_FOLDER_ID
+            DEBUG_METADATA_BACKUP_FOLDER_ID
         )
         s3_debug_prefix = "debug/"
     else:
-        sheet_id = settings.sources.GOOGLE_SHEET_ID
-        sheet_backup_folder_id = settings.sources.METADATA_BACKUP_FOLDER_ID
+        sheet_id = GOOGLE_SHEET_ID
+        sheet_backup_folder_id = METADATA_BACKUP_FOLDER_ID
         s3_debug_prefix = ""
     with ASDF_CONSOLE.status(
         "... backing up marslab & ROI files ...", spinner="star"
@@ -467,9 +464,7 @@ def upload_asdf_analysis(
     with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
         try:
             upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails)
-            sheetbot = gspread.service_account(
-                settings.sources.GOOGLE_CLIENT_SECRETS_FILE
-            )
+            sheetbot = gspread.service_account(GOOGLE_CLIENT_SECRETS_FILE)
             update_google_sheet(
                 bandset, sheet_backup_folder_id, sheet_id, sheetbot
             )

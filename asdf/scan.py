@@ -114,7 +114,7 @@ def skim_products(
     )
 
 
-def ls_zcam(root_dir, recursive, file_regex):
+def ls_zcam(root_dir, recursive=False, file_regex=""):
     if recursive is True:
         scan_fs = OSFS(str(root_dir))
         files = [scan_fs.getsyspath(file) for file in scan_fs.walk.files()]
