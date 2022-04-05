@@ -13,7 +13,6 @@ from marslab.compat.mertools import merspect_to_marslab
 from marslab.imgops.imgutils import mapfilter
 import matplotlib as mpl
 import pandas as pd
-from rasterio.errors import NotGeoreferencedWarning
 from rich.rule import Rule
 
 from asdf.asdf_utils import (
@@ -39,9 +38,9 @@ from asdf.format import (
 from asdf.network import upload_asdf_analysis
 from asdf.pretty import name_prompt
 from asdf.zcam_bandset import ZcamBandSet
-import asdf_settings as settings
-
-warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
+from asdf_settings import (
+    process, metadata as metadata_settings, rapidlooks
+)
 
 
 # TODO: add dry-run options for testing
@@ -76,7 +75,7 @@ def asdf_body(
         prototype = pd.DataFrame()
     aprint("... scraping image file headers ...")
     bandset = ZcamBandSet(
-        observation, roi_path, suffix, threads=settings.process.THREADS
+        observation, roi_path, suffix, threads=process.THREADS
     )
     if recreate_from and ("CREATOR" in prototype.columns):
         bandset.metadata["CREATOR"] = str(prototype["CREATOR"].iloc[0])
@@ -195,7 +194,7 @@ def asdf_body(
         aprint("[dark_orange]No ROI file passed; using null values for data.")
     # add location from lookup table and sol
     marslab_data["LOCATION"] = "Unknown"
-    for last_sol, location_name in settings.metadata.LOCATION_TABLE.items():
+    for last_sol, location_name in metadata_settings.LOCATION_TABLE.items():
         if last_sol > int(bandset.metadata["SOL"].iloc[0]):
             marslab_data["LOCATION"] = location_name
             break
@@ -215,7 +214,7 @@ def asdf_body(
     # keep images that are to be thumbnailed for upload, discard those
     # that are not; waste not memory, want not memory
     pick_thumbs = keyfilter(
-        partial(contains, settings.rapidlooks.THUMBNAILS)
+        partial(contains, rapidlooks.THUMBNAILS)
     )
     # set up thumbnail cache
     thumbnail_staging = {}
@@ -234,7 +233,7 @@ def asdf_body(
                 "rapidlooks required for uploaded thumbnails"
             )
             look_instructions = mapfilter(
-                partial(contains, settings.rapidlooks.THUMBNAILS),
+                partial(contains, rapidlooks.THUMBNAILS),
                 "name",
                 look_instructions,
             )
@@ -283,7 +282,7 @@ def asdf_body(
     if upload is True:
         aprint(Rule(" uploading asdf outputs "))
         thumbnails = make_rapidlook_thumbnails(
-            thumbnail_staging, settings.rapidlooks.THUMBNAIL_SIZE
+            thumbnail_staging, rapidlooks.THUMBNAIL_SIZE
         )
         upload_asdf_analysis(bandset, thumbnails, debug)
 

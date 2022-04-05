@@ -6,7 +6,7 @@ these literals should generally be safe; removing them may not be.
 # don't change this
 from itertools import chain
 
-from .generators import FILTER_DATA_COLUMNS
+from .metagenerators import FILTER_DATA_COLUMNS
 
 # lookup table for location by sol -- number is final sol of location
 LOCATION_TABLE = {
@@ -154,43 +154,110 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
 # statistical columns we add along with mean value to FILTER_DATA_COLUMNS
 COMPACT_MARSLAB_STATS = ["ERR", "COUNT"]
 
-# regexes for getting metadata from attached PDS3 product labels without
-# parsing PVL. this structure defines almost everything we look for in a label.
-IOF_METADATA_REGEX = {
+
+# mapping from field names to label parameters.
+
+# this structure defines almost everything we look for in a label
+
+# format of label keys / parameters (values of this dictionary):
+# if they're strings, we just grab the first matching parameter
+# using Metadata.metablock.
+# they can also be mappings with key names "keys" and "regex".
+# "keys" can be used to specify a hierarchy of keys -- for instance, if azimuth
+# angle is given twice in the label, in two separate coordinate frames, and
+# you would like it from one of those in particular.
+# "regex" is used to peel a specific portion of a value from the label out --
+# say, the filter's labeled name is 'ZCAM_R1_800NM' but our internal
+# canonical name for that filter is simply 'R1'.
+# the first capturing group of the regular expression is assigned to the
+# BandSet's metadata.
+# if we receive dicts from any queries, we assume they are parsed pvl.
+IOF_METADATA_FIELDS = {
     # the zoom motor count is given several places in the label,
     # but the malin mini header line has other interesting contents
-    "MINI_HEADER": r"(?<=ARTICULATION_DEV_POSITION ).*(\(.*\))",
-    "FRAME_TYPE": r"(?<=FRAME_TYPE ).*?(\w+)",
-    "RMC": r"(?<=ROVER_MOTION_COUNTER ).*(\(.*\))",
-    "SEQ_ID": r"(?<=SEQUENCE_ID).*(zcam\d+)",
-    "SOL": r"(?<=PLANET_DAY_NUMBER).*?(\d+)",
-    "FILTER": r"FILTER_NAME.*ZCAM_([LR][\w\d])(?=_)",
-    "IMAGE_TIME": r"(?<=IMAGE_TIME ).*?([\d\-T:]+)",
-    "LTST": r"(?<=LOCAL_TRUE_SOLAR_TIME ).*?([\d:]+)",
-    "LMST": r"(?<=LOCAL_MEAN_SOLAR_TIME ).*?M([\d:]+)",
-    "PRODUCT_CREATION_TIME": r"(?<=PRODUCT_CREATION_TIME ).*?([\d\-T:]+)",
-    "L_S": r"(?<=SOLAR_LONGITUDE ).*?([\d\.]+)",
-    "COMPRESSION": r"(?<=INST_CMPRS_NAME ).*?(\w+)",
-    # note that JPEG compression is rendered as a negative number under
-    # IMG_REQUEST_PARMS, which is why we're specifying the one from
-    # COMPRESSION_PARMS here
-    "COMPRESSION_QUALITY": r"(?:COMPRESSION_PARMS("
-    r"?:\n|\r|.)*?INST_CMPRS_QUALITY ).*?([-\d]+)",
-    "BAYER": r"(?<=BAYER_METHOD ).*?([\w_]+)",
-    "SOLAR_ELEVATION": r"(?<=SOLAR_ELEVATION ).*?([\d\.]+)",
-    "SOLAR_AZIMUTH": r"(?<=SOLAR_AZIMUTH ).*?([\d\.]+)",
-    "SCLK": r"(?<=SPACECRAFT_CLOCK_START_COUNT ).*?([\d\.]+)",
-    "COMPLETION": r"(?<=PRODUCT_COMPLETION_STATUS ).*?([\w_]+)",
+    "MINI_HEADER": "ARTICULATION_DEV_POSITION",
+    "FRAME_TYPE": "FRAME_TYPE",
+    "RMC": "ROVER_MOTION_COUNTER",
+    "SEQ_ID": "SEQUENCE_ID",
+    "SOL": "PLANET_DAY_NUMBER",
+    "FILTER": {
+        "keys": ("INSTRUMENT_STATE_PARMS", "FILTER_NAME",),
+        "regex": r"ZCAM_([LR][\w\d])(?=_)"
+    },
+    # prior version cut the milliseconds, but I think unnecessarily
+    "IMAGE_TIME": "IMAGE_TIME",
+    "LTST": "LOCAL_TRUE_SOLAR_TIME",
+    "LMST": "LOCAL_MEAN_SOLAR_TIME",
+    # prior version cut the milliseconds, but I think unnecessarily
+    "PRODUCT_CREATION_TIME": "PRODUCT_CREATION_TIME",
+    "L_S": "SOLAR_LONGITUDE",
+    "COMPRESSION": "INST_CMPRS_NAME",
+    # JPEG compression is rendered as a negative number under
+    # IMG_REQUEST_PARMS, so we specify the one from COMPRESSION_PARMS here
+    "COMPRESSION_QUALITY": {
+        'keys': ('COMPRESSION_PARMS', 'INST_CMPRS_QUALITY')
+    },
+    "BAYER": "BAYER_METHOD",
+    "SOLAR_ELEVATION": "SOLAR_ELEVATION",
+    "SOLAR_AZIMUTH": "SOLAR_AZIMUTH",
+    "SCLK": "SPACECRAFT_CLOCK_START_COUNT",
+    "COMPLETION": "PRODUCT_COMPLETION_STATUS",
     # TODO: check if they're in the headers now
     # these files appear to currently be stored in
     # # /project/m2020/gds/radcal/effective_taus on islamorada
-    "TAU_ESTIMATE_FILENAME": r"(?<=TAU_ESTIMATE_FILENAME).*?(\w+\.csv)",
-    "INSTRUMENT_ELEVATION": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
-    r"?:\n|\r|.)*?INSTRUMENT_ELEVATION ).*?(["
-    r"-\d\.]+)",
-    "INSTRUMENT_AZIMUTH": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
-    r"?:\n|\r|.)*?INSTRUMENT_AZIMUTH ).*?([-\d\.]+)",
+    "TAU_ESTIMATE_FILENAME": "TAU_ESTIMATE_FILENAME",
+    "INSTRUMENT_ELEVATION": {
+        "keys": ("SITE_DERIVED_GEOMETRY_PARMS", "INSTRUMENT_ELEVATION")
+    },
+    "INSTRUMENT_AZIMUTH": {
+        "keys": ("SITE_DERIVED_GEOMETRY_PARMS", "INSTRUMENT_AZIMUTH")
+    },
+    "INPUT_PRODUCT_ID": "INPUT_PRODUCT_ID",
+    # subframe parameters to be assembled later
+    "FIRST_LINE": "FIRST_LINE",
+    "FIRST_LINE_SAMPLE": "FIRST_LINE_SAMPLE",
+    "LINES": "LINES",
+    "LINE_SAMPLES": "LINE_SAMPLES"
 }
+
+# # regexes for getting metadata from attached PDS3 product labels without
+# # parsing PVL. this structure defines almost everything we look for in a label.
+# IOF_METADATA_REGEX = {
+#     # the zoom motor count is given several places in the label,
+#     # but the malin mini header line has other interesting contents
+#     "MINI_HEADER": r"(?<=ARTICULATION_DEV_POSITION ).*(\(.*\))",
+#     "FRAME_TYPE": r"(?<=FRAME_TYPE ).*?(\w+)",
+#     "RMC": r"(?<=ROVER_MOTION_COUNTER ).*(\(.*\))",
+#     "SEQ_ID": r"(?<=SEQUENCE_ID).*(zcam\d+)",
+#     "SOL": r"(?<=PLANET_DAY_NUMBER).*?(\d+)",
+#     "FILTER": r"FILTER_NAME.*ZCAM_([LR][\w\d])(?=_)",
+#     "IMAGE_TIME": r"(?<=IMAGE_TIME ).*?([\d\-T:]+)",
+#     "LTST": r"(?<=LOCAL_TRUE_SOLAR_TIME ).*?([\d:]+)",
+#     "LMST": r"(?<=LOCAL_MEAN_SOLAR_TIME ).*?M([\d:]+)",
+#     "PRODUCT_CREATION_TIME": r"(?<=PRODUCT_CREATION_TIME ).*?([\d\-T:]+)",
+#     "L_S": r"(?<=SOLAR_LONGITUDE ).*?([\d\.]+)",
+#     "COMPRESSION": r"(?<=INST_CMPRS_NAME ).*?(\w+)",
+#     # note that JPEG compression is rendered as a negative number under
+#     # IMG_REQUEST_PARMS, which is why we're specifying the one from
+#     # COMPRESSION_PARMS here
+#     "COMPRESSION_QUALITY": r"(?:COMPRESSION_PARMS("
+#     r"?:\n|\r|.)*?INST_CMPRS_QUALITY ).*?([-\d]+)",
+#     "BAYER": r"(?<=BAYER_METHOD ).*?([\w_]+)",
+#     "SOLAR_ELEVATION": r"(?<=SOLAR_ELEVATION ).*?([\d\.]+)",
+#     "SOLAR_AZIMUTH": r"(?<=SOLAR_AZIMUTH ).*?([\d\.]+)",
+#     "SCLK": r"(?<=SPACECRAFT_CLOCK_START_COUNT ).*?([\d\.]+)",
+#     "COMPLETION": r"(?<=PRODUCT_COMPLETION_STATUS ).*?([\w_]+)",
+#     # TODO: check if they're in the headers now
+#     # these files appear to currently be stored in
+#     # # /project/m2020/gds/radcal/effective_taus on islamorada
+#     "TAU_ESTIMATE_FILENAME": r"(?<=TAU_ESTIMATE_FILENAME).*?(\w+\.csv)",
+#     "INSTRUMENT_ELEVATION": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
+#     r"?:\n|\r|.)*?INSTRUMENT_ELEVATION ).*?(["
+#     r"-\d\.]+)",
+#     "INSTRUMENT_AZIMUTH": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
+#     r"?:\n|\r|.)*?INSTRUMENT_AZIMUTH ).*?([-\d\.]+)",
+# }
+# quantities and take the value of their 'value' keys, ignoring 'units'.
 
 # Define the types of pixel flags that we care about
 PIXEL_FLAG_NAMES = ("bad", "no_signal", "nonlinear", "saturated", "hot")

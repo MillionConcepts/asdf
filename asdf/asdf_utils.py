@@ -1,7 +1,6 @@
 """generic utility-type functions for asdf"""
 import io
 import os
-import shutil
 import gzip
 import tarfile
 import random
@@ -9,11 +8,9 @@ import string
 from pathlib import Path
 
 import pandas as pd
-from astropy.io import fits
 from fs.osfs import OSFS
 
 from asdf.console import aprint
-from marslab.compat.sel_to_roi import is_sel_file, sel_to_roi
 
 
 def dashify(df):
@@ -53,6 +50,8 @@ def save_roi_file(roi_fits, outpath=".", extension=".fits.gz", verbose=True):
 
 
 def load_roi_file(roi_path, title="", verbose=True):
+    from marslab.compat.sel_to_roi import is_sel_file, sel_to_roi
+
     # TODO: move this chatter elsewhere
     # if passed ROI file is a SEL, convert to marslab FITS
     is_sel = is_sel_file(roi_path)
@@ -62,6 +61,8 @@ def load_roi_file(roi_path, title="", verbose=True):
             aprint("loaded MERspect .sel file")
     # if it's FITS, just load it
     else:
+        from astropy.io import fits
+
         if str(roi_path).endswith('.gz'):
             # astropy technically reads this transparently but is slow
             zipfile = gzip.open(roi_path, 'rb')

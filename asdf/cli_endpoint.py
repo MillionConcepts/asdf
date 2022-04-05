@@ -64,7 +64,6 @@ def asdf_initiate(
     with console.status(".. initializing ...", spinner="star"):
         initialize_loggers()
         insert_settings_module_path(config)
-        from asdf.flow import asdf_body
     # find all associated files and ask the user about them
     if noninteractive_all:  # run all sequences without user input
         noninteractive = "all"
@@ -110,6 +109,8 @@ def asdf_initiate(
         save_plain_images,
         skip_pixmaps,
     )
+    from asdf.flow import asdf_body
+
     if is_multiple is not True:
         return asdf_body(observation, *asdf_args)
     for ix, obs in enumerate(observation):

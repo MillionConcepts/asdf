@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import rasterio
+import pdr
 from cytoolz import keyfilter
 from matplotlib import pyplot as plt
 
@@ -35,7 +35,6 @@ from asdf.labels import bulk_scrape_asdf_metadata
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
-from marslab.compat.sel_to_roi import is_sel_file
 from marslab.compat.xcam import (
     DERIVED_CAM_DICT,
     BAND_TO_BAYER,
@@ -44,14 +43,13 @@ from marslab.compat.xcam import (
 from marslab.bandset import BandSet
 from marslab.imgops.debayer import RGGB_PATTERN, mask_bayer_pixels
 from marslab.imgops.imgutils import normalize_range
-from marslab.imgops.loaders import rasterio_load
+from marslab.imgops.loaders import pdr_load
 from marslab.imgops.pltutils import remove_ticks, despine
 from marslab.imgops.regions import (
     make_roi_edgemaps,
     draw_edgemaps_on_image,
     draw_edgemaps_on_axis,
 )
-
 
 def polish_metadata(metadata, creation_time):
     metadata["FILE_TIMESTAMP"] = creation_time
@@ -106,7 +104,7 @@ def setup_zcam_bandset_metadata(metadata):
 class ZcamBandSet(BandSet):
     def __init__(self, pointing, rois=None, suffix="", threads=None):
         files = setup_zcam_bandset_metadata(pointing)
-        load_method = partial(rasterio_load, preserve_constants=[0])
+        load_method = partial(pdr_load, preserve_constants=[0])
         bayer_info = {"pattern": RGGB_PATTERN}
         super().__init__(
             metadata=files,
@@ -115,15 +113,17 @@ class ZcamBandSet(BandSet):
             rois=rois,
             threads=threads,
         )
+
+        # initialize pdr.Data objects to read metadata from files
+        for path in self.metadata["PATH"]:
+            self.precached[path] = pdr.Data(path, label_fn=path)
         # scrape headers for all desired metadata fields and derive values
         # from them as necessary
         dtypes = METADATA_DTYPES
         self.metadata = self.metadata.astype(
             keyfilter(lambda key: key in self.metadata.columns, dtypes)
         )
-        headers = pd.DataFrame(
-            bulk_scrape_asdf_metadata(self.metadata["PATH"])
-        )
+        headers = pd.DataFrame(bulk_scrape_asdf_metadata(self.precached))
         headers = headers.astype(
             keyfilter(lambda key: key in headers.columns, dtypes)
         )
@@ -165,6 +165,8 @@ class ZcamBandSet(BandSet):
         return True
 
     def load_rois(self, title=None, outpath=".", save=False):
+        from marslab.compat.sel_to_roi import is_sel_file
+
         if self.rois is None:
             aprint("No ROI data loaded.")
             return
@@ -207,7 +209,7 @@ class ZcamBandSet(BandSet):
                 band = band[0:2]
             if band in self.pixmaps.keys():
                 continue
-            self.pixmaps[band] = rasterio.open(row["PIXMAP_PATH"]).read(1)
+            self.pixmaps[band] = pdr.open(row["PIXMAP_PATH"]).IMAGE
             if verbose:
                 aprint("loaded " + row["PIXMAP_PATH"])
 

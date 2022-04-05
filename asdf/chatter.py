@@ -58,7 +58,6 @@ from asdf.scan import (
     cluster_observations,
     find_matching_observations,
 )
-import asdf_settings as settings
 from asdf_settings.metadata import (
     ROI_METADATA_FIELDS,
     FEATURE_EXCLUSIVE_ROI_FIELDS,
@@ -67,6 +66,7 @@ from asdf_settings.metadata import (
     ROI_METADATA_FIELD_CHOICES,
     LEGACY_METADATA_FIELDS,
 )
+from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
 import pplot
 
 
@@ -508,13 +508,13 @@ def collect_dispersed_metadata(metadata):
     sources asking them for additional info prior to ROI evaluation
     """
 
-    if settings.sources.USE_PUBLIC_WAYPOINTS:
+    if USE_PUBLIC_WAYPOINTS:
         aprint(
             "... scraping localization information from public "
             "waypoints file ..."
         )
         metadata = add_public_waypoints_to_metadata(metadata)
-    if settings.sources.FIND_EFFECTIVE_TAUS:
+    if FIND_EFFECTIVE_TAUS:
         metadata = add_effective_taus(metadata)
     return metadata
 

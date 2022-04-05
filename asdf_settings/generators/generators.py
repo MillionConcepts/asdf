@@ -15,17 +15,7 @@ from matplotlib.cm import register_cmap
 from matplotlib.colors import ListedColormap
 from scipy.ndimage import gaussian_filter
 
-from marslab.compat.xcam import make_xcam_filter_dict
 from marslab.imgops.imgutils import split_filter
-
-FILTER_DATA_COLUMNS = tuple(
-    chain.from_iterable(
-        [
-            (filt, filt + "_ERR")
-            for filt in make_xcam_filter_dict("ZCAM").keys()
-        ]
-    )
-)
 
 
 # default smoothing: applies gaussian kernel to each channel of an image

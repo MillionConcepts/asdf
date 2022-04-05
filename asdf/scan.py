@@ -10,7 +10,6 @@ import re
 from typing import Union
 from urllib.error import URLError
 
-from astropy.io import fits
 from cytoolz.dicttoolz import valfilter
 from cytoolz.functoolz import curry
 from cytoolz.itertoolz import partition
@@ -34,7 +33,7 @@ from asdf.parse import (
     looks_like_marslab,
     looks_like_roi,
 )
-from asdf.labels import cached_aux_skimmer, is_pixel_map_heuristic
+from asdf.labels import get_pixel_map_heuristic, cached_aux_skimmer
 
 
 # TODO: make all the error-printing statements in this module more consistent
@@ -318,7 +317,9 @@ def find_matching_pixmap(product_path, code="pix_map"):
     # check 2: are they pixmaps?
     # TODO: gross hack
     if code == "PIX_MAP":
-        possible_pixmaps = list(filter(is_pixel_map_heuristic, possible_pixmaps))
+        possible_pixmaps = filter(
+            None, map(get_pixel_map_heuristic, possible_pixmaps)
+        )
     # TODO: find an actual way to associate these across versions --
     #  even adding a version number check will inappropriately reject
     #  many pixmaps because they do not increment the version numbers
@@ -327,7 +328,7 @@ def find_matching_pixmap(product_path, code="pix_map"):
     # check 3: does the candidate we pick have PRODUCT_ID that matches
     # the data product's SOURCE_PRODUCT_ID? (CANCELLED FOR NOW)
     possible_pixmaps = prune_excessive_pixmap_matches(
-        match_warnings, possible_pixmaps, product_path
+        match_warnings, list(possible_pixmaps), product_path
     )
     pixmap = possible_pixmaps[0]
     # data_source_id = scrape_product_id(
@@ -347,11 +348,13 @@ def prune_excessive_pixmap_matches(
 ):
     if len(possible_pixmaps) > 1:
         ok_pixmaps = []
-        parsed_fns = list(map(parse_zcam_fn, possible_pixmaps))
+        parsed_fns = list(
+            map(parse_zcam_fn, [pix.filename for pix in possible_pixmaps])
+        )
         versions = [parsed["VERSION"] for parsed in parsed_fns]
-        for parsed in parsed_fns:
+        for parsed, pix in zip(parsed_fns, possible_pixmaps):
             if parsed["VERSION"] == max(versions):
-                ok_pixmaps.append(Path(parsed["PATH"]))
+                ok_pixmaps.append(pix)
         match_warnings.append(
             f"multiple matches for {product_path.name}, "
             f"using highest version # or first if version #s are equal;"
@@ -570,6 +573,8 @@ def compare_roi_colors(analyses):
     extra soft check to help verfiy that a ROI file corresponds to a compact
     marslab file
     """
+    from astropy.io import fits
+
     ok_indices = []
     bad_indices = []
     for ix, row in analyses.iterrows():

@@ -1,43 +1,105 @@
 """specialty ZCAM/isla-specific additions to generic label-scraping tools"""
 
 import re
-from functools import cache, partial
+from functools import cache
 from pathlib import Path
-from types import MappingProxyType
-from typing import Union
+from typing import Mapping, Union
 
+import pdr
 from dustgoggles.scrape import (
-    bulk_scrape_metadata,
-    cached_label_loader,
-    get_label_text,
-    make_scraper,
-    scrape_subframe,
-    scrape_patterns,
+    get_label_text, cached_label_loader, make_scraper, scrape_subframe,
 )
 
-import asdf_settings
+from asdf_settings.metadata import IOF_METADATA_FIELDS
 
 
-ASDF_METADATA_REGEX = MappingProxyType(
-    {
-        field: re.compile(pattern)
-        for field, pattern in asdf_settings.metadata.IOF_METADATA_REGEX.items()
+def keygetter(mapping, keys):
+    for key in keys:
+        mapping = mapping[key]
+    return mapping
+
+
+def dequantizer(value):
+    """
+    pdr.parselabel.pds3 parses pvl quantities into dicts. if we find ourselves
+    with a dict, take its 'value' key.
+    """
+    if isinstance(value, dict):
+        return value['value']
+    return value
+
+
+def scrape_field(metadata, field):
+    if isinstance(field, str):
+        return dequantizer(metadata.metaget(field))
+    else:
+        value = dequantizer(keygetter(metadata, field['keys']))
+    if 'regex' not in field.keys():
+        return value
+    return re.search(field['regex'], value).group(0)
+
+
+def assemble_subframe(scraped: dict) -> dict:
+    fields = ("FIRST_LINE", "FIRST_LINE_SAMPLE", "LINES", "LINE_SAMPLES")
+    subframe = []
+    for field in fields:
+        subframe.append(int(scraped.pop(field)))
+    scraped["SUBFRAME"] = tuple(subframe)
+    return scraped
+
+
+def pluck_rsm(scraped: dict) -> dict:
+    scraped["RSM"] = scraped["RMC"][6]
+    return scraped
+
+
+def auxiliary_asdf_metadata_polisher(scraped: dict) -> dict:
+    polishing_functions = (assemble_subframe, pluck_rsm)
+    for func in polishing_functions:
+        scraped = func(scraped)
+    return scraped
+
+
+def scrape_asdf_metadata(
+    metadata: "pdr.Metadata", field_specifications: Mapping
+) -> dict:
+    scraped = {
+        field_name: scrape_field(metadata, field_specification)
+        for field_name, field_specification in field_specifications.items()
     }
-)
-
-# metadata necessary for to discrimination of observations and enumeration of
-# their members that cannot be derived from the filename
-AUX_FIELDS = ("MINI_HEADER", "RMC", "COMPLETION", "FRAME_TYPE", "LTST")
+    return auxiliary_asdf_metadata_polisher(scraped)
 
 
-def scrape_product_id(label_text: str, prefix: str = ""):
-    """special case: they put line breaks in these"""
+def bulk_scrape_asdf_metadata(
+    data_cache: Mapping[str, "pdr.Data"]
+) -> list[dict]:
+    bulk_scraped = []
+    for path, data in data_cache.items():
+        scraped = scrape_asdf_metadata(data.metadata, IOF_METADATA_FIELDS)
+        scraped["PATH"] = path
+        bulk_scraped.append(scraped)
+    return bulk_scraped
 
-    expression = re.compile(
-        r"(?<= " + prefix + r"PRODUCT_ID ).*?(Z.+?)\"", re.M + re.DOTALL
-    )
-    broken_string = re.search(expression, label_text).group(1)
-    return re.sub(r"\s", "", broken_string)
+
+def get_pixel_map_heuristic(putative_pixmap_path):
+    data = pdr.read(putative_pixmap_path)
+    if data.metaget("PIXEL_MAP_VALUES") is not None:
+        return data
+    return None
+
+
+"""
+pure text-parsing based 'skimmer' functions for speed and stability on 
+networked filesystems.
+"""
+
+SKIMMER_REGEX = {
+    "MINI_HEADER": r"(?<=ARTICULATION_DEV_POSITION ).*(\(.*\))",
+    "RMC": r"(?<=ROVER_MOTION_COUNTER ).*(\(.*\))",
+    "COMPLETION": r"(?<=PRODUCT_COMPLETION_STATUS ).*?([\w_]+)",
+    "FRAME_TYPE": r"(?<=FRAME_TYPE ).*?(\w+)",
+    "LTST": r"(?<=LOCAL_TRUE_SOLAR_TIME ).*?([\d:]+)",
+}
 
 
 def aux_skim_header(label: Union[Path, str]) -> dict:
@@ -48,9 +110,7 @@ def aux_skim_header(label: Union[Path, str]) -> dict:
     # little closure for neatness
     scrape = make_scraper(label_text)
     skim = {
-        field: scrape(pattern)
-        for field, pattern in ASDF_METADATA_REGEX.items()
-        if field in AUX_FIELDS
+        field: scrape(pattern) for field, pattern in SKIMMER_REGEX.items()
     }
     # for labels with (overflow?) line breaks
     # TODO: is this multiline rep dangerous?
@@ -65,42 +125,3 @@ def aux_skim_header(label: Union[Path, str]) -> dict:
 
 # cached versions for faster operation on networked filesystems.
 cached_aux_skimmer = cache(aux_skim_header)
-
-
-@cache
-def is_iof_est_heuristic(label):
-    return "SCALING" not in cached_label_loader(label)
-
-
-@cache
-def supplemental_scraper(label, label_text):
-    # special cases
-    return {
-        "SUBFRAME": scrape_subframe(label_text),
-        "IOF_FILE": Path(label).name,
-        "INPUT_PRODUCT_ID": scrape_product_id(label_text, "INPUT_"),
-        "INSTRUMENT": "ZCAM",
-    }
-
-
-scrape_asdf_metadata = cache(
-    partial(
-        scrape_patterns,
-        metadata_regex=ASDF_METADATA_REGEX,
-        supplemental_search_function=supplemental_scraper,
-    )
-)
-
-
-bulk_scrape_asdf_metadata = partial(
-    bulk_scrape_metadata, pattern_scraper=scrape_asdf_metadata
-)
-
-
-@cache
-def is_pixel_map_heuristic(putative_pixmap_path):
-    """
-    TODO: determine if they are the actually only ones that even mention this
-     identifier
-    """
-    return "PIXEL_MAP" in get_label_text(putative_pixmap_path)

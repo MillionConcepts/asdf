@@ -26,7 +26,8 @@ def compile_looks():
     compile looks at runtime -- makes settings.rapidlooks readable while
     avoiding circular imports.
     """
-    rapidlooks = settings.generators.look_assembler.RAPIDLOOKS
+    from asdf_settings.generators import look_assembler
+    rapidlooks = look_assembler.RAPIDLOOKS
     # interleave 'hard' rapidlooks for efficiency
     return (
         rapidlooks[slice(None, None, 3)]
