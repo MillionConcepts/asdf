@@ -1,6 +1,7 @@
 """
 top-level handler loop for asdf / fdsa
 """
+import time
 import zlib
 from functools import partial
 from operator import contains
@@ -248,6 +249,7 @@ def asdf_body(
                 warnings.simplefilter("ignore")
                 bandset.make_look_set(look_instructions)
             prog.remove_task(ASDF_RPH.task_id)
+            bandset.purge("precached_images")
 
         aprint(Rule(" saving rapidlooks "))
         with ASDF_PROGRESS as prog:
@@ -272,7 +274,6 @@ def asdf_body(
             if not (skip_rapidlooks and not upload):
                 thumbnail_staging |= pick_thumbs(bandset.looks)
     bandset.purge()
-    aprint("\n")
 
     # pretty-plot data if we've got it
     if not we_do_not_have_rois:

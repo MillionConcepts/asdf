@@ -443,28 +443,31 @@ class ZcamBandSet(BandSet):
         for band, pixmap in keyfilter(
             lambda key: key.startswith(eye[0].upper()), self.pixmaps
         ).items():
+            eye_pixmaps |= self._pixmap_to_dict(band, pixmap)
+        return eye_pixmaps
+
+    def _pixmap_to_dict(self, band, pixmap):
+        output_pixmaps = {}
+        if band in ("L0", "R0"):
+            bands = [band + color for color in ("R", "G", "B")]
+        else:
+            bands = [band]
+        for band in bands:
             # use all pixels from bayer-transparent and onboard-debayered
             # frames; otherwise mask bayer_pixels
             do_mask = (
                 (self.check_onboard_debayer() is False)
-                and (BAND_TO_BAYER["ZCAM"][band] is not None)
+                and (BAND_TO_BAYER["ZCAM"].get(band) is not None)
             )
-            eye_pixmaps = self._add_pixmaps(eye_pixmaps, band, pixmap, do_mask)
-        return eye_pixmaps
-
-    def _add_pixmaps(self, pixmap_cache, band, pixmap, do_mask):
-        if band in ("L0", "R0"):
-            bands = (band + color for color in ("R", "G", "B"))
-        else:
-            bands = (band,)
-        for band in bands:
             if do_mask is True:
+                self.make_db_masks(pixmap.shape)
                 pixel = BAND_TO_BAYER["ZCAM"][band]
-                pixmap = mask_bayer_pixels(
+                output_pixmaps[band] = mask_bayer_pixels(
                     pixmap, pixel, masks=self.bayer_info["masks"]
                 )
-            pixmap_cache[band] = pixmap
-        return pixmap_cache
+            else:
+                output_pixmaps[band] = pixmap
+        return output_pixmaps
 
     def make_context_images(self, verbose=False):
         # TODO: automatically try to count ROIs and stuff? maybe?
