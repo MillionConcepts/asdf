@@ -118,7 +118,7 @@ def upload_s3(
     """Upload a file or buffer to an S3 bucket
 
     :param upload_object: String, pathlike, or filelike object to upload
-    :param bucket: Bucket to upload to
+    :param bucket: Bucket to upload it to
     :param object_name: S3 object name. If not specified then str(
         file_or_buffer) is used -- will most likely look bad if it's a buffer
     :param client: botocore.client.S3 instance; makes a default client if None
