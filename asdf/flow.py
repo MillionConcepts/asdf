@@ -82,6 +82,9 @@ def asdf_body(
         bandset.metadata["CREATOR"] = str(prototype["CREATOR"].iloc[0])
     else:
         bandset.metadata["CREATOR"] = os.getlogin()
+    # add (meta)data from rc files
+    aprint("... scraping photometric responsivity constant files ...")
+    bandset.scrape_rc_files()
     # where are we locally writing files? by default, directories separated
     # by user and sol.
     outpath = make_asdf_outpath(output, bandset)

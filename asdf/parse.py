@@ -84,9 +84,37 @@ def make_pointing_name(pointing):
     return pointing_name
 
 
+def parse_zcam_rc_fn(path):
+    """
+    parse rad-to-iof rc file filenames. these filenames are a variant of SIS
+    standard: somewhat different layout, don't contain quite as much
+    information. most notably, for our purposes, they don't list sol.
+
+    this _shouldn't_ be necessary in the primary pipeline, because clear links
+    should be present from each IOF file to the relevant rc files. But it is
+    useful to scrape lots of rc files, etc., and more generally for
+    completeness.
+    """
+    if Path(path).suffix == ".jpg":  # graphs of model fits
+        return None
+    split = tuple(filter(None, Path(path).stem.split("_")))
+    return {
+        "SITE": int(split[3][:3]),
+        "DRIVE": int(split[3][3:7]),
+        "SEQ_ID": split[3][7:16],
+        "CTIME": int(split[2]),
+        "FILTER": split[1],
+        "VERSION": int(split[4]),
+        "PRODUCT_TYPE": split[0].upper(),
+        "PATH": str(path)
+    }
+
+
 def parse_zcam_fn(path):
     """use mp.parse rules to get basic file identifiers"""
     filename = Path(path).name
+    if filename.startswith("rc_"):
+        return parse_zcam_rc_fn(path)
     try:
         values = list(juxt(*ZCAM_FN_PARSERS.values())(filename))
         # chop off currently not-used-as-specified stereo counter

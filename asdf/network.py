@@ -186,7 +186,7 @@ def backup_data_to_s3(bandset, debug_prefix=""):
     extended_key = (
         f"{s3_prefix}marslab_extended_{bandset.name + bandset.suffix}.csv"
     )
-    marslab, extended = bandset.write_data_files(in_memory=True)
+    marslab, extended, _ = bandset.write_data_files(in_memory=True)
     upload_hopper = [(marslab, marslab_key), (extended, extended_key)]
     for fn in bandset.local_files:
         if Path(fn).suffix in (".fits", ".fits.gz", ".sel"):

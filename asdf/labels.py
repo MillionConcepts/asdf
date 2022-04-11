@@ -15,7 +15,12 @@ from asdf_settings.metadata import IOF_METADATA_FIELDS
 
 def keygetter(mapping, keys):
     for key in keys:
-        mapping = mapping[key]
+        # making sure to use __getitem__ at top level to trigger formatting --
+        # a little awkward, might suggest desirable changes upstream
+        if key in mapping.keys():
+            mapping = mapping[key]
+        else:
+            return None
     return mapping
 
 
@@ -31,7 +36,7 @@ def dequantizer(value):
 
 def scrape_field(metadata, field):
     if isinstance(field, str):
-        return dequantizer(metadata.metaget(field))
+        return dequantizer(metadata.metaget_(field))
     else:
         value = dequantizer(keygetter(metadata, field['keys']))
     if 'regex' not in field.keys():
@@ -121,6 +126,9 @@ def aux_skim_header(label: Union[Path, str]) -> dict:
         )
     skim["RSM"] = skim["RMC"][6]
     skim["SUBFRAME"] = scrape_subframe(label_text)
+    skim["PRODUCT_CREATION_TIME"] = scrape(
+        r"(?<=PRODUCT_CREATION_TIME ).*?((\d|-|:|T)+)"
+    )
     return skim
 
 

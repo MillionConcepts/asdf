@@ -33,6 +33,7 @@ from asdf.format import (
 from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
 from asdf.labels import bulk_scrape_asdf_metadata
+from asdf.rc_parser import find_rc_file, read_rc_file
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
@@ -140,8 +141,50 @@ class ZcamBandSet(BandSet):
         self.pixmaps = {}
         self.pixmap_counts = {}
         self.local_files = []
+        # additional tables to hold metadata / marslab-like files scraped
+        # from rc files
+        self.rc_metadata = None
+        self.rc_compact = None
         # a slightly goofy holding location for things like google drive ids
         self.remote_resource_id = None
+
+    def scrape_rc_files(self):
+        rc_table_map = {}
+        rc_metadata = {}
+        for ix, row in self.metadata.iterrows():
+            rc_file = find_rc_file(row['RC_FILE'], row['PATH'])
+            # TODO: handle this more prettily
+            if rc_file is None:
+                aprint(
+                    f"[bold dark orange]Missing rc file(s), cancelling rc "
+                    f"file processing."
+                )
+                return
+            rc_roi_table, rc_file_metadata = read_rc_file(rc_file)
+            rc_table_map[row['BAND']] = rc_roi_table
+            rc_metadata[row['BAND']] = rc_file_metadata
+        rc_metadata = pd.DataFrame(rc_metadata)
+        # superfluous fields
+        rc_metadata = rc_metadata.drop(["FILTER_NUMBER", "CHANNEL"])
+        self.rc_metadata = self._make_caltarget_table(rc_metadata, rc_table_map)
+        rc_metadata = rc_metadata.T.reset_index(drop=True)
+        rc_metadata.columns = [f"RC_{col}" for col in rc_metadata.columns]
+        self.metadata = pd.concat([self.metadata, rc_metadata], axis=1)
+
+    @staticmethod
+    def _make_caltarget_table(rc_metadata, rc_table_map):
+        rc_marslab_chunks = []
+        for band, table in rc_table_map.items():
+            band_metadata = rc_metadata[band]
+            for col, value in band_metadata.iteritems():
+                table[col] = value
+            table.columns = [
+                # matching 'reflectance field is the band name' convention
+                f"{band}_{col}".strip("_") for col in table.columns
+            ]
+            rc_marslab_chunks.append(table)
+        rc_marslab = pd.concat(rc_marslab_chunks, axis=1).copy()  # copy defrag
+        return rc_marslab
 
     def _get_headers_from_precached_metadata(self):
         headers = pd.DataFrame(bulk_scrape_asdf_metadata(self.precached))
@@ -150,7 +193,13 @@ class ZcamBandSet(BandSet):
         # files with pdr.Data again or setting up some silly cache
         header_rows = []
         for _, row in self.metadata.iterrows():
-            match = headers.loc[headers['PATH'] == row['PATH']]
+            match = headers.loc[headers['PATH'] == row['PATH']].copy()
+            if row['FILTER'] in ('L0', 'R0'):
+                # each bayer band has a separate rc file, but the file headers
+                # only point to the red-band file
+                match['RC_FILE'] = match['RC_FILE'].str.replace(
+                    f"{row['FILTER']}R", row['BAND']
+                )
             header_rows.append(match)
         return pd.concat(header_rows).reset_index(drop=True)
 
@@ -319,6 +368,35 @@ class ZcamBandSet(BandSet):
         self.summary = summary
         self.extended = polish_metadata(extended, creation_time)
         self.compact = polish_metadata(compact, creation_time)
+        if self.rc_metadata is not None:
+            self._assemble_rc_compact(creation_time)
+
+    def _assemble_rc_compact(self, creation_time):
+        self.rc_compact = drop_excess_stats(self.rc_metadata)
+        # convoluted vertical version of horizontal summary procedure
+        # above (because this is not from the same kind of source)
+        ltst_block = self.rc_metadata[
+            [c for c in self.rc_metadata.columns if 'LTST' in c]
+        ]
+        first_frame_ix = ltst_block.values.argmin(axis=1)[0]
+        first_filt = ltst_block.columns[first_frame_ix].split("_")[0]
+        rc_summary = self.rc_metadata[
+            [
+                c for c in self.rc_metadata.columns if c.startswith(first_filt)
+            ]
+        ].iloc[0]
+        rc_summary.index = [
+            ix.replace(first_filt, "").strip("_") for ix in rc_summary.index
+        ]
+        for field, value in rc_summary.iteritems():
+            if field in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS:
+                self.rc_compact[field] = value
+        self.rc_compact["SOL"] = self.summary["SOL"]
+        self.rc_compact["FEATURE"] = "caltarget"
+        self.rc_compact["CALTARGET_ELEMENT"] = self.rc_compact.index
+        self.rc_compact["COLOR"] = "black"
+        self.rc_compact = polish_metadata(self.rc_compact, creation_time)
+        self.rc_compact = self.rc_compact.copy()  # defrag
 
     def write_data_files(self, outpath=".", verbose=False, in_memory=False):
         if in_memory is False:
@@ -326,24 +404,32 @@ class ZcamBandSet(BandSet):
             stem = f"_{self.name + self.suffix}.csv"
             metadata_file = str(Path(datapath, f"marslab{stem}"))
             extended_file = str(Path(datapath, f"marslab_extended{stem}"))
+            rc_metadata_file = str(Path(datapath, f"marslab_rc{stem}"))
             if not datapath.exists():
                 os.makedirs(datapath)
         else:
             metadata_file = io.BytesIO()
             extended_file = io.BytesIO()
+            rc_metadata_file = io.BytesIO()
         dashify(self.extended).to_csv(extended_file, index=False)
         if verbose and (in_memory is False):
             aprint("wrote extended-format marslab file: " + extended_file)
         dashify(self.compact).to_csv(metadata_file, index=False)
         if verbose and (in_memory is False):
             aprint("wrote compact-format marslab file: " + metadata_file)
+        if self.rc_compact is not None:
+            dashify(self.rc_compact).to_csv(rc_metadata_file, index=False)
+            if verbose and (in_memory is False):
+                aprint("wrote caltarget marslab file: " + rc_metadata_file)
         if in_memory is True:
             metadata_file.seek(0)
             extended_file.seek(0)
+            rc_metadata_file.seek(0)
         else:
             self.local_files.append(extended_file)
             self.local_files.append(metadata_file)
-        return metadata_file, extended_file
+            self.local_files.append(rc_metadata_file)
+        return metadata_file, extended_file, rc_metadata_file
 
     def draw_context(self, edgemaps, eye):
         inst = {

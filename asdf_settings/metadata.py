@@ -109,6 +109,19 @@ ROI_METADATA_FIELD_CHOICES = {
     ],
 }
 
+RC_METADATA_COLUMNS = (
+    "CALTARGET_FILE",
+    "SOL",
+    "SEQ_ID",
+    "LTST",
+    "SOLAR_AZIMUTH",
+    "INCIDENCE_ANGLE",
+    "AZIMUTH_ANGLE",
+    "EMISSION_ANGLE",
+    "SCALING_FACTOR",
+    "UNCERTAINTY"
+)
+
 # Only the columns listed here will appear in the compact -marslab.csv file.
 # Their order here is preserved in the .csv file.
 # *ROI_METADATA_FIELDS are the user-input fields defined above.
@@ -120,6 +133,9 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "SOL",
     "SEQ_ID",
     *ROI_METADATA_FIELDS,
+    # TODO: determine if this moves somewhere else or if we always
+    #  automatically populate caltarget element
+    "CALTARGET_ELEMENT",
     "LOCATION",
     "SITE",
     "DRIVE",
@@ -130,6 +146,8 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "SOLAR_ELEVATION",
     "INCIDENCE_ANGLE",
     "EMISSION_ANGLE",
+    # TODO: RC-file value. ?
+    "AZIMUTH_ANGLE",
     "PHASE_ANGLE",
     "LTST",
     "LAT",
@@ -149,6 +167,7 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "COLUMN",
     "DET_RAD",
     "DET_THETA",
+    *[f"RC_{col}" for col in RC_METADATA_COLUMNS]
 )
 
 # statistical columns we add along with mean value to FILTER_DATA_COLUMNS
@@ -213,11 +232,12 @@ IOF_METADATA_FIELDS = {
         "keys": ("SITE_DERIVED_GEOMETRY_PARMS", "INSTRUMENT_AZIMUTH")
     },
     "INPUT_PRODUCT_ID": "INPUT_PRODUCT_ID",
+    "RC_FILE": "RC_FILE",
     # subframe parameters to be assembled later
     "FIRST_LINE": "FIRST_LINE",
     "FIRST_LINE_SAMPLE": "FIRST_LINE_SAMPLE",
     "LINES": "LINES",
-    "LINE_SAMPLES": "LINE_SAMPLES"
+    "LINE_SAMPLES": "LINE_SAMPLES",
 }
 
 # # regexes for getting metadata from attached PDS3 product labels without

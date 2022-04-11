@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 from more_itertools import all_equal
 
-import asdf_settings as settings
+from asdf_settings import sources
 from asdf.asdf_utils import dir_fs
 from dustgoggles.structures import listify
 from dustgoggles.pivot import split_on, pdstr
@@ -42,17 +42,20 @@ def drop_mismatched_versions(siblings, base_version=None):
     if len(siblings["VERSION"].unique()) == 1:
         return siblings
     versioned = siblings.copy()
-    if base_version is None:
-        base_version = versioned["VERSION"].max()
+    # if base_version is None:
+    #     base_version = versioned["VERSION"].max()
     dupes = versioned.loc[versioned["FILTER"].duplicated(keep=False)]
     for filter_name in dupes["FILTER"].unique():
         filter_slice = versioned.loc[versioned["FILTER"] == filter_name]
-        if base_version in filter_slice["VERSION"].values:
-            target_version = base_version
-        else:
-            target_version = filter_slice["VERSION"].max()
+        # if base_version in filter_slice["VERSION"].values:
+        #     target_version = base_version
+        # else:
+        #     target_version = filter_slice["VERSION"].max()
         versioned.drop(
-            filter_slice.loc[filter_slice["VERSION"] != target_version].index,
+            filter_slice.loc[
+                filter_slice["PRODUCT_CREATION_TIME"]
+                < filter_slice["PRODUCT_CREATION_TIME"].max()
+            ].index,
             inplace=True,
         )
     return versioned
@@ -279,7 +282,7 @@ def cluster_observations(
             "from broadband-only sequences",
             "from caltarget observations",
             "with off-size subframes",
-            "of lower/mismatched versions",
+            "with older creation times",
         ),
     ):
         if count > 0:
@@ -297,8 +300,7 @@ def find_matching_pixmap(product_path, code="pix_map"):
     sol_dir = product_dir.parent
     search_dirs = [Path(sol_dir, code)]
     search_dirs += [
-        Path(root, sol_dir.name, code)
-        for root in settings.sources.PIX_ROOTS
+        Path(root, sol_dir.name, code) for root in sources.PIX_ROOTS
     ]
     search_dirs = set(search_dirs)
     # get all the files in these directories
@@ -460,7 +462,7 @@ def add_effective_taus(metadata):
         return metadata
     stringified_taus = []
     for taufile in metadata["TAU_ESTIMATE_FILENAME"]:
-        taupath = settings.sources.EFFECTIVE_TAU_PATH + taufile
+        taupath = sources.EFFECTIVE_TAU_PATH + taufile
         if not os.path.exists(taupath):
             stringified_taus.append(np.nan)
         else:

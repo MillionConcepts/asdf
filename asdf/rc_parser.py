@@ -1,6 +1,9 @@
 """
-parser for "rc" files used by the Mastcam-Z photometric calibration pipeline
+parser for "rc" responsivity-constant files used by the Mastcam-Z photometric
+calibration pipeline
 """
+from pathlib import Path
+
 from cytoolz import valfilter
 import pandas as pd
 
@@ -9,9 +12,8 @@ RC_FIELD_MAPPING = {
     "uncertainty": "UNCERTAINTY",
     "RC file format version": "FORMAT_VERSION",
     "local true solar time": "LTST",
-    "unique sequence identifier": "SEQ_ID",
     "RC file creation time": "CREATION_TIME",
-    "responsivity constants file": "FILE",
+    "responsivity constants file": "FULL_PATH",
     "associated selection filename": "SEL_FILE",
     "outliers excluded from selections": "OUTLIERS_EXCLUDED",
     "dust correction": "DUST_CORRECTION",
@@ -22,7 +24,7 @@ RC_FIELD_MAPPING = {
     "fit method": "FIT_METHOD",
     "camera id": "CAMERA_ID",
     "filter number": "FILTER_NUMBER",
-    "rad-to-iof scaling factor": "SCALING_FACTOR"
+    "rad-to-iof scaling factor": "SCALING_FACTOR",
 }
 
 RC_ROI_FIELD_MAPPING = {
@@ -35,7 +37,7 @@ RC_ROI_FIELD_MAPPING = {
     "incidence angle": "INCIDENCE_ANGLE",
     "emission angle": "EMISSION_ANGLE",
     "azimutih angle": "AZIMUTH_ANGLE",
-    "reflectances": "REF"
+    "reflectances": ""
 }
 
 
@@ -57,10 +59,22 @@ def parse_terminal_line(terminal_line):
     return {header: rc_typecast(value) for header, value in zip(headers, row)}
 
 
+def parse_sequence_identifier(value):
+    identifier = value.split("_")
+    return {
+        "SOL": int(identifier[0]),
+        "SEQ_ID": identifier[1].upper(),
+        "BOOT_COUNT": int(identifier[2])
+        # TODO: what is the final value? ignoring for now.
+    }
+
+
 def parse_rc_line(rc_line):
     if rc_line.startswith("camera"):
         return parse_terminal_line(rc_line)
     parameter, value = rc_line.split(":", maxsplit=1)
+    if parameter.startswith("unique sequence"):
+        return parse_sequence_identifier(value)
     if "file format version" in parameter:
         putative_values = (value,)
     elif '"' in value:
@@ -90,11 +104,28 @@ def read_rc_file(rc_fn):
     for line in lines:
         parsed |= parse_rc_line(line)
     table_fields = valfilter(lambda v: isinstance(v, tuple), parsed)
-    metadata = {
-        RC_FIELD_MAPPING[k]: v for k, v in parsed.items()
-        if k not in table_fields.keys()
-    }
+    metadata = {}
+    for k, v in parsed.items():
+        if k in table_fields.keys():
+            continue
+        if k in RC_FIELD_MAPPING.keys():
+            metadata[RC_FIELD_MAPPING[k]] = v
+        else:
+            metadata[k] = v
     table = extract_roi_table(table_fields)
-    for k, v in metadata.items():
-        table[k] = v
-    return table.copy()
+    for angle in ["AZIMUTH_ANGLE", "EMISSION_ANGLE", "INCIDENCE_ANGLE"]:
+        metadata[angle] = table[angle].loc["BLACK_CHIP_CENTER"]
+    return table, metadata
+
+
+def find_rc_file(rc_file, product_path):
+    from asdf_settings import sources
+
+    sol_dir = Path(product_path).parent.parent
+    search_dirs = [Path(sol_dir, "rc_files")]
+    search_dirs += [
+        Path(root, sol_dir.name, "rc_files") for root in sources.RC_ROOTS
+    ]
+    for search_dir in search_dirs:
+        if Path(search_dir, rc_file).exists():
+            return Path(search_dir, rc_file)
