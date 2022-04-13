@@ -404,7 +404,10 @@ class ZcamBandSet(BandSet):
             stem = f"_{self.name + self.suffix}.csv"
             metadata_file = str(Path(datapath, f"marslab{stem}"))
             extended_file = str(Path(datapath, f"marslab_extended{stem}"))
-            rc_metadata_file = str(Path(datapath, f"marslab_rc{stem}"))
+            if self.rc_compact is not None:
+                rc_metadata_file = str(Path(datapath, f"marslab_rc{stem}"))
+            else:
+                rc_metadata_file = None
             if not datapath.exists():
                 os.makedirs(datapath)
         else:
@@ -428,7 +431,8 @@ class ZcamBandSet(BandSet):
         else:
             self.local_files.append(extended_file)
             self.local_files.append(metadata_file)
-            self.local_files.append(rc_metadata_file)
+            if self.rc_compact is not None:
+                self.local_files.append(rc_metadata_file)
         return metadata_file, extended_file, rc_metadata_file
 
     def draw_context(self, edgemaps, eye):

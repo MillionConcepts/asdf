@@ -7,7 +7,7 @@ from functools import reduce
 from operator import mul
 from pathlib import Path
 import re
-from typing import Union
+from typing import Union, Sequence
 from urllib.error import URLError
 
 from cytoolz.dicttoolz import valfilter
@@ -542,9 +542,14 @@ def make_marslab_metadata_df(marslab_fn_list):
     return marslab_df
 
 
-def prune_analysis_df(df, sol=None, seq_id=None, file_regex=None):
-    if sol:
-        df = df.loc[df["SOL"] == int(sol)].copy()
+def prune_analysis_df(
+    df: pd.DataFrame, sol=None, seq_id=None, file_regex=None
+):
+    if sol is not None:
+        if isinstance(sol, Sequence) and not isinstance(sol, str):
+            df = df.loc[df["SOL"].between(*map(int, sol))]
+        else:
+            df = df.loc[df["SOL"] == int(sol)].copy()
     if seq_id:
         df = df.loc[
             df["SEQ_ID"].str.lower().str.contains(seq_id.lower())
