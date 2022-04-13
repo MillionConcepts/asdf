@@ -7,7 +7,7 @@ from typing import Mapping, Union
 
 import pdr
 from dustgoggles.scrape import (
-    get_label_text, cached_label_loader, make_scraper, scrape_subframe,
+    cached_label_loader, make_scraper, scrape_subframe
 )
 
 from asdf_settings.metadata import IOF_METADATA_FIELDS

@@ -1,9 +1,7 @@
-import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 from rapid.algebra import make_classifier_look
 from rapid.helpers import get_zcam_bandset
-
 
 mpl.rcParams['image.interpolation'] = None
 
