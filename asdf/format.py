@@ -1,24 +1,24 @@
 """
 formatting and helper functions for other asdf modules.
 """
-import os
-import re
 from functools import partial
 from hashlib import md5
+import os
 from pathlib import Path
+import re
 
-import asdf_settings as settings
-import matplotlib.figure
-import numpy as np
-import pandas as pd
-from asdf.console import ASDF_CONSOLE, aprint
-from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
 from dustgoggles.structures import NestingDict
-
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.imgutils import absolutely_destroy
 from marslab.imgops.regions import count_rois_on_image, roi_stats
 from marslab.imgops.render import make_thumbnail, simple_figure
+import matplotlib.figure
+import numpy as np
+import pandas as pd
+
+from asdf.console import ASDF_CONSOLE, aprint
+from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
+from asdf_settings import rapidlooks, sources
 
 
 def compile_looks():
@@ -101,14 +101,14 @@ def render_figure_labels(ax, title, annotation):
         transform=ax.transAxes,
     )
     render(
-        y=settings.rapidlooks.TITLE_POSITION,
+        y=rapidlooks.TITLE_POSITION,
         s=title,
-        fontproperties=settings.rapidlooks.TITLE_FONT,
+        fontproperties=rapidlooks.TITLE_FONT,
     )
     render(
-        y=settings.rapidlooks.ANNOTATION_POSITION,
+        y=rapidlooks.ANNOTATION_POSITION,
         s=annotation,
-        fontproperties=settings.rapidlooks.ANNOTATION_FONT,
+        fontproperties=rapidlooks.ANNOTATION_FONT,
     )
 
 
@@ -141,12 +141,12 @@ def parse_abbreviated_inputs(
     # default path root and subdirectory, which can be overridden
     if root_path_abbreviation:
         try:
-            path_root = settings.sources.PATH_ABBREVIATIONS[
+            path_root = sources.PATH_ABBREVIATIONS[
                 root_path_abbreviation
             ]
         except KeyError:
             source_names = ", ".join(
-                settings.sources.PATH_ABBREVIATIONS.keys()
+                sources.PATH_ABBREVIATIONS.keys()
             )
             ASDF_CONSOLE.log(
                 "sorry, I don't know the abbreviation {}. I know: {}.".format(
@@ -156,18 +156,18 @@ def parse_abbreviated_inputs(
             )
             return None, None
     else:
-        path_root = list(settings.sources.PATH_ABBREVIATIONS.values())[0]
+        path_root = list(sources.PATH_ABBREVIATIONS.values())[0]
     if not product_subdirectory:
-        product_subdirectory = settings.sources.DEFAULT_PRODUCT_SUBDIRECTORY
+        product_subdirectory = sources.DEFAULT_PRODUCT_SUBDIRECTORY
     directory = Path(path_root, sol_path, product_subdirectory)
 
     return directory, clean_sequence_id(seq_id)
 
 
-def make_rapidlook_thumbnails(rapidlooks, size):
+def make_rapidlook_thumbnails(thumblooks, size):
     aprint("... making thumbnails (if necessary) ...")
     thumbnails = {}
-    for name, image in rapidlooks.items():
+    for name, image in thumblooks.items():
         thumbnails[name] = make_thumbnail(image, size)
     return thumbnails
 
@@ -369,8 +369,7 @@ def construct_title_and_annotation(bandset, look_name):
         title = insert_wavelengths_into_text(title)
     annotation = "\n".join(
         (
-            make_bandset_annotation(bandset.metadata),
-            settings.rapidlooks.CREDIT_TEXT,
+            make_bandset_annotation(bandset.metadata), rapidlooks.CREDIT_TEXT,
         )
     )
     return annotation, title
