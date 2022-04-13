@@ -27,12 +27,12 @@ def compile_looks():
     avoiding circular imports.
     """
     from asdf_settings.generators import look_assembler
-    rapidlooks = look_assembler.RAPIDLOOKS
+    looks = look_assembler.RAPIDLOOKS
     # interleave 'hard' rapidlooks for efficiency
     return (
-        rapidlooks[slice(None, None, 3)]
-        + rapidlooks[slice(1, None, 3)]
-        + rapidlooks[slice(2, None, 3)]
+        looks[slice(None, None, 3)]
+        + looks[slice(1, None, 3)]
+        + looks[slice(2, None, 3)]
     )
 
 
