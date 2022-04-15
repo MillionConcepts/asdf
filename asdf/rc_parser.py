@@ -93,6 +93,7 @@ def extract_roi_table(rc_roi_dict):
     table.index = table.index.str.replace("ROI", "").str.strip()
     table.columns = table.loc['names'].str.upper().str.replace(" ", "_").values
     table = table.drop('names')
+    # TODO: find a way to notoverwrite all files l,ater
     return table.rename(index=RC_ROI_FIELD_MAPPING).T
 
 

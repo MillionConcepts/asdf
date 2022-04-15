@@ -203,6 +203,7 @@ IOF_METADATA_FIELDS = {
         "keys": ("INSTRUMENT_STATE_PARMS", "FILTER_NAME",),
         "regex": r"ZCAM_([LR][\w\d])(?=_)"
     },
+    "SOURCE_PRODUCT_ID": "SOURCE_PRODUCT_ID",
     # prior version cut the milliseconds, but I think unnecessarily
     "IMAGE_TIME": "IMAGE_TIME",
     "LTST": "LOCAL_TRUE_SOLAR_TIME",

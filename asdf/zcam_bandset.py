@@ -183,8 +183,9 @@ class ZcamBandSet(BandSet):
                 f"{band}_{col}".strip("_") for col in table.columns
             ]
             rc_marslab_chunks.append(table)
-        rc_marslab = pd.concat(rc_marslab_chunks, axis=1).copy()  # copy defrag
-        return rc_marslab
+        rc_marslab = pd.concat(rc_marslab_chunks, axis=1)
+        rc_marslab["INSTRUMENT"] = "ZCAM"
+        return rc_marslab.copy()  # copy defrag
 
     def _get_headers_from_precached_metadata(self):
         headers = pd.DataFrame(bulk_scrape_asdf_metadata(self.precached))
