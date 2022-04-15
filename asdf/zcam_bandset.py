@@ -182,7 +182,7 @@ class ZcamBandSet(BandSet):
                 # matching 'reflectance field is the band name' convention
                 f"{band}_{col}".strip("_") for col in table.columns
             ]
-            rc_marslab_chunks.append(table)
+            rc_marslab_chunks.append(table.copy())  # copy defrag
         rc_marslab = pd.concat(rc_marslab_chunks, axis=1)
         rc_marslab["INSTRUMENT"] = "ZCAM"
         return rc_marslab.copy()  # copy defrag
