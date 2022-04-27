@@ -39,7 +39,6 @@ BANDMAP_DEFAULTS = {
     "name": "{look} {bands}",
     "params": {"special_constants": [0]},
     "limiter": {"function": std_clip},
-    "postfilter": {"function": gaussian_filter, "params": {"sigma": 2}},
     "plotter": {
         "function": colormapped_plot,
         "params": {
@@ -177,56 +176,10 @@ SHADOWED_OPTIONS = {"premask": {"sigma": (1, 0)}}
 
 # sigma-invariant (non-merspect-style) dcs options
 INVARIANT_OPTIONS = {"sigma": None, "contrast_stretch": 1}
-# defaults for 'accent' - type looks (currently just the aqua-pink overlays)
-ACCENT_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
-ACCENT_DEFAULTS["prefilter"] = {"function": make_bilateralfilter(15, 3, 7)}
-
-# settings for the aqua-pink overlays
-AQUA_PINK_OVERLAY_OPTIONS = {
-    "params": {
-        "mpl_settings": {"colorbar_fp": TICK_FONT},
-        "overlay_opacity": 0.3,
-        "overlay_cmap": "aqua_pink",
-        "base_cmap": "Greys_r",
-    },
-}
-
-# settings for the red-blue overlays
-RED_BLUE_OVERLAY_OPTIONS = {
-    "name": "{look} {bands} rb accent",
-    "params": {
-        "mpl_settings": {"colorbar_fp": TICK_FONT},
-        "overlay_opacity": 0.4,
-        "overlay_cmap": "red_blue",
-        "base_cmap": "Greys_r",
-    },
-}
-
-# default options for 'heatmap' - type looks -- currently in this file
-# only including the rainbow looks
-HEATMAP_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
-HEATMAP_DEFAULTS["prefilter"] = {
-    # syntax for the bilateral filter is slightly different because of a
-    # problem in python-opencv
-    "function": make_bilateralfilter(10, 10, 10),
-}
-HEATMAP_DEFAULTS["postfilter"] = {"function": smoother, "params": {"sigma": 5}}
-
-RAINBOW_OPTIONS = {
-    "params": {
-        "mpl_settings": {"colorbar_fp": TICK_FONT},
-        "overlay_opacity": 0.35,
-        "overlay_cmap": "gist_rainbow_r",
-        "base_cmap": "Greys_r",
-    }
-}
 
 # dictionary of all procedural looks to be generated. general syntax is:
 # '$CATEGORY_NAME': (options_for_look, options_for_other_look, ...)
-
 LOOK_GENERATORS = {
-    "accent": [AQUA_PINK_OVERLAY_OPTIONS, RED_BLUE_OVERLAY_OPTIONS],
-    "heatmap": [RAINBOW_OPTIONS],
     "stretchy": [INVARIANT_OPTIONS],
     # recolored bandmaps: just give colormap names
     "bandmap": ["viridis"],
