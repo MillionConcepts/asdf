@@ -6,6 +6,7 @@ import tarfile
 import random
 import string
 from pathlib import Path
+from typing import Union
 
 import pandas as pd
 from cytoolz import keyfilter
@@ -83,7 +84,7 @@ def null_marslab_data_section():
     return pd.DataFrame({"COLOR": "-", "INSTRUMENT": "ZCAM"}, index=[0])
 
 
-def dir_fs(path):
+def dir_fs(path: Union[str, Path]) -> OSFS:
     path = Path(path)
     if not path.is_dir:
         path = path.parent

@@ -10,6 +10,7 @@ from dustgoggles.scrape import (
     cached_label_loader, make_scraper, scrape_subframe
 )
 
+from asdf.parse import parse_zcam_fn
 from asdf_settings.metadata import IOF_METADATA_FIELDS
 
 
@@ -105,6 +106,11 @@ SKIMMER_REGEX = {
     "COMPLETION": r"(?<=PRODUCT_COMPLETION_STATUS ).*?([\w_]+)",
     "FRAME_TYPE": r"(?<=FRAME_TYPE ).*?(\w+)",
     "LTST": r"(?<=LOCAL_TRUE_SOLAR_TIME ).*?([\d:]+)",
+    "COMPRESSION": r"(?<=INST_CMPRS_NAME ).*?([\w|_]+)",
+    "PRODUCT_CREATION_TIME": r"(?<=PRODUCT_CREATION_TIME ).*?((\d|-|:|T)+)",
+    "CALTARGET_FILE": r"(?<=CALTARGET_FILE ).*?\n?.*?(Z.*?IMG)",
+    "RC_FILE": r"(?<=RC_FILE ).*?\n?.*?(rc_.*?txt)"
+
 }
 
 
@@ -126,9 +132,6 @@ def aux_skim_header(label: Union[Path, str]) -> dict:
         )
     skim["RSM"] = skim["RMC"][6]
     skim["SUBFRAME"] = scrape_subframe(label_text)
-    skim["PRODUCT_CREATION_TIME"] = scrape(
-        r"(?<=PRODUCT_CREATION_TIME ).*?((\d|-|:|T)+)"
-    )
     return skim
 
 

@@ -71,7 +71,10 @@ def asdf_body(
     aprint(Rule(" gathering metadata "))
     if recreate_from:
         prototype = pd.read_csv(recreate_from)
-        aprint("[italic hot_pink]... fdsa: loaded prototype marslab file ...")
+        aprint(
+            f"[italic hot_pink]... fdsa: loaded prototype marslab file "
+            f"{recreate_from} ..."
+        )
     else:
         prototype = pd.DataFrame()
     aprint("... scraping image file headers ...")

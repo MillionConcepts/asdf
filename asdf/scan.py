@@ -3,6 +3,7 @@ functions for running around the filesystem and mashing together big messes
 of products
 """
 import os
+from collections import defaultdict
 from functools import reduce
 from operator import mul
 from pathlib import Path
@@ -38,27 +39,6 @@ from asdf.labels import get_pixel_map_heuristic, cached_aux_skimmer
 
 # TODO: make all the error-printing statements in this module more consistent
 #  with style in other modules
-def drop_mismatched_versions(siblings, base_version=None):
-    if len(siblings["VERSION"].unique()) == 1:
-        return siblings
-    versioned = siblings.copy()
-    # if base_version is None:
-    #     base_version = versioned["VERSION"].max()
-    dupes = versioned.loc[versioned["FILTER"].duplicated(keep=False)]
-    for filter_name in dupes["FILTER"].unique():
-        filter_slice = versioned.loc[versioned["FILTER"] == filter_name]
-        # if base_version in filter_slice["VERSION"].values:
-        #     target_version = base_version
-        # else:
-        #     target_version = filter_slice["VERSION"].max()
-        versioned.drop(
-            filter_slice.loc[
-                filter_slice["PRODUCT_CREATION_TIME"]
-                < filter_slice["PRODUCT_CREATION_TIME"].max()
-            ].index,
-            inplace=True,
-        )
-    return versioned
 
 
 def skim_products(
@@ -90,7 +70,7 @@ def skim_products(
         try:
             skim_results.append(aux_skimmer(product))
             keep_paths.append(product)
-        except (FileNotFoundError, TypeError, KeyError):
+        except (FileNotFoundError, TypeError, KeyError) as _error:
             bad_files.append(product)
     if len(bad_files) > 0:
         ASDFLOG.warning(
@@ -137,7 +117,8 @@ def ls_zcam(root_dir, recursive=False, file_regex=""):
             )
         files = matches
     matches = [
-        file for file in files
+        file
+        for file in files
         if not re.match(r".*\.(xml|lbl)$", str(file), re.I)
     ]
     if len(matches) != len(files):
@@ -188,6 +169,9 @@ def scan_zcam_files(
     products = skim_products(products, field_filters)
     if len(products) == 0:
         raise ValueError("sorry, no matching products found in path.")
+    products["stem"] = (
+        products["PATH"].str.rsplit("/", n=1, expand=True)[1].str.slice(0, 49)
+    )
     return products
 
 
@@ -197,37 +181,76 @@ def cluster_observations(
     keep_broadband=False,
     keep_caltarget=False,
 ):
-    groups = products.groupby(
-        ["SOL", "SEQ_ID", "PRODUCT_TYPE", "THUMBNAIL", "PRODUCER"]
-    )
+    groups = products.groupby(["SOL", "SEQ_ID", "PRODUCT_TYPE", "THUMBNAIL"])
     observations = {}
     parser_warnings = []
-    rejects = {cause: 0 for cause in ("bb", "cal", "frame", "version")}
+    rejects = defaultdict(list)
     for group_ix, group in groups:
         if target_file and (target_file not in group["PATH"].values):
             continue
-        sol, seq_id, product_type, thumb, producer = group_ix
+        sol, seq_id, product_type, thumb = group_ix
         if keep_broadband is False:
             if group["FILTER"].isin(("L0", "R0")).all() or (
                 int(seq_id[4:]) > 5000
             ):
-                rejects["bb"] += len(group)
+                rejects["bb"] += group["PATH"].tolist()
                 continue
         if keep_caltarget is False:
             if int(seq_id[4:]) < 3100:
-                rejects["cal"] += len(group)
+                rejects["cal"] += group["PATH"].tolist()
                 continue
         # drop off-size subframes -- focus(?) frames, etc.
-        frame_sizes = group["SUBFRAME"].map(
-            lambda seq: seq[2:]
-        ).map(lambda pair: reduce(mul, pair))
+        frame_sizes = (
+            group["SUBFRAME"]
+            .map(lambda seq: seq[2:])
+            .map(lambda pair: reduce(mul, pair))
+        )
         if not all_equal(frame_sizes.values):
             smaller = frame_sizes.loc[frame_sizes != frame_sizes.max()]
-            rejects["frame"] += len(smaller)
+            rejects["frame"] += smaller["PATH"].tolist()
             group = group.drop(smaller.index)
-        name = "_".join(
-            [format(sol, "0>4"), seq_id, product_type, thumb, producer]
-        )
+        # apply file quality selection logic:  take the 'best' version of
+        # each image. this is intended to handle cases in which lower-quality
+        # products were downlinked later due to various transmission
+        # exigencies.
+        stem_groups = group.groupby("stem")
+        ok_indices = []
+        for stem, siblings in stem_groups:
+            merit_criteria = (
+                rate_completion,
+                rate_compression,
+                rate_cal_offset,
+                rate_rc_version,
+                rate_version,
+                rate_creation_time,
+            )
+            for merit_criterion in merit_criteria:
+                if len(siblings) == 1:
+                    break
+                predicate = merit_criterion(siblings)
+                if predicate is None:
+                    continue
+                # noinspection PyTypeChecker
+                ok, not_ok = split_on(siblings, predicate)
+                if len(ok) != len(siblings):
+                    rejects[
+                        merit_criterion.__name__.replace("rate_", "")
+                    ] += not_ok["PATH"].tolist()
+                    siblings = ok
+            ok_indices += siblings.index.tolist()
+        group = group.loc[ok_indices].sort_values(by="CTIME")
+        # rc validation check
+        parsed_rc_fns = group["RC_FILE"].map(parse_zcam_fn)
+        for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
+            if not all_equal([fn[key] for fn in parsed_rc_fns]):
+                parser_warnings.append(
+                    f"warning: cannot process {seq_id}. it appears to have "
+                    f"mismatched calibrations. this probably indicates an "
+                    f"issue in the photometric pipeline or accidental data "
+                    f"deletion."
+                )
+                rejects["mismatched_cal"] += group["PATH"].tolist()
+        name = "_".join([format(sol, "0>4"), seq_id, product_type, thumb])
         # TODO: hideous logic
         # handle simultaneous stereo or single-eye observations: group by RSM
         if (group["FRAME_TYPE"] == "STEREO").all() or all_equal(
@@ -235,21 +258,37 @@ def cluster_observations(
         ):
             rsm_groups = group.groupby(["RSM"])
             for RSM, rsm_group in rsm_groups:
-                versioned = drop_mismatched_versions(rsm_group)
-                if len(versioned) != len(rsm_group):
-                    rejects["version"] += len(rsm_group) - len(versioned)
-                    rsm_group = versioned
-                if not rsm_group["FILTER"].duplicated().any():
+                dupes = rsm_group.loc[
+                    rsm_group["FILTER"].duplicated(keep=False)
+                ]
+                if len(dupes) == 0:
                     observations[name + "_RSM" + str(RSM)] = rsm_group
+                # stereo ranging shot before sequence
+                elif detect_ranging_shot(dupes):
+                    observations[name + "_RSM" + str(RSM)] = rsm_group.iloc[2:]
                 else:
                     parser_warnings.append(
                         f"warning: an uncategorized issue may have prevented "
                         f"me from correctly clustering {seq_id}."
                     )
                     rsm_group = rsm_group.drop_duplicates(subset="FILTER")
-                    if not rsm_group["FILTER"].duplicated().any():
-                        observations[name + "_RSM" + str(RSM)] = rsm_group
-        elif (group["FRAME_TYPE"] == "MONO").all():
+                    observations[name + "_RSM" + str(RSM)] = rsm_group
+        # elif (group["FRAME_TYPE"] == "MONO").all():
+        else:
+            # try to filter ranging shots here
+            if not (group["FRAME_TYPE"] == "MONO").all():
+                stereo = group.loc[group["FRAME_TYPE"] == "STEREO"]
+                if (set(stereo["FILTER"]) == {"L0", "R0"}) and (
+                    set(group["FILTER"] != {"L0", "R0"})
+                ):
+                    group = group.loc[group["FRAME_TYPE"] == "MONO"]
+                else:
+                    parser_warnings.append(
+                        f"warning: MONO and STEREO mixed in {seq_id}; could "
+                        f"not be clustered."
+                    )
+                    rejects["mono_stereo"] += group["PATH"].tolist()
+                    continue
             # handle repointed-stereo-observation case: split by pairs of RSM
             # TODO: this will currently fail if all filters from a single eye
             #  are missing
@@ -262,32 +301,47 @@ def cluster_observations(
                 )
             for repoint in partition(2, group["RSM"].unique()):
                 observation = group.loc[group["RSM"].isin(repoint)]
-                versioned = drop_mismatched_versions(observation)
-                if not versioned["FILTER"].duplicated().any():
-                    observations[name + "_RSM" + str(repoint[0])] = versioned
-                else:
+                if observation["FILTER"].duplicated().any():
                     parser_warnings.append(
                         f"warning: an unknown windowing issue may have "
                         f"prevented me from correctly clustering {seq_id}."
                     )
-        else:
-            parser_warnings.append(
-                f"warning: MONO and STEREO mixed in {seq_id}; could not be "
-                f"clustered."
-            )
+                    observation = observation.drop_duplicates(subset="FILTER")
+                observations[name + "_RSM" + str(repoint[0])] = observation
     hidden_things = []
-    for count, line in zip(
-        (rejects["bb"], rejects["cal"], rejects["frame"], rejects["version"]),
+    for reason, line in zip(
+        (
+            "bb",
+            "cal",
+            "frame",
+            "completion",
+            "compression",
+            "cal_offset",
+            "rc_version",
+            "version",
+            "creation_time",
+            "mono_stereo",
+            "mismatched_cal",
+        ),
         (
             "from broadband-only sequences",
             "from caltarget observations",
             "with off-size subframes",
+            "with partial completion status",
+            "worse compression types",
+            "with less chronologically appropriate caltarget observations",
+            "with lower rc file version numbers",
+            "with lower version numbers",
             "with older creation times",
+            "mixed mono and stereo",
+            "mismatched calibrations",
         ),
     ):
-        if count > 0:
-            hidden_things.append(f"({count} file(s) {line} hidden)")
-    return observations, parser_warnings, hidden_things
+        if rejects.get(reason) is not None:
+            hidden_things.append(
+                f"({len(rejects[reason])} file(s) {line} hidden)"
+            )
+    return observations, parser_warnings, hidden_things, rejects
 
 
 def find_matching_pixmap(product_path, code="pix_map"):
@@ -479,13 +533,11 @@ def add_effective_taus(metadata):
 
 
 def is_marslab_empty(marslab_path: Union[str, Path]) -> bool:
-    return pd.read_csv(marslab_path)['COLOR'].iloc[0] == '-'
+    return pd.read_csv(marslab_path)["COLOR"].iloc[0] == "-"
 
 
 def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
-    stemmer = pdstr(
-        "replace", "(roi|\.|fits|gz|marslab|csv)", "", regex=True
-    )
+    stemmer = pdstr("replace", "(roi|\.|fits|gz|marslab|csv)", "", regex=True)
     roi_stems = stemmer(roi["PATH"])
     marslab_stems = stemmer(marslab["PATH"])
 
@@ -493,7 +545,7 @@ def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
         marslab, marslab_stems.isin(roi_stems)
     )
     empty_marslab, lonely_marslab = split_on(
-        lonely_marslab, lonely_marslab['PATH'].map(is_marslab_empty)
+        lonely_marslab, lonely_marslab["PATH"].map(is_marslab_empty)
     )
     paired_roi, lonely_roi = split_on(roi, roi_stems.isin(marslab_stems))
     paired_marslab = (
@@ -533,9 +585,7 @@ def make_marslab_metadata_df(marslab_fn_list):
         ],
         axis=1,
     )
-    marslab_df = marslab_df.dropna(
-        subset=["SOL", "SEQ_ID", "RSM"]
-    )
+    marslab_df = marslab_df.dropna(subset=["SOL", "SEQ_ID", "RSM"])
     for field in ("SOL", "RSM"):
         marslab_df[field] = marslab_df[field].astype("int16")
     marslab_df["SEQ_ID"] = marslab_df["SEQ_ID"].str.upper()
@@ -545,7 +595,7 @@ def make_marslab_metadata_df(marslab_fn_list):
 def prune_analysis_df(
     df: pd.DataFrame, sol=None, seq_id=None, file_regex=None
 ):
-    if sol is not None:
+    if sol not in (None, ""):
         if isinstance(sol, Sequence) and not isinstance(sol, str):
             df = df.loc[df["SOL"].between(*map(int, sol))]
         else:
@@ -559,7 +609,7 @@ def prune_analysis_df(
     return df
 
 
-def fetch_analysis_files(path):
+def fetch_analysis_files(path: Union[str, Path]):
     analysis_fs = dir_fs(path)
     syspath = dir_fs(path).getsyspath
     marslab_files = []
@@ -575,7 +625,7 @@ def fetch_analysis_files(path):
     return marslab_files, roi_files, other_files
 
 
-def compare_roi_colors(analyses):
+def compare_roi_colors(analyses: pd.DataFrame):
     """
     extra soft check to help verfiy that a ROI file corresponds to a compact
     marslab file
@@ -596,7 +646,9 @@ def compare_roi_colors(analyses):
     return analyses.loc[ok_indices], analyses.loc[bad_indices]
 
 
-def find_matching_observations(analyses, search_dir, search_regex):
+def find_matching_observations(
+    analyses: pd.DataFrame, search_dir: str, search_regex: str
+):
     # This does not presently support thumbnails; we may need to collect
     # more metadata
 
@@ -628,12 +680,15 @@ def find_matching_observations(analyses, search_dir, search_regex):
         # TODO: is this a bad idea? should we just pull filenames out of the
         #  marslab files, chopping off versions? or do we want this to be
         #  robust to even changes in naming conventions ... ?
-        clusters, _, _ = cluster_observations(
-            sol_seq_files, keep_caltarget=True, keep_broadband=True
-        )
-        matches = valfilter(
-            lambda df: analysis["RSM"] in df["RSM"].values, clusters
-        )
+        if len(sol_seq_files) > 0:
+            clusters, _, _, _ = cluster_observations(
+                sol_seq_files, keep_caltarget=True, keep_broadband=True
+            )
+            matches = valfilter(
+                lambda df: analysis["RSM"] in df["RSM"].values, clusters
+            )
+        else:
+            matches = {}
         if len(matches) == 0:
             misses.append(analysis["MARSLAB"])
             continue
@@ -646,3 +701,74 @@ def find_matching_observations(analyses, search_dir, search_regex):
             )
         reprocess_pairs[analysis["MARSLAB"]] = list(matches.values())[0]
     return reprocess_pairs, parser_warnings, misses
+
+
+def rate_completion(siblings: pd.DataFrame):
+    """
+    merit criterion for file selection. return the files
+    that are not partials, if any are not partials.
+    """
+    if (siblings["COMPLETION"] == "COMPLETE_CHECKSUM_PASS").any():
+        return siblings["COMPLETION"] == "COMPLETE_CHECKSUM_PASS"
+
+
+def rate_compression(siblings: pd.DataFrame):
+    """
+    merit criterion for file selection. return the files with the best
+    compression type.
+    """
+    for compression in ("NONE", "MSSS_LOSSLESS", "JPEG"):
+        if (siblings["COMPRESSION"] == compression).any():
+            return siblings["COMPRESSION"] == compression
+
+
+def rate_cal_offset(siblings: pd.DataFrame):
+    """
+    merit criterion for file selection. caltarget observation chronological
+    distance from image time.
+    """
+    decimal_ltst = (
+        siblings["LTST"].str.slice(0, 2).astype(int)
+        + siblings["LTST"].str.slice(3, 5).astype(int) / 60
+    )
+    ltst_offset = decimal_ltst - siblings["CALTARGET_LTST"].abs()
+    sol_offset = (
+        siblings["CALTARGET_FILE"].map(parse_zcam_fn)["SOL"]
+        - [rec["SOL"] for rec in siblings["CALTARGET_FILE"].map(parse_zcam_fn)]
+    ).abs()
+    cal_chron_score = sol_offset + ltst_offset
+    return cal_chron_score == cal_chron_score.min()
+
+
+def rate_version(siblings: pd.DataFrame):
+    """
+    merit criterion for file selection. return files with highest version #s.
+    """
+    return siblings["VERSION"] == siblings["VERSION"].max()
+
+
+def rate_rc_version(siblings: pd.DataFrame):
+    parsed_rc_fns = siblings["RC_FILE"].map(parse_zcam_fn)
+    max_version = max([fn["VERSION"] for fn in parsed_rc_fns])
+    return [
+        True if fn["VERSION"] == max_version else False for fn in parsed_rc_fns
+    ]
+
+
+def rate_creation_time(siblings: pd.DataFrame):
+    """
+    merit criterion for file selection. return most recently made file.
+    """
+    return (
+        siblings["PRODUCT_CREATION_TIME"]
+        == siblings["PRODUCT_CREATION_TIME"].max()
+    )
+
+
+def detect_ranging_shot(dupes):
+    """are these duplicate filters due to a 3D-supporting ranging shot?"""
+    return (
+        (set(dupes["FILTER"]) == {"L0", "R0"})
+        and (len(dupes) == 4)
+        and (set(dupes["FILTER"].iloc[0:2]) == {"L0", "R0"})
+    )

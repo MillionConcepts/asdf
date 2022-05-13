@@ -164,8 +164,10 @@ class ZcamBandSet(BandSet):
             rc_table_map[row['BAND']] = rc_roi_table
             rc_metadata[row['BAND']] = rc_file_metadata
         rc_metadata = pd.DataFrame(rc_metadata)
-        # superfluous fields
-        rc_metadata = rc_metadata.drop(["FILTER_NUMBER", "CHANNEL"])
+        superfluous = filter(
+            lambda c: c in rc_metadata.columns, ("FILTER_NUMBER", "CHANNEL")
+        )
+        rc_metadata = rc_metadata.drop(list(superfluous), axis=1)
         self.rc_metadata = self._make_caltarget_table(rc_metadata, rc_table_map)
         rc_metadata = rc_metadata.T.reset_index(drop=True)
         rc_metadata.columns = [f"RC_{col}" for col in rc_metadata.columns]

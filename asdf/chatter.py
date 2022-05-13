@@ -86,7 +86,7 @@ def get_scan_results(
             )
             products = scan_zcam_files(root_dir, **scan_kwargs)
             aprint(" ... chunking products into observations ...")
-            results, problems, hidden = cluster_observations(
+            results, problems, hidden, _ = cluster_observations(
                 products, target_file, keep_broadband, keep_caltarget
             )
         except (ValueError, FileNotFoundError, PermissionError) as err:
@@ -409,7 +409,9 @@ def loudly_ingest_analyses(
     aprint(message + ":\n")
     empty_marslab["MARSLAB"] = empty_marslab["PATH"]
     empty_marslab["ROI"] = None
-    analyses = pd.concat([analyses, empty_marslab[analyses.columns]])
+    analyses = pd.concat(
+        [analyses, empty_marslab[analyses.columns]]
+    ).sort_values(by="SOL")
     for _, row in analyses.iterrows():
         aprint(f"* {row['MARSLAB']}\n* {row['ROI']}\n")
     if not confirm_fdsa_metadata():

@@ -119,7 +119,8 @@ RC_METADATA_COLUMNS = (
     "AZIMUTH_ANGLE",
     "EMISSION_ANGLE",
     "SCALING_FACTOR",
-    "UNCERTAINTY"
+    "UNCERTAINTY",
+    "SEL_FILE"
 )
 
 # Only the columns listed here will appear in the compact -marslab.csv file.
@@ -167,7 +168,8 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "COLUMN",
     "DET_RAD",
     "DET_THETA",
-    *[f"RC_{col}" for col in RC_METADATA_COLUMNS]
+    *[f"RC_{col}" for col in RC_METADATA_COLUMNS],
+    "FORMAT_VERSION",
 )
 
 # statistical columns we add along with mean value to FILTER_DATA_COLUMNS

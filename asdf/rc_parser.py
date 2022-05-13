@@ -88,12 +88,44 @@ def parse_rc_line(rc_line):
     return {parameter: values}
 
 
+def fix_rc_roi_index(rc_roi_table, rc_file_format_version):
+    """
+    correct ROI indices in older rc_file versions.
+    see: M. Merusi, p. comm., 2022-04-18.
+    """
+    if rc_file_format_version is not None:
+        if float(rc_file_format_version[0:3]) >= 1.1:
+            return rc_roi_table
+        elif rc_file_format_version.startswith("1.0"):
+            correct_indices = [
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 19, 20,
+                21, 22, 18, 17, 16, 26, 27, 28, 29, 25, 24, 23, 30, 31, 32,
+                33, 34, 35, 36, 37, 38, 39, 40
+            ]
+        else:
+            raise ValueError(
+                f"Unknown rc format version {rc_file_format_version}"
+            )
+    else:
+        correct_indices = [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 27, 30, 33,
+            36, 24, 20, 17, 28, 31, 34, 37, 25, 21, 18, 16, 19, 22, 23, 26,
+            29, 32, 35, 38, 39, 40
+        ]
+    disordered_columns = ['COUNT', 'ERR', '']
+    # note that roi names are contained in the index, so we specifically do
+    # not want to reindex the dataframe. we could probably do more
+    corrected = rc_roi_table[disordered_columns].iloc[correct_indices].values
+    rc_roi_table[disordered_columns] = corrected
+    return rc_roi_table
+
+
 def extract_roi_table(rc_roi_dict):
     table = pd.DataFrame.from_dict(rc_roi_dict, orient='index')
     table.index = table.index.str.replace("ROI", "").str.strip()
     table.columns = table.loc['names'].str.upper().str.replace(" ", "_").values
     table = table.drop('names')
-    # TODO: find a way to notoverwrite all files l,ater
+    # TODO: find a way to not overwrite all files later
     return table.rename(index=RC_ROI_FIELD_MAPPING).T
 
 
@@ -104,7 +136,7 @@ def read_rc_file(rc_fn):
     parsed = {}
     for line in lines:
         parsed |= parse_rc_line(line)
-    table_fields = valfilter(lambda v: isinstance(v, tuple), parsed)
+    table_fields = valfilter(lambda value: isinstance(value, tuple), parsed)
     metadata = {}
     for k, v in parsed.items():
         if k in table_fields.keys():
@@ -114,6 +146,8 @@ def read_rc_file(rc_fn):
         else:
             metadata[k] = v
     table = extract_roi_table(table_fields)
+    table = fix_rc_roi_index(table, metadata["FORMAT_VERSION"])
+    table['FORMAT_VERSION'] = metadata.pop("FORMAT_VERSION")
     for angle in ["AZIMUTH_ANGLE", "EMISSION_ANGLE", "INCIDENCE_ANGLE"]:
         metadata[angle] = table[angle].loc["BLACK_CHIP_CENTER"]
     return table, metadata
@@ -130,3 +164,4 @@ def find_rc_file(rc_file, product_path):
     for search_dir in search_dirs:
         if Path(search_dir, rc_file).exists():
             return Path(search_dir, rc_file)
+

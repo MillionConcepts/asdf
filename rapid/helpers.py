@@ -14,7 +14,9 @@ def get_zcam_bandset(
     image_path, roi_path=None, use_pixmaps=True, keep_caltarget=False
 ):
     observations = scan_zcam_files(image_path)
-    clusters = cluster_observations(observations, keep_caltarget=keep_caltarget)
+    clusters = cluster_observations(
+        observations, keep_caltarget=keep_caltarget
+    )
     observation = list(clusters[0].values())[0]
     zband = ZcamBandSet(observation)
     if use_pixmaps is True:
