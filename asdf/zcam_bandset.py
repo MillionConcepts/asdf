@@ -470,12 +470,14 @@ class ZcamBandSet(BandSet):
     def draw_eye_pixmaps(self, edgemaps, eye, verbose=False):
         # TODO: consider reorganizing this whole situation
         eye_pixmaps = self.get_pixmap_dict(eye)
-        if not eye_pixmaps:
+        if len(eye_pixmaps) < 1:
             return
         eye_pixmaps["flat"] = self.flatten_pixmaps(eye_pixmaps)
-        eye_pixmaps["narrow"] = self.flatten_pixmaps(
-            keyfilter(lambda k: (k[1] != "0") and (k != "flat"), eye_pixmaps)
+        narrow = keyfilter(
+            lambda k: (k[1] != "0") and (k != "flat"), eye_pixmaps
         )
+        if len(narrow) > 0:
+            eye_pixmaps["narrow"] = self.flatten_pixmaps(narrow)
         for name, pixmap in eye_pixmaps.items():
             self.render_pixmap_context(edgemaps, eye, pixmap, name, verbose)
 

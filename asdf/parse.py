@@ -113,9 +113,9 @@ def parse_zcam_rc_fn(path):
 def parse_zcam_fn(path):
     """use mp.parse rules to get basic file identifiers"""
     filename = Path(path).name
-    if filename.startswith("rc_"):
-        return parse_zcam_rc_fn(path)
     try:
+        if filename.startswith("rc_"):
+            return parse_zcam_rc_fn(path)
         values = list(juxt(*ZCAM_FN_PARSERS.values())(filename))
         # chop off currently not-used-as-specified stereo counter
         values[5] = values[5][1:]

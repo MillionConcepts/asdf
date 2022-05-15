@@ -206,7 +206,7 @@ def cluster_observations(
             .map(lambda pair: reduce(mul, pair))
         )
         if not all_equal(frame_sizes.values):
-            smaller = frame_sizes.loc[frame_sizes != frame_sizes.max()]
+            smaller = group.loc[frame_sizes != frame_sizes.max()]
             rejects["frame"] += smaller["PATH"].tolist()
             group = group.drop(smaller.index)
         # apply file quality selection logic:  take the 'best' version of
