@@ -240,6 +240,8 @@ def cluster_observations(
             ok_indices += siblings.index.tolist()
         group = group.loc[ok_indices].sort_values(by="CTIME")
         # rc validation check
+        # TODO: this currently makes running asdf on RADs fail...which is
+        #  not a major issue, but should probably be addressed.
         parsed_rc_fns = group["RC_FILE"].map(parse_zcam_fn)
         for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
             if not all_equal([fn[key] for fn in parsed_rc_fns]):

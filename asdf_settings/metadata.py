@@ -145,6 +145,7 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     "L_S",
     "SCLK",
     "SOLAR_ELEVATION",
+    "SOLAR_AZIMUTH",
     "INCIDENCE_ANGLE",
     "EMISSION_ANGLE",
     # TODO: RC-file value. ?
@@ -220,20 +221,8 @@ IOF_METADATA_FIELDS = {
         'keys': ('COMPRESSION_PARMS', 'INST_CMPRS_QUALITY')
     },
     "BAYER": "BAYER_METHOD",
-    "SOLAR_ELEVATION": "SOLAR_ELEVATION",
-    "SOLAR_AZIMUTH": "SOLAR_AZIMUTH",
     "SCLK": "SPACECRAFT_CLOCK_START_COUNT",
     "COMPLETION": "PRODUCT_COMPLETION_STATUS",
-    # TODO: check if they're in the headers now
-    # these files appear to currently be stored in
-    # # /project/m2020/gds/radcal/effective_taus on islamorada
-    "TAU_ESTIMATE_FILENAME": "TAU_ESTIMATE_FILENAME",
-    "INSTRUMENT_ELEVATION": {
-        "keys": ("SITE_DERIVED_GEOMETRY_PARMS", "INSTRUMENT_ELEVATION")
-    },
-    "INSTRUMENT_AZIMUTH": {
-        "keys": ("SITE_DERIVED_GEOMETRY_PARMS", "INSTRUMENT_AZIMUTH")
-    },
     "INPUT_PRODUCT_ID": "INPUT_PRODUCT_ID",
     "RC_FILE": "RC_FILE",
     # subframe parameters to be assembled later

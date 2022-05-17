@@ -18,7 +18,9 @@ import asdf_settings
 from asdf.asdf_utils import (
     load_roi_file,
     null_marslab_data_section,
-    dashify, save_roi_file, cast_to_reference,
+    dashify,
+    save_roi_file,
+    cast_to_reference,
 )
 from dustgoggles.pivot import dupe_df_block, check_and_drop_duplicate_columns
 from dustgoggles.structures import to_records, NestingDict
@@ -43,6 +45,7 @@ from marslab.compat.xcam import (
     count_rois_on_xcam_images,
 )
 from marslab.bandset import BandSet
+from marslab.geom import transform_angle, get_coordinates
 from marslab.imgops.debayer import RGGB_PATTERN, mask_bayer_pixels
 from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.loaders import pdr_load
@@ -152,7 +155,7 @@ class ZcamBandSet(BandSet):
         rc_table_map = {}
         rc_metadata = {}
         for ix, row in self.metadata.iterrows():
-            rc_file = find_rc_file(row['RC_FILE'], row['PATH'])
+            rc_file = find_rc_file(row["RC_FILE"], row["PATH"])
             # TODO: handle this more prettily
             if rc_file is None:
                 aprint(
@@ -161,14 +164,16 @@ class ZcamBandSet(BandSet):
                 )
                 return
             rc_roi_table, rc_file_metadata = read_rc_file(rc_file)
-            rc_table_map[row['BAND']] = rc_roi_table
-            rc_metadata[row['BAND']] = rc_file_metadata
+            rc_table_map[row["BAND"]] = rc_roi_table
+            rc_metadata[row["BAND"]] = rc_file_metadata
         rc_metadata = pd.DataFrame(rc_metadata)
         superfluous = filter(
             lambda c: c in rc_metadata.columns, ("FILTER_NUMBER", "CHANNEL")
         )
         rc_metadata = rc_metadata.drop(list(superfluous), axis=1)
-        self.rc_metadata = self._make_caltarget_table(rc_metadata, rc_table_map)
+        self.rc_metadata = self._make_caltarget_table(
+            rc_metadata, rc_table_map
+        )
         rc_metadata = rc_metadata.T.reset_index(drop=True)
         rc_metadata.columns = [f"RC_{col}" for col in rc_metadata.columns]
         self.metadata = pd.concat([self.metadata, rc_metadata], axis=1)
@@ -182,7 +187,8 @@ class ZcamBandSet(BandSet):
                 table[col] = value
             table.columns = [
                 # matching 'reflectance field is the band name' convention
-                f"{band}_{col}".strip("_") for col in table.columns
+                f"{band}_{col}".strip("_")
+                for col in table.columns
             ]
             rc_marslab_chunks.append(table.copy())  # copy defrag
         rc_marslab = pd.concat(rc_marslab_chunks, axis=1)
@@ -191,17 +197,32 @@ class ZcamBandSet(BandSet):
 
     def _get_headers_from_precached_metadata(self):
         headers = pd.DataFrame(bulk_scrape_asdf_metadata(self.precached))
+        geometry = []
+        for data in self.precached.values():
+            instrument = get_coordinates(data)["ROVER"]["INSTRUMENT"]
+            solar_el, solar_az, _ = transform_angle(
+                "SITE", "ROVER", "SOLAR", data
+            )
+            geometry.append(
+                {
+                    "INSTRUMENT_ELEVATION": instrument["ELEVATION"],
+                    "INSTRUMENT_AZIMUTH": instrument["AZIMUTH"],
+                    "SOLAR_ELEVATION": solar_el,
+                    "SOLAR_AZIMUTH": solar_az,
+                }
+            )
+        headers = pd.concat([headers, pd.DataFrame(geometry)], axis=1)
         headers = cast_to_reference(headers, METADATA_DTYPES)
         # dupe rows as necessary to recreate bayer pixels w/out reading
         # files with pdr.Data again or setting up some silly cache
         header_rows = []
         for _, row in self.metadata.iterrows():
-            match = headers.loc[headers['PATH'] == row['PATH']].copy()
-            if row['FILTER'] in ('L0', 'R0'):
+            match = headers.loc[headers["PATH"] == row["PATH"]].copy()
+            if row["FILTER"] in ("L0", "R0"):
                 # each bayer band has a separate rc file, but the file headers
                 # only point to the red-band file
-                match['RC_FILE'] = match['RC_FILE'].str.replace(
-                    f"{row['FILTER']}R", row['BAND']
+                match["RC_FILE"] = match["RC_FILE"].str.replace(
+                    f"{row['FILTER']}R", row["BAND"]
                 )
             header_rows.append(match)
         return pd.concat(header_rows).reset_index(drop=True)
@@ -379,14 +400,12 @@ class ZcamBandSet(BandSet):
         # convoluted vertical version of horizontal summary procedure
         # above (because this is not from the same kind of source)
         ltst_block = self.rc_metadata[
-            [c for c in self.rc_metadata.columns if 'LTST' in c]
+            [c for c in self.rc_metadata.columns if "LTST" in c]
         ]
         first_frame_ix = ltst_block.values.argmin(axis=1)[0]
         first_filt = ltst_block.columns[first_frame_ix].split("_")[0]
         rc_summary = self.rc_metadata[
-            [
-                c for c in self.rc_metadata.columns if c.startswith(first_filt)
-            ]
+            [c for c in self.rc_metadata.columns if c.startswith(first_filt)]
         ].iloc[0]
         rc_summary.index = [
             ix.replace(first_filt, "").strip("_") for ix in rc_summary.index
@@ -550,9 +569,8 @@ class ZcamBandSet(BandSet):
         for band in bands:
             # use all pixels from bayer-transparent and onboard-debayered
             # frames; otherwise mask bayer_pixels
-            do_mask = (
-                (self.check_onboard_debayer() is False)
-                and (BAND_TO_BAYER["ZCAM"].get(band) is not None)
+            do_mask = (self.check_onboard_debayer() is False) and (
+                BAND_TO_BAYER["ZCAM"].get(band) is not None
             )
             if do_mask is True:
                 self.make_db_masks(pixmap.shape)
