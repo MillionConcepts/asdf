@@ -5,10 +5,12 @@ channels:
 dependencies:
   - python=3.9
   - numpy
+  - dustgoggles
   - pandas
   - matplotlib
   - git
   - jupyter
+  - pdr
   - clize
   - pip
   - gdal
@@ -29,6 +31,4 @@ dependencies:
   - more-itertools
   - cytoolz
   - pip:
-      - git+https://github.com/MillionConcepts/dustgoggles.git
-      - git+https://github.com/MillionConcepts/pdr.git
       - git+https://github.com/MillionConcepts/marslab.git
