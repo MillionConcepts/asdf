@@ -156,6 +156,8 @@ def read_rc_file(rc_fn):
 def find_rc_file(rc_file, product_path):
     from asdf_settings import sources
 
+    if rc_file is None:
+        return
     sol_dir = Path(product_path).parent.parent
     search_dirs = [Path(sol_dir, "rc_files")]
     search_dirs += [
