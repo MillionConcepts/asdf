@@ -6,8 +6,6 @@ these literals should generally be safe; removing them may not be.
 # don't change this
 from itertools import chain
 
-from .metagenerators import FILTER_DATA_COLUMNS
-
 # lookup table for location by sol -- number is final sol of location
 LOCATION_TABLE = {
     101: "Octavia E. Butler Landing",
@@ -123,48 +121,49 @@ RC_METADATA_COLUMNS = (
     "SEL_FILE"
 )
 
-# Only the columns listed here will appear in the compact -marslab.csv file.
-# Their order here is preserved in the .csv file.
+# Only the metadata fields here will appear in the compact -marslab.csv file.
 # *ROI_METADATA_FIELDS are the user-input fields defined above.
-# *FILTER_DATA_COLUMNS are the per-filter mean/std pixel count columns.
 COMPACT_ZCAM_MARSLAB_FIELDS = (
     "NAME",
     "COLOR",
     "ANALYSIS_NAME",
     "SOL",
     "SEQ_ID",
-    *ROI_METADATA_FIELDS,
-    # TODO: determine if this moves somewhere else or if we always
-    #  automatically populate caltarget element
-    "CALTARGET_ELEMENT",
-    "LOCATION",
+    "FEATURE",
+    "DESCRIPTION",
     "SITE",
     "DRIVE",
     "RSM",
-    "ZOOM",
-    "L_S",
-    "SCLK",
-    "SOLAR_ELEVATION",
-    "SOLAR_AZIMUTH",
+    "LTST",
     "INCIDENCE_ANGLE",
     "EMISSION_ANGLE",
-    # TODO: RC-file value. ?
-    "AZIMUTH_ANGLE",
     "PHASE_ANGLE",
-    "LTST",
+    "SOLAR_ELEVATION",
+    "SOLAR_AZIMUTH",
     "LAT",
     "LON",
     "ODOMETRY",
     "ROVER_ELEVATION",
     "TARGET_ELEVATION",
+    "INSTRUMENT",
+    "SCLK",
+    *ROI_METADATA_FIELDS,
+    # TODO: determine if this moves somewhere else or if we always
+    #  automatically populate caltarget element
+    "CALTARGET_ELEMENT",
+    "LOCATION",
+    "ZOOM",
+    "L_S",
+    "SOLAR_ELEVATION",
+    "SOLAR_AZIMUTH",
+    # TODO: RC-file value. ?
+    "AZIMUTH_ANGLE",
     "CREATOR",
     "FILE_TIMESTAMP",
     "ROI_SOURCE",
     "ORIGINAL_ROI_SOURCE",
-    "INSTRUMENT",
     "COMPRESSION",
     "COMPRESSION_QUALITY",
-    *FILTER_DATA_COLUMNS,
     "ROW",
     "COLUMN",
     "DET_RAD",
@@ -231,45 +230,6 @@ IOF_METADATA_FIELDS = {
     "LINES": "LINES",
     "LINE_SAMPLES": "LINE_SAMPLES",
 }
-
-# # regexes for getting metadata from attached PDS3 product labels without
-# # parsing PVL. this structure defines almost everything we look for in a label.
-# IOF_METADATA_REGEX = {
-#     # the zoom motor count is given several places in the label,
-#     # but the malin mini header line has other interesting contents
-#     "MINI_HEADER": r"(?<=ARTICULATION_DEV_POSITION ).*(\(.*\))",
-#     "FRAME_TYPE": r"(?<=FRAME_TYPE ).*?(\w+)",
-#     "RMC": r"(?<=ROVER_MOTION_COUNTER ).*(\(.*\))",
-#     "SEQ_ID": r"(?<=SEQUENCE_ID).*(zcam\d+)",
-#     "SOL": r"(?<=PLANET_DAY_NUMBER).*?(\d+)",
-#     "FILTER": r"FILTER_NAME.*ZCAM_([LR][\w\d])(?=_)",
-#     "IMAGE_TIME": r"(?<=IMAGE_TIME ).*?([\d\-T:]+)",
-#     "LTST": r"(?<=LOCAL_TRUE_SOLAR_TIME ).*?([\d:]+)",
-#     "LMST": r"(?<=LOCAL_MEAN_SOLAR_TIME ).*?M([\d:]+)",
-#     "PRODUCT_CREATION_TIME": r"(?<=PRODUCT_CREATION_TIME ).*?([\d\-T:]+)",
-#     "L_S": r"(?<=SOLAR_LONGITUDE ).*?([\d\.]+)",
-#     "COMPRESSION": r"(?<=INST_CMPRS_NAME ).*?(\w+)",
-#     # note that JPEG compression is rendered as a negative number under
-#     # IMG_REQUEST_PARMS, which is why we're specifying the one from
-#     # COMPRESSION_PARMS here
-#     "COMPRESSION_QUALITY": r"(?:COMPRESSION_PARMS("
-#     r"?:\n|\r|.)*?INST_CMPRS_QUALITY ).*?([-\d]+)",
-#     "BAYER": r"(?<=BAYER_METHOD ).*?([\w_]+)",
-#     "SOLAR_ELEVATION": r"(?<=SOLAR_ELEVATION ).*?([\d\.]+)",
-#     "SOLAR_AZIMUTH": r"(?<=SOLAR_AZIMUTH ).*?([\d\.]+)",
-#     "SCLK": r"(?<=SPACECRAFT_CLOCK_START_COUNT ).*?([\d\.]+)",
-#     "COMPLETION": r"(?<=PRODUCT_COMPLETION_STATUS ).*?([\w_]+)",
-#     # TODO: check if they're in the headers now
-#     # these files appear to currently be stored in
-#     # # /project/m2020/gds/radcal/effective_taus on islamorada
-#     "TAU_ESTIMATE_FILENAME": r"(?<=TAU_ESTIMATE_FILENAME).*?(\w+\.csv)",
-#     "INSTRUMENT_ELEVATION": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
-#     r"?:\n|\r|.)*?INSTRUMENT_ELEVATION ).*?(["
-#     r"-\d\.]+)",
-#     "INSTRUMENT_AZIMUTH": r"(?:SITE_DERIVED_GEOMETRY_PARMS("
-#     r"?:\n|\r|.)*?INSTRUMENT_AZIMUTH ).*?([-\d\.]+)",
-# }
-# quantities and take the value of their 'value' keys, ignoring 'units'.
 
 # Define the types of pixel flags that we care about
 PIXEL_FLAG_NAMES = ("bad", "no_signal", "nonlinear", "saturated", "hot")

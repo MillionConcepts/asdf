@@ -36,13 +36,18 @@ from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
 from asdf.labels import bulk_scrape_asdf_metadata
 from asdf.rc_parser import find_rc_file, read_rc_file
-from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
+from asdf_settings.metadata import (
+    PIXEL_FLAG_NAMES,
+    PIXEL_FLAG_STYLE,
+    COMPACT_MARSLAB_STATS,
+)
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
 from marslab.compat.xcam import (
     DERIVED_CAM_DICT,
     BAND_TO_BAYER,
     count_rois_on_xcam_images,
+    construct_field_ordering,
 )
 from marslab.bandset import BandSet
 from marslab.geom import transform_angle, get_coordinates
@@ -60,20 +65,17 @@ from marslab.imgops.regions import (
 def polish_metadata(metadata, creation_time):
     metadata["FILE_TIMESTAMP"] = creation_time
     dataframe = check_and_drop_duplicate_columns(metadata)
-    extra_columns = [
-        column
-        for column in dataframe.columns
-        if column not in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS
-    ]
-    ordered_fields = dataframe.reindex(
-        [
-            c
-            for c in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS
-            if c in dataframe.columns
-        ],
-        axis=1,
+    ordering = construct_field_ordering(
+        filters=tuple(DERIVED_CAM_DICT["ZCAM"]["filters"].keys()),
+        fields=dataframe.columns
     )
-    return pd.concat([ordered_fields, dataframe[extra_columns]], axis=1)
+    return pd.concat(
+        [
+            dataframe[ordering],
+            dataframe[[f for f in dataframe.columns if f not in ordering]]
+        ],
+        axis=1
+    )
 
 
 def setup_zcam_bandset_metadata(metadata):
