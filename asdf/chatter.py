@@ -48,7 +48,7 @@ from asdf.pretty import (
 from asdf.scan import (
     scan_zcam_files,
     cluster_analyses,
-    find_obs_pixmaps,
+    find_obs_metamaps,
     compare_roi_colors,
     fetch_analysis_files,
     make_marslab_metadata_df,
@@ -278,31 +278,31 @@ def input_roi_metadata(marslab_data, ci):
     return marslab_data
 
 
-def handle_map_checks(bandset):
-    pixmaps, match_warnings = find_obs_pixmaps(
-        bandset.metadata["PATH"].unique()
+def handle_map_checks(bandset,code="pix_map"):
+    metamaps, match_warnings = find_obs_metamaps(
+        bandset.metadata["PATH"].unique(),code=code,
     )
     if match_warnings:
         for warning in match_warnings:
             aprint("[bold purple]" + warning)
-    pixmaps = valfilter(lambda x: x is not None, pixmaps)
-    if not pixmaps:
+    metamaps = valfilter(lambda x: x is not None, metamaps)
+    codestr = code.replace('_','')
+    if not metamaps:
         aprint(
-            "[bold dark_orange]no matching pixmaps found; "
-            "cancelling pixmap processing."
+            f"[bold dark_orange]no matching {codestr}s found; "
+            f"cancelling {codestr} processing."
         )
         return
-    if len(pixmaps) != len(bandset.metadata["PATH"].unique()):
+    if len(metamaps) != len(bandset.metadata["PATH"].unique()):
         aprint(
-            "[bold dark_orange] some data products missing pixmaps; "
-            "cancelling pixmap processing."
+            f"[bold dark_orange] some data products missing {codestr}s; "
+            f"cancelling {codestr} processing."
         )
         return
-    aprint("... found matching pixmaps for all images ...")
-    bandset.metadata["PIXMAP_PATH"] = ""
-    bandset.associate_pixmaps(pixmaps)
-    bandset.load_pixmaps(verbose=True)
-
+    aprint(f"... found matching {codestr}s for all images ...")
+    bandset.metadata[f"{codestr.upper()}_PATH"] = ""
+    bandset.associate_metamaps(metamaps,code=code)
+    bandset.load_metamaps(verbose=True, code=code)
 
 def loudly_ingest_analyses(
     path, sol=None, seq_id=None, file_regex=None, sol_range = None, do_empties=True

@@ -9,8 +9,7 @@ PUBLIC_WAYPOINTS_URL = (
 FIND_EFFECTIVE_TAUS = True
 EFFECTIVE_TAU_PATH = "/project/m2020/gds/radcal/effective_taus/"
 
-PIX_ROOTS = ["/scratch/cal_wg/flight/products/"]
-RC_ROOTS = ["/scratch/cal_wg/flight/products/"]
+META_ROOTS = ["/scratch/cal_wg/flight/products/"]
 
 # resolvers for asdf -a
 PATH_ABBREVIATIONS = {

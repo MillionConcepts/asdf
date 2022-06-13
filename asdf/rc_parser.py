@@ -161,7 +161,7 @@ def find_rc_file(rc_file, product_path):
     sol_dir = Path(product_path).parent.parent
     search_dirs = [Path(sol_dir, "rc_files")]
     search_dirs += [
-        Path(root, sol_dir.name, "rc_files") for root in sources.RC_ROOTS
+        Path(root, sol_dir.name, "rc_files") for root in sources.META_ROOTS
     ]
     for search_dir in search_dirs:
         if Path(search_dir, rc_file).exists():

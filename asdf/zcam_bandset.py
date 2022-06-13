@@ -145,6 +145,8 @@ class ZcamBandSet(BandSet):
         self.check_onboard_debayer(fix_metadata=True)
         self.pixmaps = {}
         self.pixmap_counts = {}
+        self.ioferrs = {}
+        self.ioferr_counts = {}
         self.local_files = []
         # additional tables to hold metadata / marslab-like files scraped
         # from rc files
@@ -273,37 +275,38 @@ class ZcamBandSet(BandSet):
         roi_fits_fn = save_roi_file(self.rois, Path(outpath, "data"))
         self.local_files.append(roi_fits_fn)
 
-    def associate_pixmaps(self, pixmaps):
+    def associate_metamaps(self, metamaps, code='pix_map'):
         for path in self.metadata["PATH"].unique():
             self.metadata.loc[
-                self.metadata["PATH"] == path, "PIXMAP_PATH"
-            ] = str(pixmaps[path])
+                self.metadata["PATH"] == path, f"{code.replace('_','').upper()}_PATH"
+            ] = str(metamaps[path])
 
-    def load_pixmaps(self, verbose=False):
-        if "PIXMAP_PATH" not in self.metadata.columns:
+    def load_metamaps(self, verbose=False, code="pix_map"):
+        codestr = code.replace('_','')
+        if f"{codestr.upper()}_PATH" not in self.metadata.columns:
             return
         # this doesn't need to be fancy; these files are smallish and have a
         # known structure
         for _, row in self.metadata.iterrows():
-            if not row["PIXMAP_PATH"]:
+            if not row[f"{codestr.upper()}_PATH"]:
                 continue
             band = row["BAND"]
             # TODO: the L0/R0 pixmaps now, at least sometimes, have
             #  meaningfully separate bayer channels. verify that this is
             #  consistent.
-            if band in self.pixmaps.keys():
+            if band in getattr(self,f"{codestr}s").keys():
                 continue
             # don't open each clear filter three times
             band = band[0:2] if band[0:2] in ("L0", "R0") else band
-            pixmap = pdr.open(row["PIXMAP_PATH"]).IMAGE
-            if len(pixmap.shape) == 3:
+            metamap = pdr.open(row[f"{codestr.upper()}_PATH"]).IMAGE
+            if len(metamap.shape) == 3:
                 for band_ix, pixel in zip((0, 1, 2), ("R", "G", "B")):
-                    self.pixmaps[band + pixel] = pixmap[band_ix]
+                    getattr(self,f"{codestr}s")[band + pixel] = metamap[band_ix]
             else:
-                self.pixmaps[band] = pixmap
+                getattr(self,f"{codestr}s")[band] = metamap
 
             if verbose:
-                aprint("loaded " + row["PIXMAP_PATH"])
+                aprint("loaded " + row[f"{codestr.upper()}_PATH"])
 
     def count_rois(self):
         if self.rois is None:

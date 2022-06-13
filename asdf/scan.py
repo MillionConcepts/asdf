@@ -346,17 +346,19 @@ def cluster_observations(
     return observations, parser_warnings, hidden_things, rejects
 
 
-def find_matching_pixmap(product_path, code="pix_map"):
+def find_matching_metamap(product_path: str, code="pix_map"):
     # look where we are, look in ../pix_map, look in hardcoded roots --
     # like the /scratch directories on islamorada; they don't live in /project.
     # or whatever you define locally.
     match_warnings = []
+    if not code in ["pix_map", "iof_err", "rad_err"]:
+        raise TypeError(f"metamap {code} is invalid")
     product_path = Path(product_path)
     product_dir = product_path.parent
     sol_dir = product_dir.parent
     search_dirs = [Path(sol_dir, code)]
     search_dirs += [
-        Path(root, sol_dir.name, code) for root in sources.PIX_ROOTS
+        Path(root, sol_dir.name, code) for root in sources.META_ROOTS
     ]
     search_dirs = set(search_dirs)
     # get all the files in these directories
@@ -373,11 +375,12 @@ def find_matching_pixmap(product_path, code="pix_map"):
     if len(possible_pixmaps) == 0:
         return None, match_warnings
     # check 2: are they pixmaps?
-    # TODO: gross hack
-    if code == "PIX_MAP":
-        possible_pixmaps = filter(
-            None, map(get_pixel_map_heuristic, possible_pixmaps)
-        )
+    # TODO: gross hack to deal with non-standard directory structures given
+    # the problem that pixel maps and RAD files have colliding filenames
+    ###if code == "pix_map":
+    ###    possible_pixmaps = filter(
+    ###        None, map(get_pixel_map_heuristic, possible_pixmaps)
+    ###    )
     # TODO: find an actual way to associate these across versions --
     #  even adding a version number check will inappropriately reject
     #  many pixmaps because they do not increment the version numbers
@@ -435,16 +438,18 @@ def match_in_dirs(search_dirs, product_path, predicate=None):
     return possible_matches
 
 
-def find_obs_pixmaps(product_paths, code="pix_map"):
+def find_obs_metamaps(product_paths: Union[list, pd.DataFrame], code="pix_map"):
+    if not code in ["pix_map", "iof_err", "rad_err"]:
+        raise TypeError(f"metamap {code} is invalid")
     all_match_warnings = []
-    pixmaps = {}
+    metamaps = {}
     for path in product_paths:
         path = Path(path)
-        pixmap, match_warnings = find_matching_pixmap(path, code=code)
-        if pixmap is not None:
-            pixmaps[str(path)] = str(pixmap)
+        metamap, match_warnings = find_matching_metamap(path, code=code)
+        if metamap is not None:
+            metamaps[str(path)] = str(metamap)
         all_match_warnings += match_warnings
-    return pixmaps, all_match_warnings
+    return metamaps, all_match_warnings
 
 
 def matching_waypoints(site, drive, m20_waypoint_dict):
