@@ -298,7 +298,11 @@ class ZcamBandSet(BandSet):
                 continue
             # don't open each clear filter three times
             band = band[0:2] if band[0:2] in ("L0", "R0") else band
-            metamap = pdr.open(row[f"{codestr.upper()}_PATH"]).IMAGE
+            data = pdr.open(row[f"{codestr.upper()}_PATH"])
+            if code=="iof_err": # the IOE maps need to be converted to floating point
+                metamap = data.get_scaled('IMAGE',inplace=True,float_dtype=np.dtype('float32'))
+            else:
+                metamap = data.IMAGE
             if len(metamap.shape) == 3:
                 for band_ix, pixel in zip((0, 1, 2), ("R", "G", "B")):
                     getattr(self,f"{codestr}s")[band + pixel] = metamap[band_ix]
@@ -315,10 +319,11 @@ class ZcamBandSet(BandSet):
         if isinstance(self.rois, (str, Path)):
             self.load_rois()
         self.counts = count_rois_on_xcam_images(
-            self.rois,
-            self.raw,
+            self.rois, # list of roi hdus
+            self.raw, # dict of image masked_arrays
             "ZCAM",
-            pixel_map_dict=self.pixmaps,
+            pixel_map_dict=self.pixmaps, # dict of pixel flag arrays
+            error_map_dict=self.ioferrs, # dict of error map arrays
             bayer_pixel_dict={
                 band: pixel
                 for band, pixel in zip(

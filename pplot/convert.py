@@ -22,7 +22,7 @@ def scale_eyes(data, method="scale_to_avg"):
             for k in data.keys():
                 if (
                     ("R" in k)
-                    and (not "ERR" in k)
+                    and (not "VAR" in k)
                     and (not "L0" in k)
                     and (not "RMS" in k)
                     and len(k) <= 3
@@ -38,7 +38,7 @@ def scale_eyes(data, method="scale_to_avg"):
             for k in data.keys():
                 if (
                     ("R" in k)
-                    and ("ERR" not in k)
+                    and ("VAR" not in k)
                     and ("L0" not in k)
                     and ("RSM" not in k)
                     and ("SOL" not in k)
@@ -49,7 +49,7 @@ def scale_eyes(data, method="scale_to_avg"):
                     data.loc[i, k] = data.iloc[i][k] * right_scale
                 elif (
                     ("L" in k)
-                    and ("ERR" not in k)
+                    and ("VAR" not in k)
                     and ("R0" not in k)
                     and ("RSM" not in k)
                     and ("SOL" not in k)
@@ -83,41 +83,41 @@ def merspect_to_marslab(
             "MEMBER",
             "FLOAT",
             "L2",
-            "L2_ERR",
+            "L2_VAR",
             "R2",
-            "R2_ERR",
+            "R2_VAR",
             "L0B",
-            "L0B_ERR",
+            "L0B_VAR",
             "R0B",
-            "R0B_ERR",
+            "R0B_VAR",
             "L1",
-            "L1_ERR",
+            "L1_VAR",
             "R1",
-            "R1_ERR",
+            "R1_VAR",
             "R0G",
-            "R0G_ERR",
+            "R0G_VAR",
             "L0G",
-            "L0G_ERR",
+            "L0G_VAR",
             "R0R",
-            "R0R_ERR",
+            "R0R_VAR",
             "L0R",
-            "L0R_ERR",
+            "L0R_VAR",
             "L4",
-            "L4_ERR",
+            "L4_VAR",
             "L3",
-            "L3_ERR",
+            "L3_VAR",
             "R3",
-            "R3_ERR",
+            "R3_VAR",
             "L5",
-            "L5_ERR",
+            "L5_VAR",
             "R4",
-            "R4_ERR",
+            "R4_VAR",
             "R5",
-            "R5_ERR",
+            "R5_VAR",
             "L6",
-            "L6_ERR",
+            "L6_VAR",
             "R6",
-            "R6_ERR",
+            "R6_VAR",
         ],  # Some of these parameters are only meaningful to WWU Marslab
         "ZCAM": [
             "SOL",
@@ -129,40 +129,58 @@ def merspect_to_marslab(
             "MEMBER",
             "FLOAT",
             "L6",
+            "L6_VAR",
             "L6_ERR",
             "L0B",
-            "L0B_ERR",
+            "L0B_VAR",
+            "L0B_ERR"
             "R0B",
-            "R0B_ERR",
+            "R0B_VAR",
+            "R0B_ERR"
             "L5",
+            "L5_VAR",
             "L5_ERR",
             "L0G",
+            "L0G_VAR",
             "L0G_ERR",
             "R0G",
+            "R0G_VAR",
             "R0G_ERR",
             "L4",
+            "L4_VAR",
             "L4_ERR",
             "L0R",
+            "L0R_VAR",
             "L0R_ERR",
             "R0R",
+            "R0R_VAR",
             "R0R_ERR",
             "L3",
+            "L3_VAR",
             "L3_ERR",
             "L2",
+            "L2_VAR",
             "L2_ERR",
             "L1",
+            "L1_VAR",
             "L1_ERR",
             "R1",
+            "R1_VAR",
             "R1_ERR",
             "R2",
+            "R2_VAR",
             "R2_ERR",
             "R3",
+            "R3_VAR",
             "R3_ERR",
             "R4",
+            "R4_VAR",
             "R4_ERR",
             "R5",
+            "R5_VAR",
             "R5_ERR",
             "R6",
+            "R6_VAR",
             "R6_ERR",
         ],
     }[instrument]

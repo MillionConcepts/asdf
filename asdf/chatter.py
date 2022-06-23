@@ -595,7 +595,7 @@ def pretty_plot_bandset(bandset, outpath):
     plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
     for band in DERIVED_CAM_DICT["ZCAM"]["filters"].keys():
         if plot_data[band].isna().any():
-            plot_data.drop(columns=[band, band + "_ERR"], inplace=True)
+            plot_data.drop(columns=[band, band + "_VAR"], inplace=True)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         pplot.pplot_utils.pretty_plot(

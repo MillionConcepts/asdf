@@ -58,7 +58,7 @@ def asdf_body(
     console=None,
     save_plain_images=False,
     skip_pixmaps=False,
-    skip_errmaps=False,
+    skip_errmaps=True,
     recreate_from=None,
 ):
     """

@@ -26,6 +26,7 @@ def asdf_initiate(
     image_regex: "ir" = None,
     config=None,
     skip_pixmaps: "sp" = False,
+    skip_errmaps: "se" = True,
 ):
     """
     processes and archives everything
@@ -108,6 +109,7 @@ def asdf_initiate(
         console,
         save_plain_images,
         skip_pixmaps,
+        skip_errmaps
     )
     from asdf.flow import asdf_body
 
