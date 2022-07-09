@@ -32,7 +32,7 @@ RC_ROI_FIELD_MAPPING = {
     "marked bad": "BAD",
     "used in fit": "USED",
     "radiances": "RAD",
-    "uncertainty": "VAR",
+    "uncertainty": "STD",
     "count": "COUNT",
     "incidence angle": "INCIDENCE_ANGLE",
     "emission angle": "EMISSION_ANGLE",
@@ -112,7 +112,7 @@ def fix_rc_roi_index(rc_roi_table, rc_file_format_version):
             36, 24, 20, 17, 28, 31, 34, 37, 25, 21, 18, 16, 19, 22, 23, 26,
             29, 32, 35, 38, 39, 40
         ]
-    disordered_columns = ['COUNT', 'VAR', '']
+    disordered_columns = ['COUNT', 'STD', '']
     # note that roi names are contained in the index, so we specifically do
     # not want to reindex the dataframe. we could probably do more
     corrected = rc_roi_table[disordered_columns].iloc[correct_indices].values

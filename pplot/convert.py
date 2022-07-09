@@ -22,7 +22,7 @@ def scale_eyes(data, method="scale_to_avg"):
             for k in data.keys():
                 if (
                     ("R" in k)
-                    and (not "VAR" in k)
+                    and (not "STD" in k)
                     and (not "L0" in k)
                     and (not "RMS" in k)
                     and len(k) <= 3
@@ -38,7 +38,7 @@ def scale_eyes(data, method="scale_to_avg"):
             for k in data.keys():
                 if (
                     ("R" in k)
-                    and ("VAR" not in k)
+                    and ("STD" not in k)
                     and ("L0" not in k)
                     and ("RSM" not in k)
                     and ("SOL" not in k)
@@ -49,7 +49,7 @@ def scale_eyes(data, method="scale_to_avg"):
                     data.loc[i, k] = data.iloc[i][k] * right_scale
                 elif (
                     ("L" in k)
-                    and ("VAR" not in k)
+                    and ("STD" not in k)
                     and ("R0" not in k)
                     and ("RSM" not in k)
                     and ("SOL" not in k)
@@ -83,41 +83,41 @@ def merspect_to_marslab(
             "MEMBER",
             "FLOAT",
             "L2",
-            "L2_VAR",
+            "L2_STD",
             "R2",
-            "R2_VAR",
+            "R2_STD",
             "L0B",
-            "L0B_VAR",
+            "L0B_STD",
             "R0B",
-            "R0B_VAR",
+            "R0B_STD",
             "L1",
-            "L1_VAR",
+            "L1_STD",
             "R1",
-            "R1_VAR",
+            "R1_STD",
             "R0G",
-            "R0G_VAR",
+            "R0G_STD",
             "L0G",
-            "L0G_VAR",
+            "L0G_STD",
             "R0R",
-            "R0R_VAR",
+            "R0R_STD",
             "L0R",
-            "L0R_VAR",
+            "L0R_STD",
             "L4",
-            "L4_VAR",
+            "L4_STD",
             "L3",
-            "L3_VAR",
+            "L3_STD",
             "R3",
-            "R3_VAR",
+            "R3_STD",
             "L5",
-            "L5_VAR",
+            "L5_STD",
             "R4",
-            "R4_VAR",
+            "R4_STD",
             "R5",
-            "R5_VAR",
+            "R5_STD",
             "L6",
-            "L6_VAR",
+            "L6_STD",
             "R6",
-            "R6_VAR",
+            "R6_STD",
         ],  # Some of these parameters are only meaningful to WWU Marslab
         "ZCAM": [
             "SOL",
@@ -129,58 +129,58 @@ def merspect_to_marslab(
             "MEMBER",
             "FLOAT",
             "L6",
-            "L6_VAR",
+            "L6_STD",
             "L6_ERR",
             "L0B",
-            "L0B_VAR",
+            "L0B_STD",
             "L0B_ERR"
             "R0B",
-            "R0B_VAR",
+            "R0B_STD",
             "R0B_ERR"
             "L5",
-            "L5_VAR",
+            "L5_STD",
             "L5_ERR",
             "L0G",
-            "L0G_VAR",
+            "L0G_STD",
             "L0G_ERR",
             "R0G",
-            "R0G_VAR",
+            "R0G_STD",
             "R0G_ERR",
             "L4",
-            "L4_VAR",
+            "L4_STD",
             "L4_ERR",
             "L0R",
-            "L0R_VAR",
+            "L0R_STD",
             "L0R_ERR",
             "R0R",
-            "R0R_VAR",
+            "R0R_STD",
             "R0R_ERR",
             "L3",
-            "L3_VAR",
+            "L3_STD",
             "L3_ERR",
             "L2",
-            "L2_VAR",
+            "L2_STD",
             "L2_ERR",
             "L1",
-            "L1_VAR",
+            "L1_STD",
             "L1_ERR",
             "R1",
-            "R1_VAR",
+            "R1_STD",
             "R1_ERR",
             "R2",
-            "R2_VAR",
+            "R2_STD",
             "R2_ERR",
             "R3",
-            "R3_VAR",
+            "R3_STD",
             "R3_ERR",
             "R4",
-            "R4_VAR",
+            "R4_STD",
             "R4_ERR",
             "R5",
-            "R5_VAR",
+            "R5_STD",
             "R5_ERR",
             "R6",
-            "R6_VAR",
+            "R6_STD",
             "R6_ERR",
         ],
     }[instrument]
