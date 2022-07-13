@@ -58,6 +58,7 @@ def asdf_body(
     console=None,
     save_plain_images=False,
     skip_pixmaps=False,
+    skip_errmaps=True,
     recreate_from=None,
 ):
     """
@@ -136,14 +137,25 @@ def asdf_body(
             add_image_hashes(bandset)
     # much safer and more consistent than any of the GUI backends
     mpl.use("agg")
+
     if skip_pixmaps is not True:
         aprint(Rule(" looking for pixel flag maps "))
-        with console.status("... handling flagmaps ...", spinner="star"):
-            handle_map_checks(bandset)
+        with console.status("... handling pixel flag maps ...", spinner="star"):
+            handle_map_checks(bandset,code='pix_map')
     else:
         aprint(
-            "[dark_orange]skip-pixmaps flag active; skipping pixmap handling"
+            "[dark_orange]skip-pixmaps flag active; skipping pixel flag map handling"
         )
+
+    if skip_errmaps is not True:
+        aprint(Rule(" looking for error maps "))
+        with console.status("... handling error maps ...", spinner="star"):
+            handle_map_checks(bandset,code='iof_err')
+    else:
+        aprint(
+            "[dark_orange]skip-errmaps flag active; skipping error map handling"
+        )
+
     # handle ROI file conversion, ROI counting, user input per-ROI metadata
     if we_do_not_have_rois:
         marslab_data = null_marslab_data_section()

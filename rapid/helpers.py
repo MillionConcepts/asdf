@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 from rasterio.errors import NotGeoreferencedWarning
 
-from asdf.scan import find_obs_pixmaps, cluster_observations, scan_zcam_files
+from asdf.scan import find_obs_metamaps, cluster_observations, scan_zcam_files
 from asdf.zcam_bandset import ZcamBandSet
 
 warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
@@ -11,7 +11,8 @@ np.seterr(divide="ignore", invalid="ignore")
 
 
 def get_zcam_bandset(
-    image_path, roi_path=None, use_pixmaps=True, keep_caltarget=False
+    image_path, roi_path=None, use_pixmaps=True, keep_caltarget=False,
+        use_errmaps=True,
 ):
     observations = scan_zcam_files(image_path)
     clusters = cluster_observations(
@@ -20,10 +21,16 @@ def get_zcam_bandset(
     observation = list(clusters[0].values())[0]
     zband = ZcamBandSet(observation)
     if use_pixmaps is True:
-        pixes = find_obs_pixmaps(zband.metadata["PATH"])[0]
+        pixes = find_obs_metamaps(zband.metadata["PATH"], code="pix_map")[0]
         if pixes:
-            zband.associate_pixmaps(pixes)
-            zband.load_pixmaps()
+            zband.associate_metamaps(pixes, code='pix_map')
+            zband.load_metamaps(code="pix_map")
+    if use_errmaps is True:
+        errors = find_obs_metamaps(zband.metadata["PATH"], code="iof_err")[0]
+        if errors:
+            zband.associate_metamaps(errors, code='iof_err')
+            zband.load_metamaps(code="iof_err")
+
     zband.load("all")
     zband.bulk_debayer("all")
     if roi_path is not None:

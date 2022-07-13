@@ -332,7 +332,7 @@ def pretty_plot(
         ax.errorbar(
             filter_to_wavelength[notna_narrowband].values[0][ix],
             data.iloc[i][notna_narrowband][ix] / photometric_scaling,
-            yerr=data.iloc[i][[f"{f}_ERR" for f in notna_narrowband]][ix],
+            yerr=data.iloc[i][[f"{f}_STD" for f in notna_narrowband]][ix],
             fmt=f"",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             alpha=0.5,
@@ -343,7 +343,7 @@ def pretty_plot(
         ax.errorbar(
             filter_to_wavelength[notna_narrowband].values[0][ix],
             data.iloc[i][notna_narrowband][ix] / photometric_scaling,
-            yerr=data.iloc[i][[f"{f}_ERR" for f in notna_narrowband]][ix],
+            yerr=data.iloc[i][[f"{f}_STD" for f in notna_narrowband]][ix],
             fmt=f"-",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             markersize=10,
@@ -380,7 +380,7 @@ def pretty_plot(
                 ax.errorbar(
                     filter_to_wavelength[bayer].values[0],
                     data.iloc[i][bayer] / photometric_scaling,
-                    yerr=data.iloc[i][[f"{bayer}_ERR"]],
+                    yerr=data.iloc[i][[f"{bayer}_STD"]],
                     fmt=f"{symbol}",
                     color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
                     capsize=5,

@@ -173,7 +173,7 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
 )
 
 # statistical columns we add along with mean value to FILTER_DATA_COLUMNS
-COMPACT_MARSLAB_STATS = ["ERR", "COUNT"]
+COMPACT_MARSLAB_STATS = ["STD", "COUNT"]
 
 
 # mapping from field names to label parameters.
