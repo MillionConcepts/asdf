@@ -71,7 +71,7 @@ def polish_metadata(metadata, creation_time):
     )
     return pd.concat(
         [
-            dataframe[[f for f in ordering if f in dataframe.columns]],
+            dataframe[ordering],
             dataframe[[f for f in dataframe.columns if f not in ordering]]
         ],
         axis=1
@@ -152,7 +152,6 @@ class ZcamBandSet(BandSet):
         self.rc_compact = None
         # a slightly goofy holding location for things like google drive ids
         self.remote_resource_id = None
-        self.special_constants = [0]
 
     def scrape_rc_files(self):
         rc_table_map = {}
