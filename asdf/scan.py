@@ -170,8 +170,7 @@ def scan_zcam_files(
     if len(products) == 0:
         raise ValueError("sorry, no matching products found in path.")
     stems = products["PATH"].str.rsplit("/", n=1, expand=True)
-    if len(stems.columns) > 1:
-        stems = stems[1]
+    stems = stems[1] if len(stems.columns) > 1 else stems[0]
     products["stem"] = stems.str.slice(0, 49)
     return products
 
