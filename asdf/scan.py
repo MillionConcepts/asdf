@@ -734,6 +734,8 @@ def rate_cal_offset(siblings: pd.DataFrame):
     merit criterion for file selection. caltarget observation chronological
     distance from image time.
     """
+    if "CALTARGET_LTST" not in siblings.columns:
+        return pd.Series([True for _ in siblings.index], index=siblings.index)
     decimal_ltst = (
         siblings["LTST"].str.slice(0, 2).astype(int)
         + siblings["LTST"].str.slice(3, 5).astype(int) / 60
@@ -757,9 +759,14 @@ def rate_version(siblings: pd.DataFrame):
 def rate_rc_version(siblings: pd.DataFrame):
     parsed_rc_fns = siblings["RC_FILE"].map(parse_zcam_fn)
     max_version = max([fn["VERSION"] for fn in parsed_rc_fns])
-    return [
-        True if fn["VERSION"] == max_version else False for fn in parsed_rc_fns
-    ]
+    return pd.Series(
+        [
+            True if fn["VERSION"] == max_version
+            else False
+            for fn in parsed_rc_fns
+        ],
+        index=siblings.index
+    )
 
 
 def rate_creation_time(siblings: pd.DataFrame):
