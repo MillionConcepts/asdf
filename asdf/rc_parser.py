@@ -126,7 +126,11 @@ def extract_roi_table(rc_roi_dict):
     table.columns = table.loc['names'].str.upper().str.replace(" ", "_").values
     table = table.drop('names')
     # TODO: find a way to not overwrite all files later
-    return table.rename(index=RC_ROI_FIELD_MAPPING).T
+    names = RC_ROI_FIELD_MAPPING.copy()
+    if 'azimuth angle' in table.index.to_list():
+        names['azimuth angle'] = names['azimutih angle']
+        del names['azimutih angle']
+    return table.rename(index=names).T
 
 
 def read_rc_file(rc_fn):
