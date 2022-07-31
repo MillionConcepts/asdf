@@ -404,13 +404,14 @@ def find_matching_metamap(product_path: str, code="pix_map"):
     return pixmap, match_warnings
 
 
+# TODO: make this work appropriately with the new selection system.
 def prune_excessive_pixmap_matches(
     match_warnings, possible_pixmaps, product_path
 ):
     if len(possible_pixmaps) > 1:
         ok_pixmaps = []
         parsed_fns = list(
-            map(parse_zcam_fn, [pix.filename for pix in possible_pixmaps])
+            map(parse_zcam_fn, [pix.name for pix in possible_pixmaps])
         )
         versions = [parsed["VERSION"] for parsed in parsed_fns]
         for parsed, pix in zip(parsed_fns, possible_pixmaps):

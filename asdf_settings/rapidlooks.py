@@ -4,9 +4,8 @@ from pathlib import Path
 
 import matplotlib.font_manager as mplf
 from numpy import clip
-from scipy.ndimage import gaussian_filter
 
-from .generators import glom, smoother, make_bilateralfilter
+from .generators import glom
 from marslab.imgops.imgutils import std_clip, normalize_range
 from marslab.imgops.render import colormapped_plot, simple_figure
 
@@ -37,7 +36,6 @@ ANNOTATION_POSITION = -0.088
 # the filters involved in the look
 BANDMAP_DEFAULTS = {
     "name": "{look} {bands}",
-    "params": {"special_constants": [0]},
     "limiter": {"function": std_clip},
     "plotter": {
         "function": colormapped_plot,
@@ -45,7 +43,6 @@ BANDMAP_DEFAULTS = {
             "cmap": "orange_teal",
             "colorbar_fp": TICK_FONT,
             "render_colorbar": True,
-            "special_constants": [0],
         },
     },
 }
@@ -54,7 +51,7 @@ BANDMAP_DEFAULTS = {
 STRETCHY_DEFAULTS = {
     "name": "dcs {bands}",
     "look": "dcs",
-    "params": {"special_constants": [0], "contrast_stretch": 1, "sigma": 0.95},
+    "params": {"contrast_stretch": 1},
     "plotter": {"function": simple_figure},
 }
 
@@ -66,14 +63,12 @@ ENHANCED_DEFAULTS = {
         "function": normalize_range,
         "params": {"stretch": (1.25, 1)},
     },
-    "params": {"special_constants": [0]},
     "plotter": {"function": simple_figure},
 }
 
 # default settings for rgb bandmap looks
 RGB_BANDMAP_DEFAULTS = {
     "look": "nested_composite",
-    "params": {"special_constants": [0]},
     "plotter": {"function": simple_figure},
 }
 
@@ -81,7 +76,6 @@ RGB_BANDMAP_DEFAULTS = {
 NATURAL_DEFAULTS = {
     "name": "natural color {bands}",
     "look": "composite",
-    "params": {"special_constants": [0]},
     "limiter": {"function": normalize_range, "params": {"stretch": 0.1}},
     "plotter": {"function": simple_figure},
 }
@@ -125,6 +119,7 @@ STRETCHY = (
     {"bands": ("L0R", "L0G", "L0B")},
     {"bands": ("R6", "R3", "R1")},
 )
+
 # RGB_BANDMAP_DEFAULTS are added to these
 RGB_BANDMAP = [
     {
@@ -172,15 +167,11 @@ CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
 # not doing this will tend to cause looks to be clobbered.
 
 MASKED_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
-SHADOWED_OPTIONS = {"premask": {"sigma": (1, 0)}}
-
-# sigma-invariant (non-merspect-style) dcs options
-INVARIANT_OPTIONS = {"sigma": None, "contrast_stretch": 1}
+MASKED_OPTIONS = {"threshold": (10, 100)}
 
 # dictionary of all procedural looks to be generated. general syntax is:
 # '$CATEGORY_NAME': (options_for_look, options_for_other_look, ...)
 LOOK_GENERATORS = {
-    "stretchy": [INVARIANT_OPTIONS],
     # recolored bandmaps: just give colormap names
     "bandmap": ["viridis"],
 }

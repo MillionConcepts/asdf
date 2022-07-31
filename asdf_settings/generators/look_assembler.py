@@ -45,6 +45,18 @@ def make_recolored_bandmap_looks(looks, _, cmap: str):
     return recolored_bandmaps
 
 
+def make_masked_looks(looks, _, settings):
+    masked_bandmaps = []
+    for look in looks:
+        if look["look"] not in SPECTOP_NAMES:
+            continue
+        masked_bandmap = deepcopy(look)
+        masked_bandmap["name"] = f"{masked_bandmap['name']} masked"
+        masked_bandmap["params"] = settings
+        masked_bandmaps.append(masked_bandmap)
+    return masked_bandmaps
+
+
 def make_heatmap_looks(looks, defaults, settings):
     rainbow_looks = []
     for look in looks:
@@ -98,17 +110,18 @@ GENERATED_LOOK_DISPATCH = {
     "heatmap": make_heatmap_looks,
     "bandmap": make_recolored_bandmap_looks,
     "stretchy": make_dcs_looks,
+    "masked": make_masked_looks
 }
 
 # assemble explicitly-defined looks from individual definitions
 # + defaults
-ASSEMBLED_INSTRUCTIONS = []
+RAPIDLOOKS = []
 for category in CATEGORIES:
     cat_looks = getattr(rapidlooks, category)
     cat_defaults = getattr(rapidlooks, category + "_DEFAULTS")
     for cat_look in cat_looks:
         instruction = cat_defaults | cat_look
-        ASSEMBLED_INSTRUCTIONS.append(instruction)
+        RAPIDLOOKS.append(instruction)
 
 
 GENERATED_INSTRUCTIONS = []
@@ -121,13 +134,16 @@ for category, look_listing in LOOK_GENERATORS.items():
     )
     for gen_look in look_listing:
         GENERATED_INSTRUCTIONS += assembly_function(
-            ASSEMBLED_INSTRUCTIONS, category_defaults, gen_look
+            RAPIDLOOKS, category_defaults, gen_look
         )
+    RAPIDLOOKS += GENERATED_INSTRUCTIONS
 
 
-RAPIDLOOKS = ASSEMBLED_INSTRUCTIONS + GENERATED_INSTRUCTIONS
 for look_inst in RAPIDLOOKS:
     # add crop settings
     look_inst |= CROP_SETTINGS
     # insert band names, cmap names, op names as required
     look_inst["name"] = insert_name_elements(look_inst)
+# deepcopy everything to ensure that later mutation
+# does not result in undesirably shared state
+RAPIDLOOKS = [deepcopy(look_inst) for look_inst in RAPIDLOOKS]

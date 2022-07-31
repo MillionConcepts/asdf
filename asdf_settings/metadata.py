@@ -75,7 +75,7 @@ ROI_METADATA_FIELD_CHOICES = {
     "FEATURE": ["rock", "soil", "pebble", "hardware"],
     "FLOAT": ["float", "in-place", "unclear"],
     "MORPHOLOGY": ["pitted", "paver", "massive", "layered"],
-    "FORMATION": ["Maaz", "Seitah"],
+    "FORMATION": ["Maaz", "Seitah", "delta"],
     "MEMBER": {
         "Maaz": ["Chal", "Nataani", "Rochette", "Artuby", "Roubion"],
         "Seitah": ["Content", "Bastide", "Issole"],
