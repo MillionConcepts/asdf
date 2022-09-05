@@ -10,3 +10,6 @@ The contents of this library are provided by the Western Washington University R
 (PI: M. Rice) and Million Concepts (C. Million, M. St. Clair) under a BSD 3-Clause License. 
 This license places very few restrictions on what you can do with this code. Questions related
 to copyright can be sent to chase@millionconcepts.com.
+
+This version of asdf is pulled from the in production version on islamorada on 9/5/2022.
+The version of dustgoggles (as per `conda list`) used with this is 0.2.0 and the version of marslab is 0.9.6
