@@ -51,8 +51,23 @@ def make_masked_looks(looks, _, settings):
         if look["look"] not in SPECTOP_NAMES:
             continue
         masked_bandmap = deepcopy(look)
-        masked_bandmap["name"] = f"{masked_bandmap['name']} masked"
-        masked_bandmap["params"] = settings
+        masked_bandmap["name"] = (
+            f"{look['name']} {settings['suffix']}"
+        )
+        masked_bandmap["overlay"] = settings['overlay'] | {
+            "band": look["bands"][0]
+        }
+        masked_bandmap['overlay']['params'] = (
+            masked_bandmap['overlay']['params'].copy() | {
+                'overlay_cmap': look['plotter']['params']['cmap'],
+                "colorbar_fp": masked_bandmap['plotter']['params']['colorbar_fp'],
+            }
+        )
+        masked_bandmap["params"] = masked_bandmap.get('params', {}).copy()
+        if 'threshold' in settings.keys():
+            masked_bandmap['params']['threshold'] = settings['threshold']
+        if 'skymask_threshold' in settings.keys():
+            masked_bandmap['params']['skymask_threshold'] = settings['skymask_threshold']
         masked_bandmaps.append(masked_bandmap)
     return masked_bandmaps
 

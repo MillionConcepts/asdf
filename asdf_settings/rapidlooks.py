@@ -2,11 +2,11 @@
 from copy import deepcopy
 from pathlib import Path
 
+from matplotlib.colors import ListedColormap
 import matplotlib.font_manager as mplf
-from numpy import clip
 
 from .generators import glom
-from marslab.imgops.imgutils import std_clip, normalize_range
+from marslab.imgops.imgutils import clip_finite, std_clip, normalize_range
 from marslab.imgops.render import colormapped_plot, simple_figure
 
 # font settings for annotations on rapidlooks -- bear in mind that the
@@ -51,7 +51,7 @@ BANDMAP_DEFAULTS = {
 STRETCHY_DEFAULTS = {
     "name": "dcs {bands}",
     "look": "dcs",
-    "params": {"contrast_stretch": 1},
+    "params": {"contrast_stretch": 1, "threshold": None},
     "plotter": {"function": simple_figure},
 }
 
@@ -132,7 +132,7 @@ RGB_BANDMAP = [
                 "look": "ratio",
                 "bands": ("R0R", "R1"),
                 "limiter": {
-                    "function": clip,
+                    "function": clip_finite,
                     "params": {"a_min": 0.9, "a_max": 1.15},
                 },
             },
@@ -140,7 +140,7 @@ RGB_BANDMAP = [
                 "look": "band_depth",
                 "bands": ("R1", "R5", "R3"),
                 "limiter": {
-                    "function": clip,
+                    "function": clip_finite,
                     "params": {"a_min": 0.02, "a_max": 0.1},
                 },
             },
@@ -148,7 +148,7 @@ RGB_BANDMAP = [
                 "look": "ratio",
                 "bands": ("R1", "R5"),
                 "limiter": {
-                    "function": clip,
+                    "function": clip_finite,
                     "params": {"a_min": 1.05, "a_max": 1.15},
                 },
             },
@@ -159,6 +159,7 @@ RGB_BANDMAP = [
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
 CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
+
 #############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################
@@ -167,13 +168,33 @@ CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
 # not doing this will tend to cause looks to be clobbered.
 
 MASKED_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
-MASKED_OPTIONS = {"threshold": (10, 100)}
+SHADOW_ONLY_OPTIONS = {
+    "threshold": (10, 100),
+    'overlay': {'params': {'overlay_opacity': 1}},
+    'suffix': 'underlay'
+}
+SKYMASK_OPTIONS = {
+    "skymask_threshold": 75,
+    'overlay': {'params': {'overlay_opacity': 1}},
+    'suffix': 'skymask',
+}
+MIDTONE_OPTIONS = {
+    "threshold": (10, 100),
+    'overlay': {
+        'params': {
+            'overlay_opacity': 1,
+            'base_cmap': ListedColormap([[0.5, 0.5, 0.5]])
+        }
+    },
+    'suffix': 'midtone'
+}
 
 # dictionary of all procedural looks to be generated. general syntax is:
 # '$CATEGORY_NAME': (options_for_look, options_for_other_look, ...)
 LOOK_GENERATORS = {
     # recolored bandmaps: just give colormap names
     "bandmap": ["viridis"],
+    # "masked": [SKYMASK_OPTIONS, MIDTONE_OPTIONS]
 }
 
 CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
