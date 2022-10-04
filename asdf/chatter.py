@@ -304,8 +304,9 @@ def handle_map_checks(bandset,code="pix_map"):
     bandset.associate_metamaps(metamaps,code=code)
     bandset.load_metamaps(verbose=True, code=code)
 
+
 def loudly_ingest_analyses(
-    path, sol=None, seq_id=None, file_regex=None, sol_range = None, do_empties=True
+    path, sol=None, seq_id=None, file_regex=None, do_empties=True
 ):
     ASDF_CONSOLE.style = "FDSA"
     if not cached_exists(path):
@@ -433,11 +434,10 @@ def setup_reprocess(
     seq_id=None,
     marslab_regex=None,
     image_regex=None,
-    sol_range=None,
     do_empties=True,
 ):
     analyses = loudly_ingest_analyses(
-        marslab_path, sol, seq_id, marslab_regex, sol_range, do_empties
+        marslab_path, sol, seq_id, marslab_regex, do_empties
     )
     if analyses is None:
         return None, None
