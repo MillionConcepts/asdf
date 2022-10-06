@@ -229,6 +229,7 @@ IOF_METADATA_FIELDS = {
     "FIRST_LINE_SAMPLE": "FIRST_LINE_SAMPLE",
     "LINES": "LINES",
     "LINE_SAMPLES": "LINE_SAMPLES",
+    "CALTARGET_LTST": "CALTARGET_LTST"
 }
 
 # Define the types of pixel flags that we care about

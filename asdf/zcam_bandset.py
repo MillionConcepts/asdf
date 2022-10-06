@@ -187,7 +187,7 @@ class ZcamBandSet(BandSet):
         rc_marslab_chunks = []
         for band, table in rc_table_map.items():
             band_metadata = rc_metadata[band]
-            for col, value in band_metadata.iteritems():
+            for col, value in band_metadata.items():
                 table[col] = value
             table.columns = [
                 # matching 'reflectance field is the band name' convention
@@ -394,7 +394,7 @@ class ZcamBandSet(BandSet):
             compact[field] = value
         # set variable-by-image values equal to chronologically first value
         # in compact version
-        for field, value in summary.iteritems():
+        for field, value in summary.items():
             if field in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS:
                 compact[field] = value
         creation_time = dt.datetime.utcnow().isoformat()
@@ -421,7 +421,7 @@ class ZcamBandSet(BandSet):
         rc_summary.index = [
             ix.replace(first_filt, "").strip("_") for ix in rc_summary.index
         ]
-        for field, value in rc_summary.iteritems():
+        for field, value in rc_summary.items():
             if field in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS:
                 self.rc_compact[field] = value
         self.rc_compact["SOL"] = self.summary["SOL"]
