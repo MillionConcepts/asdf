@@ -11,14 +11,18 @@ np.seterr(divide="ignore", invalid="ignore")
 
 
 def get_zcam_bandset(
-    image_path, roi_path=None, use_pixmaps=True, keep_caltarget=False,
-        use_errmaps=True,
+    image_path,
+    roi_path=None,
+    observation_ix=0,
+    use_pixmaps=True,
+    keep_caltarget=False,
+    use_errmaps=True,
 ):
     observations = scan_zcam_files(image_path)
     clusters = cluster_observations(
         observations, keep_caltarget=keep_caltarget
     )
-    observation = list(clusters[0].values())[0]
+    observation = list(clusters[0].values())[observation_ix]
     zband = ZcamBandSet(observation)
     if use_pixmaps is True:
         pixes = find_obs_metamaps(zband.metadata["PATH"], code="pix_map")[0]
