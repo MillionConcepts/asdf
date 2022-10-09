@@ -1,13 +1,10 @@
 from copy import deepcopy
+from typing import Mapping
 
 from marslab.spectops import SPECTOP_NAMES
 
 from .. import rapidlooks
-from ..rapidlooks import (
-    CATEGORIES,
-    CROP_SETTINGS,
-    LOOK_GENERATORS,
-)
+from ..rapidlooks import CATEGORIES, CROP_SETTINGS, LOOK_GENERATORS
 
 
 def insert_name_elements(look_instruction):
@@ -45,87 +42,48 @@ def make_recolored_bandmap_looks(looks, _, cmap: str):
     return recolored_bandmaps
 
 
-def make_masked_looks(looks, _, settings):
-    masked_bandmaps = []
-    for look in looks:
-        if look["look"] not in SPECTOP_NAMES:
+def glom_instruction(inst, part):
+    inst = part | inst
+    for k in part.keys():
+        if not isinstance(part[k], Mapping):
             continue
-        masked_bandmap = deepcopy(look)
-        masked_bandmap["name"] = (
-            f"{look['name']} {settings['suffix']}"
-        )
-        masked_bandmap["overlay"] = settings['overlay'] | {
-            "band": look["bands"][0]
-        }
-        masked_bandmap['overlay']['params'] = (
-            masked_bandmap['overlay']['params'].copy() | {
-                'overlay_cmap': look['plotter']['params']['cmap'],
-                "colorbar_fp": masked_bandmap['plotter']['params']['colorbar_fp'],
-            }
-        )
-        masked_bandmap["params"] = masked_bandmap.get('params', {}).copy()
-        if 'threshold' in settings.keys():
-            masked_bandmap['params']['threshold'] = settings['threshold']
-        if 'skymask_threshold' in settings.keys():
-            masked_bandmap['params']['skymask_threshold'] = settings['skymask_threshold']
-        masked_bandmaps.append(masked_bandmap)
-    return masked_bandmaps
-
-
-def make_heatmap_looks(looks, defaults, settings):
-    rainbow_looks = []
-    for look in looks:
-        if look["look"] not in SPECTOP_NAMES:
+        if k == "params":
+            inst["params"] = inst.get("params", {}) | part[k]
             continue
-        new_look = deepcopy(look)
-        new_look |= defaults
-        new_look["name"] = "{look} {bands} heatmap"
-        new_look.pop("plotter")
-        # noinspection PyTypeChecker
-        new_look["overlay"] = settings | {"band": look["bands"][0]}
-        rainbow_looks.append(new_look)
-    return rainbow_looks
+        if (new_params := part[k].get("params")) is None:
+            continue
+        inst[k]["params"] = inst[k].get("params", {}) | new_params
+    return inst
 
 
-def make_dcs_looks(looks, defaults, settings):
+def edit_looks(looks, defaults, settings, look_filter):
     new_looks = []
     for look in looks:
-        if look["look"] != "dcs":
+        if not look_filter(look):
             continue
-        if "R6" in look["bands"]:
-            continue
-        new_look = deepcopy(look)
-        new_look |= defaults
-        new_look["name"] = "invariant dcs {bands}"
-        new_look["params"] = new_look["params"] | settings
-        new_looks.append(new_look)
+        new_look = defaults | deepcopy(look)
+        if "suffix" in settings.keys():
+            new_look["name"] = f"{new_look['name']} {settings['suffix']}"
+        new_looks.append(glom_instruction(new_look, settings))
     return new_looks
 
 
-def make_accent_looks(looks, defaults, settings):
-    new_looks = []
-    for look in looks:
-        if look["look"] not in SPECTOP_NAMES:
-            continue
-        new_look = deepcopy(look)
-        new_look |= defaults
-        if "name" in settings.keys():
-            new_look["name"] = settings["name"]
-        else:
-            new_look["name"] = "{look} {bands} accent"
-        new_look.pop("plotter")
-        # noinspection PyTypeChecker
-        new_look["overlay"] = settings | {"band": look["bands"][0]}
-        new_looks.append(new_look)
-    return new_looks
+def make_modified_bandmap_looks(looks, defaults, settings):
+    return edit_looks(
+        looks, defaults, settings, lambda l: l['look'] in SPECTOP_NAMES
+    )
+
+
+def make_modified_stretchy_looks(looks, defaults, settings):
+    return edit_looks(
+        looks, defaults, settings, lambda l: l['look'] == 'dcs'
+    )
 
 
 GENERATED_LOOK_DISPATCH = {
-    "accent": make_accent_looks,
-    "heatmap": make_heatmap_looks,
     "bandmap": make_recolored_bandmap_looks,
-    "stretchy": make_dcs_looks,
-    "masked": make_masked_looks
+    "modified_bandmap": make_modified_bandmap_looks,
+    "modified_stretchy": make_modified_stretchy_looks
 }
 
 # assemble explicitly-defined looks from individual definitions
@@ -144,9 +102,7 @@ GENERATED_INSTRUCTIONS = []
 # assemble procedurally generated looks
 for category, look_listing in LOOK_GENERATORS.items():
     assembly_function = GENERATED_LOOK_DISPATCH[category]
-    category_defaults = getattr(
-        rapidlooks, category.upper() + "_DEFAULTS"
-    )
+    category_defaults = getattr(rapidlooks, category.upper() + "_DEFAULTS")
     for gen_look in look_listing:
         GENERATED_INSTRUCTIONS += assembly_function(
             RAPIDLOOKS, category_defaults, gen_look

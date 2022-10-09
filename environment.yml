@@ -1,7 +1,6 @@
 name: asdf
 channels:
   - conda-forge
-  - defaults
 dependencies:
   - python=3.9
   - numpy
@@ -13,8 +12,7 @@ dependencies:
   - pdr
   - clize
   - pip
-  - gdal
-  - rasterio
+  - ipython
   - pvl
   - python-Levenshtein
   - scipy

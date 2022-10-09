@@ -5,22 +5,13 @@ that are gibberish-y and hard to read. strong recommendation against messing
 with things in this module unless you're really sure about it.
 """
 import sys
-from itertools import chain, product
+from itertools import product
 from pathlib import Path
 
-import cv2
 import numpy as np
 from cytoolz.functoolz import curry
 from matplotlib.cm import register_cmap
 from matplotlib.colors import ListedColormap
-from scipy.ndimage import gaussian_filter
-
-from marslab.imgops.imgutils import split_filter
-
-
-# default smoothing: applies gaussian kernel to each channel of an image
-# individually
-smoother = split_filter(curry(gaussian_filter), axis=0)
 
 
 # TODO: clean this up
@@ -36,17 +27,6 @@ def make_orange_teal_cmap():
     vals[half_len:, 1] = np.linspace(0, teal[1] / half_len, half_len)
     vals[half_len:, 2] = np.linspace(0, teal[2] / half_len, half_len)
     return ListedColormap(vals, name="orange_teal")
-
-
-# def make_aqua_pink_accent_cmap():
-#     aqua = (0, 1, 1, 1)
-#     pink = (1, 0, 1, 1)
-#     transparent = (0.5, 0.5, 0.5, 0)
-#     vals = np.full((10, 4), transparent)
-#     for channel in range(3):
-#         vals[:, channel][0] = aqua[channel]
-#         vals[:, channel][-1] = pink[channel]
-#     return ListedColormap(vals, name="aqua_pink")
 
 
 # TODO: clean this up too
@@ -95,6 +75,7 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
     that chokes on the gradual partial evaluation we use later
     in the pipeline, so we pre-bind arguments to it here in a closure.
     """
+    import cv2
 
     def do_bilateralfilter(array):
         return cv2.bilateralFilter(
@@ -102,6 +83,15 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
         )
 
     return do_bilateralfilter
+
+
+def smoother(array, sigma):
+    # default smoothing: applies gaussian kernel to each channel of an image
+    # individually
+    from marslab.imgops.imgutils import split_filter
+    from scipy.ndimage import gaussian_filter
+
+    return split_filter(curry(gaussian_filter), axis=0)(array, sigma=sigma)
 
 
 def glom(*paths):

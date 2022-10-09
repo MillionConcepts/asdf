@@ -2,11 +2,17 @@
 from copy import deepcopy
 from pathlib import Path
 
+import numpy as np
 from matplotlib.colors import ListedColormap
 import matplotlib.font_manager as mplf
 
 from .generators import glom
-from marslab.imgops.imgutils import clip_finite, std_clip, normalize_range
+from marslab.imgops.imgutils import (
+    std_clip,
+    normalize_range,
+    centile_clip,
+    threshold_mask, skymask,
+)
 from marslab.imgops.render import colormapped_plot, simple_figure
 
 # font settings for annotations on rapidlooks -- bear in mind that the
@@ -51,7 +57,7 @@ BANDMAP_DEFAULTS = {
 STRETCHY_DEFAULTS = {
     "name": "dcs {bands}",
     "look": "dcs",
-    "params": {"contrast_stretch": 1, "threshold": None},
+    "params": {"contrast_stretch": 1},
     "plotter": {"function": simple_figure},
 }
 
@@ -69,7 +75,10 @@ ENHANCED_DEFAULTS = {
 # default settings for rgb bandmap looks
 RGB_BANDMAP_DEFAULTS = {
     "look": "nested_composite",
-    "plotter": {"function": simple_figure},
+    "plotter": {
+        "function": simple_figure,
+        "params": {"interpolation": "none"},
+    },
 }
 
 # default settings for natural color looks
@@ -120,6 +129,16 @@ STRETCHY = (
     {"bands": ("R6", "R3", "R1")},
 )
 
+# inline 'shadow mask' for the RGB bandmaps
+RGB_BANDMAP_THRESHOLD = [
+    {
+        "function": threshold_mask,
+        "params": {"percentiles": (10, 100)},
+        "pass": True,
+        "send": False,
+    },
+]
+
 # RGB_BANDMAP_DEFAULTS are added to these
 RGB_BANDMAP = [
     {
@@ -128,29 +147,55 @@ RGB_BANDMAP = [
         # placing single quotes causes asdf to print the title verbatim
         "name": "'mafic bandmap: R0R/R1 BD910 R1/R5'",
         "params": {
+            "norm_kwargs": {"bounds": (0.2, 1)},
             "red": {
                 "look": "ratio",
-                "bands": ("R0R", "R1"),
+                "mask": {"instructions": RGB_BANDMAP_THRESHOLD},
+                "bands": ("R0R", "R4"),
                 "limiter": {
-                    "function": clip_finite,
-                    "params": {"a_min": 0.9, "a_max": 1.15},
+                    # switch this to a masked-outside thing
+                    "function": np.ma.masked_less,
+                    "params": {"value": 1, "copy": False},
+                },
+                "postfilter": {
+                    # "function": lambda array: np.zeros(array.shape)
+                    "function": centile_clip,
+                    "params": {"centiles": (50, 98)},
                 },
             },
+            # red: pathological? maybe plagioclase?
+            # yellow: low-ca pyroxene or olivine
+            # green: high-ca pyroxene or olivine
+            # cyan/purple: just green and red
+            # blue: ?
             "green": {
+                "mask": {"instructions": RGB_BANDMAP_THRESHOLD},
                 "look": "band_depth",
                 "bands": ("R1", "R5", "R3"),
                 "limiter": {
-                    "function": clip_finite,
-                    "params": {"a_min": 0.02, "a_max": 0.1},
+                    "function": np.ma.masked_outside,
+                    "params": {"v1": 0, "v2": 1, "copy": False},
+                },
+                "postfilter": {
+                    # "function": lambda array: np.zeros(array.shape)
+                    "function": centile_clip,
+                    "params": {"centiles": (0, 99)},
                 },
             },
             "blue": {
                 "look": "ratio",
+                "mask": {"instructions": RGB_BANDMAP_THRESHOLD},
                 "bands": ("R1", "R5"),
                 "limiter": {
-                    "function": clip_finite,
-                    "params": {"a_min": 1.05, "a_max": 1.15},
+                    "function": np.ma.masked_less,
+                    "params": {"value": 1.05, "copy": False},
                 },
+                "postfilter": {
+                    # "function": lambda array: np.zeros(array.shape)
+                    "function": centile_clip,
+                    "params": {"centiles": (0, 99)},
+                }
+                # postfilter with percentile clip maybe just on the top
             },
         },
     }
@@ -159,42 +204,49 @@ RGB_BANDMAP = [
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
 CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
-
-#############################################################################
+# CATEGORIES = ["RGB_BANDMAP", "ENHANCED"]
+############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################
 
 # in general, additional OPTIONS categories should define a "name" key.
 # not doing this will tend to cause looks to be clobbered.
 
-MASKED_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
-SHADOW_ONLY_OPTIONS = {
-    "threshold": (10, 100),
-    'overlay': {'params': {'overlay_opacity': 1}},
-    'suffix': 'underlay'
-}
-SKYMASK_OPTIONS = {
-    "skymask_threshold": 75,
-    'overlay': {'params': {'overlay_opacity': 1}},
-    'suffix': 'skymask',
-}
-MIDTONE_OPTIONS = {
-    "threshold": (10, 100),
-    'overlay': {
-        'params': {
-            'overlay_opacity': 1,
-            'base_cmap': ListedColormap([[0.5, 0.5, 0.5]])
-        }
+MODIFIED_BANDMAP_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
+
+SHADOW_MASK = [
+    {
+        "function": threshold_mask,
+        "params": {"percentiles": (10, 100)},
+        "colorfill": {"color": 0.45, "mask_alpha": 1},
+        "pass": True,
+        "send": True,
     },
-    'suffix': 'midtone'
+]
+SKY_MASK = [
+    {
+        "function": skymask,
+        "params": {"percentile": 75},
+        "colorfill": {"color": 0, "mask_alpha": 1},
+        "pass": True,
+        "send": True
+    }
+]
+
+MASKED_OPTIONS = {
+    "mask": {"instructions": SHADOW_MASK + SKY_MASK}, "suffix": "masked",
 }
+
+MODIFIED_STRETCHY_DEFAULTS = deepcopy(STRETCHY_DEFAULTS)
+MASK_DCS_OPTIONS = {"mask": {"instructions": SKY_MASK}, "suffix": "masked"}
 
 # dictionary of all procedural looks to be generated. general syntax is:
 # '$CATEGORY_NAME': (options_for_look, options_for_other_look, ...)
 LOOK_GENERATORS = {
     # recolored bandmaps: just give colormap names
-    "bandmap": ["viridis"],
-    # "masked": [SKYMASK_OPTIONS, MIDTONE_OPTIONS]
+    "bandmap": ["inferno"],
+    "modified_bandmap": [MASKED_OPTIONS],
+    "modified_stretchy": [MASK_DCS_OPTIONS]
 }
 
 CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
