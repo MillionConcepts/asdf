@@ -152,6 +152,7 @@ def read_rc_file(rc_fn):
     table = extract_roi_table(table_fields)
     table = fix_rc_roi_index(table, metadata["FORMAT_VERSION"])
     table['FORMAT_VERSION'] = metadata.pop("FORMAT_VERSION")
+    # TODO, maybe: transform to SITE frame
     for angle in ["AZIMUTH_ANGLE", "EMISSION_ANGLE", "INCIDENCE_ANGLE"]:
         metadata[angle] = table[angle].loc["BLACK_CHIP_CENTER"]
     return table, metadata

@@ -36,11 +36,7 @@ from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
 from asdf.labels import bulk_scrape_asdf_metadata
 from asdf.rc_parser import find_rc_file, read_rc_file
-from asdf_settings.metadata import (
-    PIXEL_FLAG_NAMES,
-    PIXEL_FLAG_STYLE,
-    COMPACT_MARSLAB_STATS,
-)
+from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
 from marslab.compat.xcam import (
@@ -50,7 +46,7 @@ from marslab.compat.xcam import (
     construct_field_ordering,
 )
 from marslab.bandset import BandSet
-from marslab.geom import transform_angle, get_coordinates
+from marslab.geom import get_coordinates
 from marslab.imgops.debayer import RGGB_PATTERN, mask_bayer_pixels
 from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.loaders import pdr_load
@@ -204,16 +200,14 @@ class ZcamBandSet(BandSet):
         headers = pd.DataFrame(bulk_scrape_asdf_metadata(self.precached))
         geometry = []
         for data in self.precached.values():
-            instrument = get_coordinates(data)["ROVER"]["INSTRUMENT"]
-            solar_el, solar_az, _ = transform_angle(
-                "SITE", "ROVER", "SOLAR", data
-            )
+            instrument = get_coordinates(data)["SITE"]["INSTRUMENT"]
+            solar = get_coordinates(data)["SITE"]["SOLAR"]
             geometry.append(
                 {
                     "INSTRUMENT_ELEVATION": instrument["ELEVATION"],
                     "INSTRUMENT_AZIMUTH": instrument["AZIMUTH"],
-                    "SOLAR_ELEVATION": solar_el,
-                    "SOLAR_AZIMUTH": solar_az,
+                    "SOLAR_ELEVATION": solar["ELEVATION"],
+                    "SOLAR_AZIMUTH": solar["AZIMUTH"],
                 }
             )
         headers = pd.concat([headers, pd.DataFrame(geometry)], axis=1)
