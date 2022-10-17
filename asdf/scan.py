@@ -256,7 +256,7 @@ def cluster_observations(
         # TODO: hideous logic
         # handle simultaneous stereo or single-eye observations: group by RSM
         if (group["FRAME_TYPE"] == "STEREO").all() or all_equal(
-            products["FILTER"].str.slice(0, 1).values
+            group["FILTER"].str.slice(0, 1).values
         ):
             rsm_groups = group.groupby(["RSM"])
             for RSM, rsm_group in rsm_groups:
