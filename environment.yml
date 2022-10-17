@@ -25,6 +25,4 @@ dependencies:
   - sympy
   - pytest
   - pydrive2
-  - more-itertools
-  - cytoolz
   - marslab
