@@ -28,5 +28,4 @@ dependencies:
   - pydrive2
   - more-itertools
   - cytoolz
-  - pip:
-      - git+https://github.com/MillionConcepts/marslab.git
+  - marslab
