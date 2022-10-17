@@ -12,7 +12,6 @@ dependencies:
   - jupyter
   - pdr
   - clize
-  - pip
   - gdal
   - rasterio
   - pvl
