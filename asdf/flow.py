@@ -1,7 +1,6 @@
 """
 top-level handler loop for asdf / fdsa
 """
-import time
 import zlib
 from functools import partial
 from operator import contains
