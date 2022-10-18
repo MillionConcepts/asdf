@@ -14,7 +14,6 @@ from cytoolz import keyfilter
 from matplotlib import pyplot as plt
 
 import asdf
-import asdf_settings
 from asdf.asdf_utils import (
     load_roi_file,
     null_marslab_data_section,
@@ -36,7 +35,7 @@ from asdf.parse import parse_pointing, make_pointing_name
 from asdf.physics import add_derived_illumination_geometry
 from asdf.labels import bulk_scrape_asdf_metadata
 from asdf.rc_parser import find_rc_file, read_rc_file
-from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE
+from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE, COMPACT_ZCAM_MARSLAB_FIELDS
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
 from marslab.compat.xcam import (
@@ -389,7 +388,7 @@ class ZcamBandSet(BandSet):
         # set variable-by-image values equal to chronologically first value
         # in compact version
         for field, value in summary.items():
-            if field in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS:
+            if field in COMPACT_ZCAM_MARSLAB_FIELDS:
                 compact[field] = value
         creation_time = dt.datetime.utcnow().isoformat()
         summary["FILE_TIMESTAMP"] = creation_time
@@ -416,7 +415,7 @@ class ZcamBandSet(BandSet):
             ix.replace(first_filt, "").strip("_") for ix in rc_summary.index
         ]
         for field, value in rc_summary.items():
-            if field in asdf_settings.metadata.COMPACT_ZCAM_MARSLAB_FIELDS:
+            if field in COMPACT_ZCAM_MARSLAB_FIELDS:
                 self.rc_compact[field] = value
         self.rc_compact["SOL"] = self.summary["SOL"]
         self.rc_compact["FEATURE"] = "caltarget"
