@@ -103,9 +103,7 @@ def ls_zcam(root_dir, recursive=False, file_regex=""):
         files = [scan_fs.getsyspath(file) for file in scan_fs.walk.files()]
     else:
         files = [file for file in Path(root_dir).iterdir()]
-    ASDFLOG.info(
-        "... {} files found in search path ...".format(str(len(files)))
-    )
+    ASDFLOG.info(f"... {len(files)} files found in search path ...")
     if file_regex:
         matches = tuple(
             filter(curry(re.match, file_regex, flags=re.I), map(str, files))
