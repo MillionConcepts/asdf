@@ -9,7 +9,6 @@ from itertools import product
 from pathlib import Path
 
 import numpy as np
-from cytoolz.functoolz import curry
 from matplotlib.cm import register_cmap
 from matplotlib.colors import ListedColormap
 
@@ -88,6 +87,7 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
 def smoother(array, sigma):
     # default smoothing: applies gaussian kernel to each channel of an image
     # individually
+    from cytoolz.functoolz import curry
     from marslab.imgops.imgutils import split_filter
     from scipy.ndimage import gaussian_filter
 
