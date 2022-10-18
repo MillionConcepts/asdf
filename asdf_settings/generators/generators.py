@@ -85,8 +85,8 @@ def make_bilateralfilter(d, sigmaColor, sigmaSpace):
 
 
 def smoother(array, sigma):
-    # default smoothing: applies gaussian kernel to each channel of an image
-    # individually
+    """ default smoothing: applies gaussian kernel to each channel of an image
+    individually"""
     from cytoolz.functoolz import curry
     from marslab.imgops.imgutils import split_filter
     from scipy.ndimage import gaussian_filter
