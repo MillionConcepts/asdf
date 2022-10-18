@@ -257,6 +257,7 @@ class DriveBot(GoogleDrive):
     convenience wrapper adding abstract pseudo-filesystem operations to
     a pydrive2 GoogleDrive object
     """
+    # TODO: maybe fold in silencio after some more work
     def mkdir(self, folder_name, parent_id):
         gdrive_folder = self.CreateFile(
             {
@@ -468,8 +469,6 @@ def upload_asdf_analysis(
             update_google_sheet(
                 bandset, sheet_backup_folder_id, sheet_id, sheetbot
             )
-        # TODO: list values are working oddly in new version,. not inportant
-        #  in prod right not but should be regularized.
         except (
             gspread.exceptions.APIError,
             BaseSSLError,
