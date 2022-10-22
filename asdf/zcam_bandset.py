@@ -368,7 +368,7 @@ class ZcamBandSet(BandSet):
         metadata_block = dupe_df_block(
             melt_metadata(self.metadata), len(self.counts.index)
         )
-        extended = pd.concat([metadata_block, self.counts], axis=1)
+        extended = pd.concat([metadata_block, self.counts], axis=1).copy()
         if isinstance(self.pixmap_counts, pd.DataFrame):
             pixmap_counts = self.pixmap_counts.copy()
             pixmap_counts.index = pixmap_counts["COLOR"]
@@ -377,7 +377,7 @@ class ZcamBandSet(BandSet):
                 .drop("COLOR", axis=1)
                 .reset_index(drop=True)
             )
-            extended = pd.concat([extended, pixmap_counts], axis=1)
+            extended = pd.concat([extended, pixmap_counts], axis=1).copy()
         compact = self.counts.copy()
         compact = drop_excess_stats(compact)
         # write canonical pointing-identifying values into all frames

@@ -15,6 +15,8 @@ from fs.osfs import OSFS
 from asdf.console import aprint
 
 
+# TODO: pandas futurewarning re: elementwise comparison between strings and
+#  other things deep behing the API
 def dashify(df):
     return df.replace("", "-").fillna("-")
 
