@@ -70,7 +70,7 @@ def skim_products(
         try:
             skim_results.append(aux_skimmer(product))
             keep_paths.append(product)
-        except (FileNotFoundError, TypeError, KeyError) as _error:
+        except (FileNotFoundError, TypeError, KeyError, SyntaxError) as _error:
             bad_files.append(product)
     if len(bad_files) > 0:
         ASDFLOG.warning(
