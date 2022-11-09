@@ -64,7 +64,7 @@ from asdf_settings.metadata import (
     EMPTY_METADATA_FIELDS,
     PIXEL_FLAG_NAMES,
     ROI_METADATA_FIELD_CHOICES,
-    LEGACY_METADATA_FIELDS,
+    LEGACY_METADATA_FIELDS, FEATURE_SUBTYPES, LEGACY_SUBTYPE_FIELDS,
 )
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
 import pplot
@@ -229,6 +229,10 @@ def ask_user_about_roi(
             )
             if options is None:
                 continue
+        if field == "FEATURE_SUBTYPE":
+            if "FEATURE" not in roi_metadata.keys():
+                continue
+            options = FEATURE_SUBTYPES[roi_metadata["FEATURE"]]
         roi_metadata[field] = ci(
             dispatched_metadata_prompt, field, roi_title, options
         )
@@ -633,7 +637,7 @@ def fdsa_insert(marslab_data, prototype):
         fields_skipped = Text("")
         for field in ROI_METADATA_FIELDS:
             if field not in prototype.columns:
-                if field in LEGACY_METADATA_FIELDS:
+                if field in LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS:
                     # who cares!
                     continue
                 fields_skipped.append(
@@ -651,8 +655,13 @@ def fdsa_insert(marslab_data, prototype):
             fields_used.append_text(
                 Text(use_message, style="default bold")
             ).append_text(Text(str(proto_value), style="bold hot_pink"))
+            # TODO: can cut this shortly
+            if field in LEGACY_SUBTYPE_FIELDS:
+                target = "FEATURE_SUBTYPE"
+            else:
+                target = field
             marslab_data.loc[
-                marslab_data["COLOR"] == color, field
+                marslab_data["COLOR"] == color, target
             ] = proto_value
         aprint(colorize_merspect_roi_name(color).append_text(fields_used))
         if fields_skipped:

@@ -23,8 +23,12 @@ LEGACY_METADATA_FIELDS = [
     "LANDFORM TYPE",
     "WORKSPACE",
     "TARGET",
-    "DISTANCE",
+    "MORPHOLOGY"
 ]
+
+# TODO: this can be removed shortly
+# treat these fields as "FEATURE_SUBTYPE" during fdsa
+LEGACY_SUBTYPE_FIELDS = ["ROCK_SURFACE", "SOIL_LOCATION"]
 
 # fields relevant only to specific feature types. users will only be queried
 # about these fields if they have set FEATURE = the key of the list. Don't put
@@ -32,8 +36,8 @@ LEGACY_METADATA_FIELDS = [
 FEATURE_EXCLUSIVE_ROI_FIELDS = {
     # similarly, for the special MEMBER selection behavior to work, FORMATION
     # needs to come before MEMBER in this list.
-    "rock": ["FORMATION", "MEMBER", "MORPHOLOGY", "FLOAT", "ROCK_SURFACE"],
-    "soil": ["GRAIN_SIZE", "SOIL_LOCATION"],
+    "rock": ["FEATURE_SUBTYPE", "FORMATION", "MEMBER", "FLOAT"],
+    "soil": ["FEATURE_SUBTYPE", "GRAIN_SIZE"],
 }
 # don't mess with this statement if you want to be able to use exclusive_fields
 # later. it pulls all the lists out of FEATURE_EXCLUSIVE_ROI_FIELDS
@@ -46,9 +50,11 @@ exclusive_fields = list(
 ROI_METADATA_FIELDS = (
     "FEATURE",
     *exclusive_fields,
+    "DISTANCE",
     "DESCRIPTION",
     *EMPTY_METADATA_FIELDS,
     *LEGACY_METADATA_FIELDS,
+    *LEGACY_SUBTYPE_FIELDS
 )
 
 # special prompt text for these
@@ -57,10 +63,9 @@ ROI_METADATA_FIELDS = (
 ROI_METADATA_FIELD_PROMPTS = {
     "FLOAT": "Is / are the rock(s) associated with {title} ROI(s) a {field}?",
     "FEATURE": "What category of {field} is / are {title} ROI(s)?",
+    "FEATURE_SUBTYPE": "What subtype of that feature are {title} ROI(s)?",
     "DESCRIPTION": "Enter any additional {field} for {title} ROI(s)"
     "(press Enter to skip)",
-    "MORPHOLOGY": "Which named {field} type do / does the rock in {title} "
-    "ROI(s) belong to?",
     "TARGET": "What named {field} do / does {title} ROI(s) cover? "
     "(press Enter to skip)",
     "GRAIN_SIZE": "What is the {field} of the soil in {title} ROI? Skip if "
@@ -68,19 +73,20 @@ ROI_METADATA_FIELD_PROMPTS = {
     "FORMATION": "What {field} do / does {title} ROI(s) belong to?",
     "MEMBER": "What {field} of their parent formation do / does {title} ROIs "
     "belong to?",
+    "DISTANCE": "What {field} category do / does {title} ROI(s) fall into?",
 }
 
-# restrictions, if any, on value choices for these fields.
-ROI_METADATA_FIELD_CHOICES = {
-    "FEATURE": ["rock", "soil", "pebble", "hardware"],
-    "FLOAT": ["float", "in-place", "unclear"],
-    "MORPHOLOGY": ["pitted", "paver", "massive", "layered"],
-    "FORMATION": ["Maaz", "Seitah", "delta"],
-    "MEMBER": {
-        "Maaz": ["Chal", "Nataani", "Rochette", "Artuby", "Roubion"],
-        "Seitah": ["Content", "Bastide", "Issole"],
+FEATURE_SUBTYPES = {
+    "soil": {
+        "undisturbed regolith",
+        "on rock",
+        "wheel track compressed",
+        "wheel track disturbed",
+        "disturbed surface (not wheel track)",
+        "bedform crest/slope",
+        "on hardware",
     },
-    "ROCK_SURFACE": [
+    "rock": {
         "bright natural surface",
         "dark natural surface",
         "thick dust",
@@ -90,21 +96,22 @@ ROI_METADATA_FIELD_CHOICES = {
         "coating (not dust)",
         "clast/inclusion",
         "tailings",
-    ],
+    }
+}
+
+# restrictions, if any, on value choices for these fields.
+ROI_METADATA_FIELD_CHOICES = {
+    "FEATURE": ["rock", "soil", "pebble", "hardware"],
+    "FLOAT": ["float", "in-place", "unclear"],
+    "FORMATION": ["Maaz", "Seitah", "delta"],
+    "MEMBER": {
+        "Maaz": ["Chal", "Nataani", "Rochette", "Artuby", "Roubion"],
+        "Seitah": ["Content", "Bastide", "Issole"],
+    },
     "GRAIN_SIZE": [
-        "fine (grains not resolvable)",
-        "coarse (grains resolvable)",
-        "mixed",
+        "fine (grains not resolvable)", "coarse (grains resolvable)", "mixed",
     ],
-    "SOIL_LOCATION": [
-        "undisturbed regolith",
-        "on rock",
-        "wheel track compressed",
-        "wheel track disturbed",
-        "disturbed surface (not wheel track)",
-        "bedform crest/slope",
-        "on hardware",
-    ],
+    "DISTANCE": ["nearfield", "midfield", "farfield"],
 }
 
 RC_METADATA_COLUMNS = (
