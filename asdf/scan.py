@@ -741,10 +741,13 @@ def rate_cal_offset(siblings: pd.DataFrame):
         + siblings["LTST"].str.slice(3, 5).astype(int) / 60
     )
     ltst_offset = decimal_ltst - siblings["CALTARGET_LTST"].abs()
-    sol_offset = (
-        siblings["CALTARGET_FILE"].map(parse_zcam_fn)["SOL"]
-        - [rec["SOL"] for rec in siblings["CALTARGET_FILE"].map(parse_zcam_fn)]
-    ).abs()
+    sol = siblings['SOL'].iloc[0]
+    sol_offset = np.array(
+        [
+            abs(sol - rec["SOL"])
+            for rec in siblings["CALTARGET_FILE"].map(parse_zcam_fn)
+        ]
+    )
     cal_chron_score = sol_offset + ltst_offset
     return cal_chron_score == cal_chron_score.min()
 
