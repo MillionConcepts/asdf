@@ -36,7 +36,6 @@ from asdf.parse import (
 )
 from asdf.labels import get_pixel_map_heuristic, cached_aux_skimmer
 
-
 # TODO: make all the error-printing statements in this module more consistent
 #  with style in other modules
 
@@ -258,7 +257,7 @@ def cluster_observations(
         if (group["FRAME_TYPE"] == "STEREO").all() or all_equal(
             group["FILTER"].str.slice(0, 1).values
         ):
-            rsm_groups = group.groupby(["RSM"])
+            rsm_groups = group.groupby("RSM")
             for RSM, rsm_group in rsm_groups:
                 dupes = rsm_group.loc[
                     rsm_group["FILTER"].duplicated(keep=False)
