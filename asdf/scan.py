@@ -240,6 +240,7 @@ def cluster_observations(
         # TODO: this currently makes running asdf on RADs fail...which is
         #  not a major issue, but should probably be addressed.
         parsed_rc_fns = group["RC_FILE"].map(parse_zcam_fn)
+        cal_bailout = False
         for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
             if not all_equal([fn[key] for fn in parsed_rc_fns]):
                 parser_warnings.append(
@@ -248,7 +249,10 @@ def cluster_observations(
                     f"issue in the photometric pipeline or accidental data "
                     f"deletion."
                 )
+                cal_bailout = True
                 rejects["mismatched_cal"] += group["PATH"].tolist()
+        if cal_bailout is True:
+            continue
         if "CALTARGET_LTST" not in group.columns:
             parser_warnings.append("old-format files!! things may be wrong.")
         name = "_".join([format(sol, "0>4"), seq_id, product_type, thumb])
@@ -544,7 +548,7 @@ def is_marslab_empty(marslab_path: Union[str, Path]) -> bool:
 
 
 def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
-    stemmer = pdstr("replace", "(roi|\.|fits|gz|marslab|csv)", "", regex=True)
+    stemmer = pdstr("replace", r"(roi|\.|fits|gz|marslab|csv)", "", regex=True)
     roi_stems = stemmer(roi["PATH"])
     marslab_stems = stemmer(marslab["PATH"])
 
