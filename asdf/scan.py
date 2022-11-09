@@ -250,6 +250,8 @@ def cluster_observations(
                     f"deletion."
                 )
                 rejects["mismatched_cal"] += group["PATH"].tolist()
+        if "CALTARGET_LTST" not in group.columns:
+            parser_warnings.append("old-format files!! things may be wrong.")
         name = "_".join([format(sol, "0>4"), seq_id, product_type, thumb])
         # TODO: hideous logic
         # handle simultaneous stereo or single-eye observations: group by RSM
