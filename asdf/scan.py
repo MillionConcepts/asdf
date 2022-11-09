@@ -206,6 +206,18 @@ def cluster_observations(
             smaller = group.loc[frame_sizes != frame_sizes.max()]
             rejects["frame"] += smaller["PATH"].tolist()
             group = group.drop(smaller.index)
+        old_spice = group[
+            "SPICE_FILE_NAME"
+        ].str.startswith('chronos.m2020_jez')
+        if old_spice.all():
+            parser_warnings.append(
+                f"All files in {seq_id} appear to have been sourced from old "
+                f"EDRs. Use caution."
+            )
+        elif old_spice.any():
+            older = group.loc[old_spice]
+            rejects["provenance"] += older["PATH"].tolist()
+            group = group.drop(older.index)
         # apply file quality selection logic:  take the 'best' version of
         # each image. this is intended to handle cases in which lower-quality
         # products were downlinked later due to various transmission
@@ -251,6 +263,7 @@ def cluster_observations(
                 )
                 cal_bailout = True
                 rejects["mismatched_cal"] += group["PATH"].tolist()
+                break
         if cal_bailout is True:
             continue
         if "CALTARGET_LTST" not in group.columns:
@@ -327,6 +340,7 @@ def cluster_observations(
             "creation_time",
             "mono_stereo",
             "mismatched_cal",
+            "provenance"
         ),
         (
             "from broadband-only sequences",
@@ -339,7 +353,8 @@ def cluster_observations(
             "with lower version numbers",
             "with older creation times",
             "mixed mono and stereo",
-            "mismatched calibrations",
+            "with mismatched calibrations",
+            "apparently sourced from old EDRs"
         ),
     ):
         if rejects.get(reason) is not None:

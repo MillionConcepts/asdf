@@ -110,8 +110,8 @@ SKIMMER_REGEX = {
     "PRODUCT_CREATION_TIME": r"(?<=PRODUCT_CREATION_TIME ).*?((\d|-|:|T)+)",
     "CALTARGET_FILE": r"(?<=CALTARGET_FILE ).*?\n?.*?(Z.*?IMG)",
     "RC_FILE": r"(?<=RC_FILE ).*?\n?.*?(rc_.*?txt)",
-    "CALTARGET_LTST": r"(?<=CALTARGET_LTST ).*?([\d\.]+)"
-
+    "CALTARGET_LTST": r"(?<=CALTARGET_LTST ).*?([\d\.]+)",
+    "SPICE_FILE_NAME": r'SPICE_FILE_NAME.*"(.*)"'
 }
 
 
