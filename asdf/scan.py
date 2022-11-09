@@ -283,7 +283,7 @@ def cluster_observations(
                     observations[name + "_RSM" + str(RSM)] = rsm_group
                 # stereo ranging shot before sequence
                 elif detect_ranging_shot(dupes):
-                    rejects['ranging'] += rsm_group.iloc[:2]['path'].to_list()
+                    rejects['ranging'] += rsm_group.iloc[:2]['PATH'].to_list()
                     observations[name + "_RSM" + str(RSM)] = rsm_group.iloc[2:]
                 else:
                     parser_warnings.append(
