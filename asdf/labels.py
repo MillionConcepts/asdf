@@ -109,7 +109,8 @@ SKIMMER_REGEX = {
     "COMPRESSION": r"(?<=INST_CMPRS_NAME ).*?([\w|_]+)",
     "PRODUCT_CREATION_TIME": r"(?<=PRODUCT_CREATION_TIME ).*?((\d|-|:|T)+)",
     "CALTARGET_FILE": r"(?<=CALTARGET_FILE ).*?\n?.*?(Z.*?IMG)",
-    "RC_FILE": r"(?<=RC_FILE ).*?\n?.*?(rc_.*?txt)"
+    "RC_FILE": r"(?<=RC_FILE ).*?\n?.*?(rc_.*?txt)",
+    "CALTARGET_LTST": r"(?<=CALTARGET_LTST ).*?([\d\.]+)"
 
 }
 
@@ -132,6 +133,7 @@ def aux_skim_header(label: Union[Path, str]) -> dict:
         )
     skim["RSM"] = skim["RMC"][6]
     skim["SUBFRAME"] = scrape_subframe(label_text)
+    skim["CALTARGET_LTST"] = float(skim["CALTARGET_LTST"])
     return skim
 
 
