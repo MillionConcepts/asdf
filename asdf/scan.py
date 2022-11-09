@@ -283,6 +283,7 @@ def cluster_observations(
                     observations[name + "_RSM" + str(RSM)] = rsm_group
                 # stereo ranging shot before sequence
                 elif detect_ranging_shot(dupes):
+                    rejects['ranging'] += rsm_group.iloc[:2]['path'].to_list()
                     observations[name + "_RSM" + str(RSM)] = rsm_group.iloc[2:]
                 else:
                     parser_warnings.append(
@@ -299,6 +300,9 @@ def cluster_observations(
                 if (set(stereo["FILTER"]) == {"L0", "R0"}) and (
                     set(group["FILTER"] != {"L0", "R0"})
                 ):
+                    rejects['ranging'] += group.loc[
+                        group['FRAME_TYPE'] != 'MONO']['PATH'
+                    ].to_list()
                     group = group.loc[group["FRAME_TYPE"] == "MONO"]
                 else:
                     parser_warnings.append(
@@ -340,7 +344,8 @@ def cluster_observations(
             "creation_time",
             "mono_stereo",
             "mismatched_cal",
-            "provenance"
+            "provenance",
+            "ranging"
         ),
         (
             "from broadband-only sequences",
@@ -354,7 +359,8 @@ def cluster_observations(
             "with older creation times",
             "mixed mono and stereo",
             "with mismatched calibrations",
-            "apparently sourced from old EDRs"
+            "sourced from old EDRs",
+            "with 'ranging' intent"
         ),
     ):
         if rejects.get(reason) is not None:
