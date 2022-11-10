@@ -31,7 +31,7 @@ from asdf.format import (
     drop_excess_stats,
     perfectly_black_rectangular_solid,
 )
-from asdf.parse import parse_pointing, make_pointing_name
+from asdf.parse import parse_pointing, make_pointing_name, parse_zcam_fn
 from asdf.physics import add_derived_illumination_geometry
 from asdf.labels import bulk_scrape_asdf_metadata
 from asdf.rc_parser import find_rc_file, read_rc_file
@@ -157,7 +157,8 @@ class ZcamBandSet(BandSet):
         rc_table_map = {}
         rc_metadata = {}
         for ix, row in self.metadata.iterrows():
-            rc_file = find_rc_file(row["RC_FILE"], row["PATH"])
+            caltarget_sol = parse_zcam_fn(row['CALTARGET_FILE'])['SOL']
+            rc_file = find_rc_file(row["RC_FILE"], row["PATH"], caltarget_sol)
             # TODO: handle this more prettily
             if rc_file is None:
                 aprint(

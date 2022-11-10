@@ -158,15 +158,16 @@ def read_rc_file(rc_fn):
     return table, metadata
 
 
-def find_rc_file(rc_file, product_path):
+def find_rc_file(rc_file, product_path, sol):
     from asdf_settings import sources
 
     if rc_file is None:
         return
-    sol_dir = Path(product_path).parent.parent
-    search_dirs = [Path(sol_dir, "rc_files")]
+    root = Path(product_path).parent.parent.parent
+    search_dirs = [Path(root, str(sol).zfill(4), "rc_files")]
     search_dirs += [
-        Path(root, sol_dir.name, "rc_files") for root in sources.META_ROOTS
+        Path(root, str(sol).zfill(4), "rc_files")
+        for root in sources.META_ROOTS
     ]
     for search_dir in search_dirs:
         if Path(search_dir, rc_file).exists():
