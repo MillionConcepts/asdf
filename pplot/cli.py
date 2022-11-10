@@ -76,11 +76,8 @@ def do_pplot(
                     units = None
                 pplot.pplot_utils.pretty_plot(
                     marslab_spectra,
-                    target_name=titular_plot_target,
-                    sol=marslab["SOL"].iloc[0],
                     solar_elevation=solar_elevation,
                     units=units,
-                    seq_id=marslab["SEQ_ID"].iloc[0],
                     plot_fn=plot_fn,
                     underplot=None
                 )

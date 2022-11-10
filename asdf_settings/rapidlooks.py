@@ -94,6 +94,34 @@ CROP_SETTINGS = {
     "crop": (25, 25, 11, 11),
 }
 
+
+SHADOW_MASK = [
+    {
+        "function": threshold_mask,
+        "params": {"percentiles": (8, 100), "operator": "mean"},
+        "colorfill": {"color": 0.45, "mask_alpha": 1},
+        "pass": True,
+        "send": True,
+    },
+]
+
+SKY_MASK = [
+    {
+        "function": skymask,
+        "params": {
+            "percentile": 75,
+            "opening_radius": 3,
+            "floodfill": True,
+            "coverage_cutoff": 0.93,
+            "extent_cutoff": 0.05
+        },
+        "colorfill": {"color": 0, "mask_alpha": 1},
+        "pass": True,
+        "send": True
+    }
+]
+
+
 #############################################################################
 #                      explicit rapidlook definitions
 #############################################################################
@@ -138,6 +166,7 @@ RGB_BANDMAP_THRESHOLD = [
 ]
 
 # RGB_BANDMAP_DEFAULTS are added to these
+# noinspection PyTypeChecker
 RGB_BANDMAP = [
     {
         # placing single quotes causes asdf to print the title verbatim
@@ -146,7 +175,7 @@ RGB_BANDMAP = [
             "norm_kwargs": {"bounds": (0.2, 1)},
             "red": {
                 "look": "ratio",
-                "mask": {"instructions": RGB_BANDMAP_THRESHOLD},
+                "mask": {"instructions": RGB_BANDMAP_THRESHOLD + SKY_MASK},
                 "bands": ("R0R", "R4"),
                 "limiter": {
                     # switch this to a masked-outside thing
@@ -165,7 +194,7 @@ RGB_BANDMAP = [
             # cyan/purple: just green and red
             # blue: ?
             "green": {
-                "mask": {"instructions": RGB_BANDMAP_THRESHOLD},
+                "mask": {"instructions": RGB_BANDMAP_THRESHOLD + SKY_MASK},
                 "look": "band_depth",
                 "bands": ("R1", "R5", "R3"),
                 "limiter": {
@@ -175,12 +204,12 @@ RGB_BANDMAP = [
                 "postfilter": {
                     # "function": lambda array: np.zeros(array.shape)
                     "function": centile_clip,
-                    "params": {"centiles": (0, 99)},
+                    "params": {"centiles": (0, 98)},
                 },
             },
             "blue": {
                 "look": "ratio",
-                "mask": {"instructions": RGB_BANDMAP_THRESHOLD},
+                "mask": {"instructions": RGB_BANDMAP_THRESHOLD + SKY_MASK},
                 "bands": ("R1", "R5"),
                 "limiter": {
                     "function": np.ma.masked_less,
@@ -189,7 +218,7 @@ RGB_BANDMAP = [
                 "postfilter": {
                     # "function": lambda array: np.zeros(array.shape)
                     "function": centile_clip,
-                    "params": {"centiles": (0, 99)},
+                    "params": {"centiles": (0, 98)},
                 }
                 # postfilter with percentile clip maybe just on the top
             },
@@ -210,41 +239,24 @@ CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
 
 MODIFIED_BANDMAP_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
 
-SHADOW_MASK = [
-    {
-        "function": threshold_mask,
-        "params": {"percentiles": (8, 100), "operator": "mean"},
-        "colorfill": {"color": 0.45, "mask_alpha": 1},
-        "pass": True,
-        "send": True,
-    },
-]
-
-SKY_MASK = [
-    {
-        "function": skymask,
-        "params": {"percentile": 75},
-        "colorfill": {"color": 0, "mask_alpha": 1},
-        "pass": True,
-        "send": True
-    }
-]
-
+# noinspection PyTypeChecker
 MASKED_OPTIONS = {
     "mask": {"instructions": SHADOW_MASK + SKY_MASK}, "suffix": "masked",
+    "limiter": {"function": std_clip, "params": {"sigma": 0.9}},
 }
 
 MODIFIED_STRETCHY_DEFAULTS = deepcopy(STRETCHY_DEFAULTS)
 
 SKYMASK_DCS_OPTIONS = {
-    "mask": {"instructions": SKY_MASK}, "suffix": "skymasked"
+    "mask": {"instructions": SKY_MASK}, "suffix": "masked",
+    "prefilter": {"function": centile_clip, "params": {"centiles": (1, 99)}}
 }
 
 # dictionary of all procedural looks to be generated. general syntax is:
 # '$CATEGORY_NAME': (options_for_look, options_for_other_look, ...)
 LOOK_GENERATORS = {
     # recolored bandmaps: just give colormap names
-    "bandmap": ["orte"],
+    # "bandmap": ["orte"],
     "modified_bandmap": [MASKED_OPTIONS],
     "modified_stretchy": [SKYMASK_DCS_OPTIONS],
 }

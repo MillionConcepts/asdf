@@ -603,10 +603,7 @@ def pretty_plot_bandset(bandset, outpath):
         warnings.simplefilter("ignore")
         pplot.pplot_utils.pretty_plot(
             plot_data,
-            target_name=target_name,
-            sol=bandset.compact["SOL"].iloc[0],
             solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
-            seq_id=bandset.compact["SEQ_ID"].iloc[0],
             plot_fn=plot_fn,
             underplot=None,
         )
@@ -616,6 +613,16 @@ def pretty_plot_bandset(bandset, outpath):
 
 # TODO: improve structure
 def fdsa_insert(marslab_data, prototype):
+    fields_skipped = []
+    for field in ROI_METADATA_FIELDS:
+        if field not in prototype.columns:
+            if field in LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS:
+                # who cares!
+                continue
+            fields_skipped.append(field)
+            marslab_data[field] = ""
+            continue
+    usable_fields = [f for f in prototype.columns if f in ROI_METADATA_FIELDS]
     for color in prototype["COLOR"].unique():
         proto_slice = prototype.loc[prototype["COLOR"] == color]
         if len(proto_slice) > 1:
@@ -633,20 +640,12 @@ def fdsa_insert(marslab_data, prototype):
             )
             continue
         fields_used = Text("")
-        fields_skipped = []
-        for field in ROI_METADATA_FIELDS:
-            if field not in prototype.columns:
-                if field in LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS:
-                    # who cares!
-                    continue
-                fields_skipped.append(field)
-                marslab_data[field] = ""
-                continue
+        for field in usable_fields:
             proto_value = proto_slice[field].iloc[0]
+            if proto_value == "-":
+                continue
             use_message = f" {field} "
             if field in LEGACY_METADATA_FIELDS:
-                if proto_value == "-":
-                    continue
                 use_message += "(retained legacy field) "
             fields_used.append_text(
                 Text(use_message, style="default bold")
@@ -663,7 +662,8 @@ def fdsa_insert(marslab_data, prototype):
 
     if len(fields_skipped) > 0:
         aprint(
-            f"note: no {', '.join(set(fields_skipped))} field(s) in this marslab file, "
+            f"note: no {', '.join(set(fields_skipped))} "
+            f"field(s) in this marslab file, "
             f"probably from an earlier asdf version\n"
         )
 

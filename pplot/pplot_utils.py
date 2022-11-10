@@ -71,26 +71,12 @@ def pretty_plot(
     bgcolor="white",
     plot_edges=("left", "bottom"),
     underplot="filter",
-    sol="NNN",
-    seq_id="Unk. SEQ_ID",
-    target_name="Unk. TARGET",
-    credit="Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC",
     sym=None,
 ):
     # for files where we've replaced nulls with '-' to make people feel better
     data = data.replace("-", None)
     # for many circumstances
     data = data.replace("", None)
-    # set up annotation text
-    annotation_parts = []
-    if isinstance(sol, (str, Integral)):
-        annotation_parts.append(f"Sol{str(sol).zfill(3)}")
-    if isinstance(seq_id, str, ):
-        if seq_id:
-            annotation_parts.append(seq_id)
-    if not (target_name.strip().strip("-") == ""):
-        annotation_parts.append(target_name)
-    annotation_string = " : ".join(annotation_parts)
     # make sure call kwargs have valid values
     try:
         assert (edge in EDGES for edge in plot_edges)
@@ -118,7 +104,7 @@ def pretty_plot(
     # can also include other face properties, different fonts, etc.
     label_fp = mplf.FontProperties(fname=titillium, size=26)
     tick_fp = mplf.FontProperties(fname=titillium, size=23)
-    legend_fp = mplf.FontProperties(fname=titillium, size=20)
+    legend_fp = mplf.FontProperties(fname=titillium, size=23)
     tick_minor_fp = mplf.FontProperties(fname=titillium, size=20)
     metadata_fp = mplf.FontProperties(fname=titillium, size=28)
 
@@ -155,7 +141,7 @@ def pretty_plot(
     max_sig = [data[f] + data[f"{f}_STD"] for f in available_bands]
     min_sig = [data[f] - data[f"{f}_STD"] for f in available_bands]
     datarange = [
-        0.05 * scale * np.nanmin(min_sig),
+        0.85 * scale * np.nanmin(min_sig),
         1.05 * scale * np.nanmax(max_sig),
     ]
 
@@ -191,13 +177,13 @@ def pretty_plot(
     # Set the major ticks of the top axis with the narrowband filters
     # only graph L1 from L1/R1, if it's available
     if "L1" in available_bands:
-        narrowband = [
+        narrow = [
             k for k in available_bands if ("0" not in k) and ("R1" not in k)
         ]
     else:
-        narrowband = [k for k in available_bands if ("0" not in k)]
+        narrow = [k for k in available_bands if ("0" not in k)]
     prx.set_xticks(
-        (filter_to_wavelength[narrowband].values[0] - datadomain[0])
+        (filter_to_wavelength[narrow].values[0] - datadomain[0])
         / (datadomain[1] - datadomain[0])
     )
     if ("L1" in available_bands) and ("R1" in available_bands):
@@ -207,7 +193,7 @@ def pretty_plot(
     else:
         L1_R1_label = "R1"
     prx.set_xticklabels(
-        [k.replace("L1", L1_R1_label) for k in narrowband],
+        [k.replace("L1", L1_R1_label) for k in narrow],
         fontproperties=tick_fp,
     )
 
@@ -221,15 +207,14 @@ def pretty_plot(
     ax.set_ylabel(y_axis_units, fontproperties=label_fp)
 
     # Set the ticks for the left yaxis
-    ytick_pos = np.linspace(
-        datarange[0],
-        datarange[1],
-        int(1 + (datarange[1] - datarange[0]) / 0.1),
-    )
-    ax.set_yticks(ytick_pos)
+    tenths = np.arange(0, 11, dtype='u1')
+    ytick_pos = tenths[
+        (tenths <= np.floor(datarange[1] * 10))
+        & (tenths >= np.ceil(datarange[0] * 10))
+    ]
+    ax.set_yticks(ytick_pos / 10)
     ax.set_yticklabels(
-        np.round(ytick_pos, 1),
-        fontproperties=tick_fp,
+        [str(round(t, 1)) for t in ytick_pos / 10], fontproperties=tick_fp,
     )
     ax.tick_params(length=6)
 
@@ -246,18 +231,16 @@ def pretty_plot(
     for i in range(len(data.index)):
         symbol = next(sym)
         # Plot narrowband filters as connected
-        notna_narrowband = [
-            f for f in narrowband if np.isfinite(data.iloc[i][f])
-        ]
+        notna_narrow = [f for f in narrow if np.isfinite(data.iloc[i][f])]
         markersizes = [
-            8 if len(k) == 3 else 13 for k in notna_narrowband
+            8 if len(k) == 3 else 13 for k in notna_narrow
         ]  # plot bayers w/ smaller symbols
-        ix = np.argsort(filter_to_wavelength[notna_narrowband].values[0])
+        ix = np.argsort(filter_to_wavelength[notna_narrow].values[0])
         # plot the errorbars
         ax.errorbar(
-            filter_to_wavelength[notna_narrowband].values[0][ix],
-            data.iloc[i][notna_narrowband][ix] / photometric_scaling,
-            yerr=data.iloc[i][[f"{f}_STD" for f in notna_narrowband]][ix],
+            filter_to_wavelength[notna_narrow].values[0][ix],
+            data.iloc[i][notna_narrow][ix] / photometric_scaling,
+            yerr=data.iloc[i][[f"{f}_STD" for f in notna_narrow]][ix],
             fmt=f"",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             alpha=0.5,
@@ -266,9 +249,9 @@ def pretty_plot(
 
         # plot the line
         ax.errorbar(
-            filter_to_wavelength[notna_narrowband].values[0][ix],
-            data.iloc[i][notna_narrowband][ix] / photometric_scaling,
-            yerr=data.iloc[i][[f"{f}_STD" for f in notna_narrowband]][ix],
+            filter_to_wavelength[notna_narrow].values[0][ix],
+            data.iloc[i][notna_narrow][ix] / photometric_scaling,
+            yerr=data.iloc[i][[f"{f}_STD" for f in notna_narrow]][ix],
             fmt=f"-",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             markersize=10,
@@ -278,8 +261,8 @@ def pretty_plot(
 
         # plot the symbols
         ax.scatter(
-            filter_to_wavelength[notna_narrowband].values[0][ix],
-            data.iloc[i][notna_narrowband][ix] / photometric_scaling,
+            filter_to_wavelength[notna_narrow].values[0][ix],
+            data.iloc[i][notna_narrow][ix] / photometric_scaling,
             marker=f"{symbol}",
             color=MERSPECT_COLOR_MAPPINGS[data["COLOR"].values[i]],
             edgecolors="k",
@@ -338,6 +321,17 @@ def pretty_plot(
         handletextpad=0,
         handlelength=3,
     )
+    fig.axes[1].annotate(
+        make_pplot_annotation(data),
+        xy=(-0.05, -0.19),
+        xycoords="axes fraction",
+        fontproperties=metadata_fp,
+    )
+    if plot_fn:
+        fig.savefig(plot_fn, bbox_inches="tight")
+
+
+def make_pplot_annotation(data):
     line = data.to_dict('records')[0]
     annotation = ""
     if "NAME" in line.keys():
@@ -349,11 +343,4 @@ def pretty_plot(
     if 'RSM' in line.keys():
         annotation += f'rsm {line["RSM"]}'
     annotation = "\n".join((annotation, rapidlooks.CREDIT_TEXT))
-    fig.axes[1].annotate(
-        annotation,
-        xy=(-0.05, -0.19),
-        xycoords="axes fraction",
-        fontproperties=metadata_fp,
-    )
-    if plot_fn:
-        fig.savefig(plot_fn, bbox_inches="tight")
+    return annotation
