@@ -9,8 +9,8 @@ from marslab.imgops.imgutils import (
     std_clip,
     normalize_range,
     centile_clip,
-    threshold_mask, skymask,
 )
+from marslab.imgops.masking import threshold_mask, skymask
 from marslab.imgops.render import colormapped_plot, simple_figure
 from .generators import glom
 
@@ -220,7 +220,6 @@ SHADOW_MASK = [
     },
 ]
 
-# TODO: check 0088 for a possible test of contiguity
 SKY_MASK = [
     {
         "function": skymask,
@@ -230,23 +229,13 @@ SKY_MASK = [
         "send": True
     }
 ]
-DCS_THRESHOLD_MASK = [
-    {
-        'function': threshold_mask,
-        'params': {'percentiles': (2, 98), "operator": "or"},
-        'pass': True,
-        'send': False
-    }
-]
 
 MASKED_OPTIONS = {
     "mask": {"instructions": SHADOW_MASK + SKY_MASK}, "suffix": "masked",
 }
 
 MODIFIED_STRETCHY_DEFAULTS = deepcopy(STRETCHY_DEFAULTS)
-MASK_DCS_OPTIONS = {
-    "mask": {"instructions": DCS_THRESHOLD_MASK}, "suffix": "masked"
-}
+
 SKYMASK_DCS_OPTIONS = {
     "mask": {"instructions": SKY_MASK}, "suffix": "skymasked"
 }
@@ -257,7 +246,7 @@ LOOK_GENERATORS = {
     # recolored bandmaps: just give colormap names
     "bandmap": ["orte"],
     "modified_bandmap": [MASKED_OPTIONS],
-    "modified_stretchy": [MASK_DCS_OPTIONS, SKYMASK_DCS_OPTIONS],
+    "modified_stretchy": [SKYMASK_DCS_OPTIONS],
 }
 
 CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
