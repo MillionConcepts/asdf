@@ -94,7 +94,6 @@ CROP_SETTINGS = {
     "crop": (25, 25, 11, 11),
 }
 
-
 SHADOW_MASK = [
     {
         "function": threshold_mask,
@@ -229,7 +228,7 @@ RGB_BANDMAP = [
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
 CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
-# CATEGORIES = ["RGB_BANDMAP", "ENHANCED"]
+# CATEGORIES = ["STRETCHY", "ENHANCED"]
 ############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################
@@ -256,7 +255,7 @@ SKYMASK_DCS_OPTIONS = {
 # '$CATEGORY_NAME': (options_for_look, options_for_other_look, ...)
 LOOK_GENERATORS = {
     # recolored bandmaps: just give colormap names
-    # "bandmap": ["orte"],
+    "bandmap": ["orte"],
     "modified_bandmap": [MASKED_OPTIONS],
     "modified_stretchy": [SKYMASK_DCS_OPTIONS],
 }
@@ -271,6 +270,6 @@ THUMBNAILS = (
     "enhanced color R0R_R0G_R0B",
     "context image left",
     "context image right",
-    "dcs R6_R3_R2",
+    "dcs R6_R3_R1",
 )
 THUMBNAIL_SIZE = (240, 330)

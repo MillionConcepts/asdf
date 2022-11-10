@@ -1,5 +1,6 @@
 import re
 import textwrap
+from functools import partial
 from itertools import cycle
 from numbers import Integral
 from pathlib import Path
@@ -105,8 +106,8 @@ def pretty_plot(
     label_fp = mplf.FontProperties(fname=titillium, size=26)
     tick_fp = mplf.FontProperties(fname=titillium, size=23)
     legend_fp = mplf.FontProperties(fname=titillium, size=23)
-    tick_minor_fp = mplf.FontProperties(fname=titillium, size=20)
-    metadata_fp = mplf.FontProperties(fname=titillium, size=28)
+    tick_minor_fp = mplf.FontProperties(fname=titillium, size=12)
+    metadata_fp = mplf.FontProperties(fname=titillium, size=26)
 
     # TODO: Handle the case where solar_elevation is not the same for all of
     #  the spectra in the input marslab file, e.g. a file composited across
@@ -163,14 +164,18 @@ def pretty_plot(
     prx = ax.twiny()
     # Remove spines _not_ listed in `plot_edges`
     despine(prx, edges=list(set(EDGES).difference(set(plot_edges))))
-    left_bayers = [k for k in data.keys() if re.match(r"L0[RGB]$", k)]
-    prx.set_xticks(
-        (filter_to_wavelength[left_bayers].values[0] - datadomain[0])
-        / (datadomain[1] - datadomain[0]),
-        minor=True,
-    )
+    left_bayers = [k for k in data.columns if re.match(r"L0[RGB]$", k)]
+    prx_ticks = []
+    for filt in left_bayers:
+        position = (
+            (f2w[filt][0] - datadomain[0]) / (datadomain[1] - datadomain[0])
+        )
+        if filt.endswith("G"):
+            position *= 1.04
+        prx_ticks.append(position)
+    prx.set_xticks(prx_ticks, minor=True)
     prx.set_xticklabels(
-        [f"0{k[-1]}\n" for k in left_bayers],
+        [f"L0{k[-1]}\nR0{k[-1]}" for k in left_bayers],
         minor=True,
         fontproperties=tick_minor_fp,
     )
@@ -321,12 +326,16 @@ def pretty_plot(
         handletextpad=0,
         handlelength=3,
     )
-    fig.axes[1].annotate(
-        make_pplot_annotation(data),
-        xy=(-0.05, -0.19),
-        xycoords="axes fraction",
-        fontproperties=metadata_fp,
+    titleprint = partial(
+        fig.axes[0].text,
+        x=0.5,
+        horizontalalignment="center",
+        verticalalignment="center",
+        transform=fig.axes[0].transAxes,
+        fontproperties=metadata_fp
     )
+    titleprint(s=make_pplot_annotation(data), y=-0.128)
+    titleprint(s=rapidlooks.CREDIT_TEXT, y=-0.173)
     if plot_fn:
         fig.savefig(plot_fn, bbox_inches="tight")
 
@@ -334,7 +343,7 @@ def pretty_plot(
 def make_pplot_annotation(data):
     line = data.to_dict('records')[0]
     annotation = ""
-    if "NAME" in line.keys():
+    if 'NAME' in line.keys():
         annotation += f'{line["NAME"]}, '
     if 'SOL' in line.keys():
         annotation += f'sol {line["SOL"]}, '
@@ -342,5 +351,4 @@ def make_pplot_annotation(data):
         annotation += f'seq_id {line["SEQ_ID"][4:]}, '
     if 'RSM' in line.keys():
         annotation += f'rsm {line["RSM"]}'
-    annotation = "\n".join((annotation, rapidlooks.CREDIT_TEXT))
     return annotation

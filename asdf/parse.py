@@ -158,7 +158,7 @@ def looks_like_marslab(fn):
     #  directories, they are probably being inappropriately used and some other
     #  functions should replace them.
     return bool(
-        ("marslab" in fn) and not ("extended" in fn) and (fn.endswith(".csv"))
+        ("marslab" in fn) and not ("extended" in fn) and not (fn.startswith("rc")) and (fn.endswith(".csv"))
     )
 
 

@@ -91,6 +91,7 @@ def annotate_and_save(title, annotation, look, filename, outpath):
     # TODO: decide if these annotation things should live on zcambandset --
     #  this is not urgent. I think _maybe_ they should be separate.
     if not isinstance(look, matplotlib.figure.Figure):
+        print('beeeeep')
         look = simple_figure(look)
     ax = look.axes[0]
     render_figure_labels(ax, title, annotation)
@@ -176,7 +177,11 @@ def parse_abbreviated_inputs(
 def make_rapidlook_thumbnails(thumblooks, size):
     aprint("... making thumbnails (if necessary) ...")
     thumbnails = {}
+    number = 2
     for name, image in thumblooks.items():
+        with open(name.replace(" ", "_") + str(number), "wb") as stream:
+            import pickle
+            pickle.dump(image, stream)
         thumbnails[name] = make_thumbnail(image, size)
     return thumbnails
 

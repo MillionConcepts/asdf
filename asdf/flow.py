@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import warnings
 
+import matplotlib.figure
 from cytoolz.curried import keyfilter
 from marslab.compat.mertools import merspect_to_marslab
 from marslab.imgops.imgutils import mapfilter
@@ -231,10 +232,23 @@ def asdf_body(
         plain=save_plain_images,
     )
     # keep images that are to be thumbnailed for upload, discard those
-    # that are not; waste not memory, want not memory
-    pick_thumbs = keyfilter(
-        partial(contains, rapidlooks.THUMBNAILS)
-    )
+    # that are not; waste not memory, want not memory;
+    # this convoluted selector is to avoid getting figures
+    # we want to thumbnail mutated during annotation
+
+    def pick_thumbs(rapids):
+        cache = {}
+        for name, look in rapids.items():
+            if name not in rapidlooks.THUMBNAILS:
+                continue
+            if isinstance(look, matplotlib.figure.Figure):
+                from marslab.imgops.pltutils import get_mpl_image
+
+                cache[name] = get_mpl_image(look).convert("RGB")
+            else:
+                cache[name] = look
+        return cache
+
     # set up thumbnail cache
     thumbnail_staging = {}
     # generate rapidlooks
@@ -275,9 +289,11 @@ def asdf_body(
                 "",
                 total=len(bandset.looks),
             )
+            if upload:
+                thumbnail_staging |= pick_thumbs(bandset.looks)
             save_images(outpath=Path(outpath, "browse"), basename=bandset.name)
             prog.remove_task(ASDF_RPH.task_id)
-        thumbnail_staging |= pick_thumbs(bandset.looks)
+
         bandset.purge("looks")
 
     # make context images and write them out
@@ -285,12 +301,13 @@ def asdf_body(
         aprint(Rule(" making context images "))
         with ASDF_CONSOLE.status("... processing context ...", spinner="star"):
             bandset.make_context_images(verbose=True)
+            if not (skip_rapidlooks and not upload):
+                thumbnail_staging |= pick_thumbs(bandset.looks)
             save_images(
                 outpath=Path(outpath, "data"),
                 basename=bandset.name + bandset.suffix,
             )
-            if not (skip_rapidlooks and not upload):
-                thumbnail_staging |= pick_thumbs(bandset.looks)
+
     bandset.purge()
 
     # pretty-plot data if we've got it

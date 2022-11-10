@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pdr
+from asdf_settings import rapidlooks
 from cytoolz import keyfilter
 from matplotlib import pyplot as plt
 
@@ -47,7 +48,7 @@ from marslab.compat.xcam import (
 from marslab.bandset import BandSet
 from marslab.geom import get_coordinates
 from marslab.imgops.debayer import RGGB_PATTERN, mask_bayer_pixels
-from marslab.imgops.imgutils import normalize_range
+from marslab.imgops.imgutils import normalize_range, cropmask
 from marslab.imgops.loaders import pdr_load
 from marslab.imgops.pltutils import remove_ticks, despine
 from marslab.imgops.regions import (
@@ -465,13 +466,21 @@ class ZcamBandSet(BandSet):
                 self.local_files.append(rc_metadata_file)
         return metadata_file, extended_file, rc_metadata_file
 
+    # TODO: so very very sloppy
+    @staticmethod
+    def chain_cropmask(func):
+        def mask_in_chain(image, *args, **kwargs):
+            cropped = cropmask(image, rapidlooks.CROP_SETTINGS['crop'])
+            return func(cropped, *args, **kwargs)
+        return mask_in_chain
+
     def draw_context(self, edgemaps, eye):
         inst = {
             "name": "context image " + eye,
             "no_band_names": True,
             "look": "composite",
             "prefilter": {
-                "function": normalize_range,
+                "function": self.chain_cropmask(normalize_range),
                 "params": {"stretch": (1.25, 1)},
             },
         }

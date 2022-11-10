@@ -7,43 +7,51 @@ import datetime as dt
 import io
 import json
 import os
+import socket
 import time
 import urllib.request
 from collections.abc import Callable, MutableMapping
 from numbers import Number
 from pathlib import Path
-import socket
 from typing import Any, Union
 
 import boto3
 import botocore.config
-from boto3.exceptions import S3UploadFailedError
-from botocore.exceptions import ClientError
 import gspread
 import pandas as pd
 import pydrive2.files
+from boto3.exceptions import S3UploadFailedError
+from botocore.exceptions import ClientError
+from dustgoggles.pivot import itemize_numpy
 
 # TODO: handling authentication differently in gspread and pydrive
 #  is messy but expedient. it's possible that it will be more stable
 #  and/or performant to merge these through a lower-level oauth call,
 #  however, and this should be evaluated.
-from googleapiclient.errors import HttpError
 from oauth2client.service_account import ServiceAccountCredentials
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from urllib3.connection import BaseSSLError
 
-from asdf_settings.process import THREADS
-from asdf_settings.sources import PUBLIC_WAYPOINTS_URL, AWS_REGION, \
-    AWS_IAM_SECRETS_FILE, BACKUP_BUCKET, OBFUSCATE_THUMBNAIL_NAMES, \
-    GOOGLE_CLIENT_SECRETS_FILE, GOOGLE_DRIVE_ROOT, DEBUG_GOOGLE_DRIVE_ROOT, \
-    DEBUG_GOOGLE_SHEET_ID, DEBUG_METADATA_BACKUP_FOLDER_ID, GOOGLE_SHEET_ID, \
-    METADATA_BACKUP_FOLDER_ID, GOOGLE_DRIVE_TRASH
 from asdf.asdf_utils import obfuscated_name, tar_bytes
-from dustgoggles.pivot import itemize_numpy
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
 from asdf.format import md5sum, folder_names
 from asdf.zcam_bandset import ZcamBandSet
+from asdf_settings.process import THREADS
+from asdf_settings.sources import (
+    PUBLIC_WAYPOINTS_URL,
+    AWS_REGION,
+    AWS_IAM_SECRETS_FILE,
+    BACKUP_BUCKET,
+    OBFUSCATE_THUMBNAIL_NAMES,
+    GOOGLE_CLIENT_SECRETS_FILE,
+    GOOGLE_DRIVE_ROOT,
+    DEBUG_GOOGLE_DRIVE_ROOT,
+    DEBUG_GOOGLE_SHEET_ID,
+    DEBUG_METADATA_BACKUP_FOLDER_ID,
+    GOOGLE_SHEET_ID,
+    METADATA_BACKUP_FOLDER_ID,
+)
 from marslab.poolutils import wait_for_it
 
 
@@ -106,7 +114,7 @@ def post_google_sheet(
         + dataframe.fillna("-")
         .applymap(stringify_unspreadsheetly_values)
         .values.tolist(),
-        value_input_option="USER_ENTERED"
+        value_input_option="USER_ENTERED",
     )
 
 
@@ -153,9 +161,7 @@ def upload_s3(
 
 
 def make_asdf_s3_client():
-    aws_config = botocore.config.Config(
-        region_name=AWS_REGION
-    )
+    aws_config = botocore.config.Config(region_name=AWS_REGION)
     secrets = pd.read_csv(AWS_IAM_SECRETS_FILE).iloc[0]
     return boto3.client(
         "s3",
@@ -254,6 +260,7 @@ class DriveBot(GoogleDrive):
     convenience wrapper adding abstract pseudo-filesystem operations to
     a pydrive2 GoogleDrive object
     """
+
     # TODO: maybe fold in silencio after some more work
     def mkdir(self, folder_name, parent_id):
         gdrive_folder = self.CreateFile(
@@ -328,10 +335,10 @@ def upload_bandset_to_gdrive(bandset, debug=False):
         | drivebot.get_checksums(pixmap_folder_id)
         | drivebot.get_checksums(browse_folder_id)
     )
-    if THREADS.get('upload') is not None:
+    if THREADS.get("upload") is not None:
         from multiprocessing import Pool
 
-        pool, results = Pool(THREADS['upload']), {}
+        pool, results = Pool(THREADS["upload"]), {}
     else:
         pool, results = None, None
     for file in bandset.local_files:
@@ -350,16 +357,16 @@ def upload_bandset_to_gdrive(bandset, debug=False):
         else:
             raise ValueError("invalid name")
         if pool is not None:
-            results[file] = (
-                pool.apply_async(asdf_drive_copy, (file, folder_id))
+            results[file] = pool.apply_async(
+                asdf_drive_copy, (file, folder_id)
             )
         else:
             drivebot.cp(file, folder_id)
             ASDFLOG.info(f"uploaded {file}")
-        if pool is not None:
-            results = wait_for_it(
-                pool, results, ASDFLOG, message=f"uploaded {file} "
-            )
+    if pool is not None:
+        wait_for_it(
+            pool, results, ASDFLOG, message=f"uploaded "
+        )
     url = f"https://drive.google.com/drive/folders/{obs_folder_id}"
     bandset.summary[
         "NAME"
@@ -418,27 +425,6 @@ def upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails):
             bandset.summary[name] = '=IMAGE("' + link + '")'
 
 
-def clear_google_drive_trash(debug=False):
-    trash = GOOGLE_DRIVE_TRASH
-    if trash is None:
-        return
-    drivebot = make_asdf_pydrive_client()
-    trash_list = drivebot.ls(trash)
-    if not trash_list:
-        return
-    aprint(f"... clearing {len(trash_list)} unneeded Drive files ...")
-    with ASDF_PROGRESS as prog:
-        task_id = prog.add_task("", total=len(trash_list))
-        for drivefile in trash_list:
-            try:
-                drivefile.Delete()
-            except (HttpError, pydrive2.files.ApiRequestError) as hte:
-                if debug:
-                    aprint(f"couldn't delete {drivefile['title']}: {hte}")
-            prog.advance(task_id, 1)
-        prog.remove_task(task_id)
-
-
 # TODO: this and its precursors are excessively baroque. Consider turning
 #  bandset.local_files into a dictionary to simplify this?
 def upload_asdf_analysis(
@@ -448,9 +434,7 @@ def upload_asdf_analysis(
 ):
     if debug is True:
         sheet_id = DEBUG_GOOGLE_SHEET_ID
-        sheet_backup_folder_id = (
-            DEBUG_METADATA_BACKUP_FOLDER_ID
-        )
+        sheet_backup_folder_id = DEBUG_METADATA_BACKUP_FOLDER_ID
         s3_debug_prefix = "debug/"
     else:
         sheet_id = GOOGLE_SHEET_ID
@@ -495,5 +479,3 @@ def upload_asdf_analysis(
                 + str(api_error),
                 style="bold red",
             )
-    aprint("... cleaning up trash ...")
-    clear_google_drive_trash(debug)
