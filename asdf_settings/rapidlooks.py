@@ -2,11 +2,9 @@
 from copy import deepcopy
 from pathlib import Path
 
-import numpy as np
-from matplotlib.colors import ListedColormap
 import matplotlib.font_manager as mplf
+import numpy as np
 
-from .generators import glom
 from marslab.imgops.imgutils import (
     std_clip,
     normalize_range,
@@ -14,6 +12,7 @@ from marslab.imgops.imgutils import (
     threshold_mask, skymask,
 )
 from marslab.imgops.render import colormapped_plot, simple_figure
+from .generators import glom
 
 # font settings for annotations on rapidlooks -- bear in mind that the
 # images are rendered at 275 dpi, so the sizes may be smaller than you
@@ -46,7 +45,7 @@ BANDMAP_DEFAULTS = {
     "plotter": {
         "function": colormapped_plot,
         "params": {
-            "cmap": "orange_teal",
+            "cmap": "inferno",
             "colorbar_fp": TICK_FONT,
             "render_colorbar": True,
         },
@@ -105,7 +104,6 @@ BANDMAP = (
     {"look": "band_depth", "bands": ("R1", "R4", "R2")},
     {"look": "band_depth", "bands": ("L4", "L2", "L3")},
     {"look": "band_depth", "bands": ("R1", "R5", "R3")},
-    {"look": "slope", "bands": ("L3", "L2")},
     {"look": "slope", "bands": ("R5", "R6")},
     {"look": "slope", "bands": ("R1", "R6")},
 )
@@ -142,8 +140,6 @@ RGB_BANDMAP_THRESHOLD = [
 # RGB_BANDMAP_DEFAULTS are added to these
 RGB_BANDMAP = [
     {
-        # TODO: try switching to sigma / percentile
-        # TODO: is there some better idea than the single quote thing?
         # placing single quotes causes asdf to print the title verbatim
         "name": "'mafic bandmap: R0R/R1 BD910 R1/R5'",
         "params": {
@@ -217,12 +213,14 @@ MODIFIED_BANDMAP_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
 SHADOW_MASK = [
     {
         "function": threshold_mask,
-        "params": {"percentiles": (10, 100)},
+        "params": {"percentiles": (8, 100), "operator": "mean"},
         "colorfill": {"color": 0.45, "mask_alpha": 1},
         "pass": True,
         "send": True,
     },
 ]
+
+# TODO: check 0088 for a possible test of contiguity
 SKY_MASK = [
     {
         "function": skymask,
@@ -232,21 +230,34 @@ SKY_MASK = [
         "send": True
     }
 ]
+DCS_THRESHOLD_MASK = [
+    {
+        'function': threshold_mask,
+        'params': {'percentiles': (2, 98), "operator": "or"},
+        'pass': True,
+        'send': False
+    }
+]
 
 MASKED_OPTIONS = {
     "mask": {"instructions": SHADOW_MASK + SKY_MASK}, "suffix": "masked",
 }
 
 MODIFIED_STRETCHY_DEFAULTS = deepcopy(STRETCHY_DEFAULTS)
-MASK_DCS_OPTIONS = {"mask": {"instructions": SKY_MASK}, "suffix": "masked"}
+MASK_DCS_OPTIONS = {
+    "mask": {"instructions": DCS_THRESHOLD_MASK}, "suffix": "masked"
+}
+SKYMASK_DCS_OPTIONS = {
+    "mask": {"instructions": SKY_MASK}, "suffix": "skymasked"
+}
 
 # dictionary of all procedural looks to be generated. general syntax is:
 # '$CATEGORY_NAME': (options_for_look, options_for_other_look, ...)
 LOOK_GENERATORS = {
     # recolored bandmaps: just give colormap names
-    "bandmap": ["inferno"],
+    "bandmap": ["orte"],
     "modified_bandmap": [MASKED_OPTIONS],
-    "modified_stretchy": [MASK_DCS_OPTIONS]
+    "modified_stretchy": [MASK_DCS_OPTIONS, SKYMASK_DCS_OPTIONS],
 }
 
 CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
@@ -259,6 +270,6 @@ THUMBNAILS = (
     "enhanced color R0R_R0G_R0B",
     "context image left",
     "context image right",
-    "dcs R0R_R0G_R0B",
+    "dcs R6_R3_R2",
 )
 THUMBNAIL_SIZE = (240, 330)

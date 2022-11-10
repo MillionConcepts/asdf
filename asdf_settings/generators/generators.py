@@ -25,7 +25,7 @@ def make_orange_teal_cmap():
     vals[half_len:, 0] = np.linspace(0, teal[0] / half_len, half_len)
     vals[half_len:, 1] = np.linspace(0, teal[1] / half_len, half_len)
     vals[half_len:, 2] = np.linspace(0, teal[2] / half_len, half_len)
-    return ListedColormap(vals, name="orange_teal")
+    return ListedColormap(vals, name="orte")
 
 
 # TODO: clean this up too

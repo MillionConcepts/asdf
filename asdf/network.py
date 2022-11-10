@@ -33,6 +33,7 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from urllib3.connection import BaseSSLError
 
+from asdf_settings.process import THREADS
 from asdf_settings.sources import PUBLIC_WAYPOINTS_URL, AWS_REGION, \
     AWS_IAM_SECRETS_FILE, BACKUP_BUCKET, OBFUSCATE_THUMBNAIL_NAMES, \
     GOOGLE_CLIENT_SECRETS_FILE, GOOGLE_DRIVE_ROOT, DEBUG_GOOGLE_DRIVE_ROOT, \
@@ -41,8 +42,9 @@ from asdf_settings.sources import PUBLIC_WAYPOINTS_URL, AWS_REGION, \
 from asdf.asdf_utils import obfuscated_name, tar_bytes
 from dustgoggles.pivot import itemize_numpy
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
-from asdf.format import md5sum
+from asdf.format import md5sum, folder_names
 from asdf.zcam_bandset import ZcamBandSet
+from marslab.poolutils import wait_for_it
 
 
 def get_public_m20_waypoints():
@@ -233,6 +235,11 @@ def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
     return links
 
 
+def asdf_drive_copy(file, folder_id):
+    drivebot = make_asdf_pydrive_client()
+    drivebot.cp(file, folder_id)
+
+
 def make_asdf_pydrive_client():
     gauth = GoogleAuth()
     scope = ["https://www.googleapis.com/auth/drive"]
@@ -240,16 +247,6 @@ def make_asdf_pydrive_client():
         GOOGLE_CLIENT_SECRETS_FILE, scope
     )
     return DriveBot(gauth)
-
-
-def bandset_gdrive_folder_names(bandset):
-    sol_folder_name = f"""{str(bandset.compact["SOL"].iloc[0]).zfill(4)}"""
-    obs_folder_name = (
-        f"""{bandset.compact["SEQ_ID"].iloc[0]}"""
-        + f""" {bandset.compact["NAME"].iloc[0]}"""
-        + f""" {"RSM " + str(bandset.compact["RSM"].iloc[0])}"""
-    )
-    return sol_folder_name, obs_folder_name
 
 
 class DriveBot(GoogleDrive):
@@ -317,7 +314,7 @@ def upload_bandset_to_gdrive(bandset, debug=False):
         root = GOOGLE_DRIVE_ROOT
     drivebot = make_asdf_pydrive_client()
     ASDFLOG.info("checking folder structure")
-    sol_folder_name, obs_folder_name = bandset_gdrive_folder_names(bandset)
+    sol_folder_name, obs_folder_name = folder_names(bandset)
     # note: this may produce unexpected behavior if people dupe folders and
     # remove the default copy suffixes, etc.
     sol_folder_id = drivebot.cd(sol_folder_name, root)
@@ -331,6 +328,12 @@ def upload_bandset_to_gdrive(bandset, debug=False):
         | drivebot.get_checksums(pixmap_folder_id)
         | drivebot.get_checksums(browse_folder_id)
     )
+    if THREADS.get('upload') is not None:
+        from multiprocessing import Pool
+
+        pool, results = Pool(THREADS['upload']), {}
+    else:
+        pool, results = None, None
     for file in bandset.local_files:
         if is_apparent_duplicate(file, title_checksum_dict):
             ASDFLOG.info(
@@ -338,13 +341,25 @@ def upload_bandset_to_gdrive(bandset, debug=False):
                 "file on Google Drive, skipping"
             )
             continue
-        ASDFLOG.info(f"uploading {file}")
         if "pixmap" in file:
-            drivebot.cp(file, pixmap_folder_id)
+            folder_id = pixmap_folder_id
         elif "data" in Path(file).parts:
-            drivebot.cp(file, data_folder_id)
+            folder_id = data_folder_id
         elif "browse" in Path(file).parts:
-            drivebot.cp(file, browse_folder_id)
+            folder_id = browse_folder_id
+        else:
+            raise ValueError("invalid name")
+        if pool is not None:
+            results[file] = (
+                pool.apply_async(asdf_drive_copy, (file, folder_id))
+            )
+        else:
+            drivebot.cp(file, folder_id)
+            ASDFLOG.info(f"uploaded {file}")
+        if pool is not None:
+            results = wait_for_it(
+                pool, results, ASDFLOG, message=f"uploaded {file} "
+            )
     url = f"https://drive.google.com/drive/folders/{obs_folder_id}"
     bandset.summary[
         "NAME"

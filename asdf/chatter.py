@@ -16,7 +16,6 @@ from pathos.multiprocessing import ProcessPool
 from rich.rule import Rule
 from rich.text import Text
 
-from asdf.asdf_utils import dashify
 from dustgoggles.func import pass_parameters
 from asdf.console import (
     ASDF_CONSOLE,
@@ -603,7 +602,7 @@ def pretty_plot_bandset(bandset, outpath):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         pplot.pplot_utils.pretty_plot(
-            dashify(plot_data),
+            plot_data,
             target_name=target_name,
             sol=bandset.compact["SOL"].iloc[0],
             solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],

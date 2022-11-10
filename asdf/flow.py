@@ -88,9 +88,6 @@ def asdf_body(
     # add (meta)data from rc files
     aprint("... scraping photometric responsivity constant files ...")
     bandset.scrape_rc_files()
-    # where are we locally writing files? by default, directories separated
-    # by user and sol.
-    outpath = make_asdf_outpath(output, bandset)
     # dial out to other directories / servers for metadata that can't be
     # found in or derived from file headers
     bandset.metadata = collect_dispersed_metadata(bandset.metadata)
@@ -101,8 +98,6 @@ def asdf_body(
     # wrapper that suppresses input calls in non-interactive mode
     ci = partial(catch_interaction, noninteractive)
 
-    # tell user where we're putting stuff
-    aprint(f"[bold green]NOTE: files will be written to {outpath}")
     # get observation name
     if recreate_from:
         aprint(
@@ -121,6 +116,12 @@ def asdf_body(
                 bandset.metadata["ANALYSIS_NAME"] = analysis
     else:
         bandset.metadata["NAME"] = ci(name_prompt)
+
+    # where are we locally writing files? by default, directories separated
+    # by user, sol, name + rsm.
+    outpath = make_asdf_outpath(output, bandset)
+    # tell user where we're putting stuff
+    aprint(f"[bold green]NOTE: files will be written to {outpath}")
 
     # do nothing if we are doing none of uploading, saving rapidlooks,
     # or counting ROIs. otherwise, preload images to share I/O and for

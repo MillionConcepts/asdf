@@ -133,6 +133,9 @@ class ZcamBandSet(BandSet):
             :, ~self.metadata.columns.duplicated()
         ].copy()
         self.metadata = add_derived_illumination_geometry(self.metadata)
+        self.metadata = self.metadata.sort_values(
+            by=['SCLK', 'BAND']
+        ).reset_index(drop=True)
         self.name = make_pointing_name(self.metadata)
         # TODO: this is horrible, refactor this garbage attribute
         self.suffix = "-" + suffix if suffix != "" else suffix

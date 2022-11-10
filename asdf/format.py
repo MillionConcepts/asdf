@@ -2,6 +2,7 @@
 formatting and helper functions for other asdf modules.
 """
 from functools import partial
+import getpass
 from hashlib import md5
 import os
 from pathlib import Path
@@ -36,17 +37,25 @@ def compile_looks():
     )
 
 
-# TODO: generate browse and data paths explicitly
+def folder_names(bandset):
+    sol_folder_name = str(bandset.metadata["SOL"].iloc[0]).zfill(4)
+    obs_folder_name = (
+        bandset.metadata["SEQ_ID"].iloc[0].lower()
+        + f" {bandset.metadata['NAME'].iloc[0]}"
+        + f" RSM {bandset.metadata['RSM'].iloc[0]}"
+    )
+    return sol_folder_name, obs_folder_name
+
+
 def make_asdf_outpath(output, bandset):
     """
     where are we locally writing files? by default, directories separated
     by user and sol.
     """
     if output is None:
+        sol_folder_name, obs_folder_name = folder_names(bandset)
         outpath = Path(
-            "output/",
-            os.getlogin(),
-            format(bandset.metadata["SOL"].iloc[0], "0>4"),
+            "output/", getpass.getuser(), sol_folder_name, obs_folder_name
         )
     else:
         outpath = Path(output)

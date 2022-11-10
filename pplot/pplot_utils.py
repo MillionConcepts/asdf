@@ -1,22 +1,18 @@
 import re
-from itertools import cycle
-from pathlib import Path
-import pandas as pd
-import numpy as np
-from matplotlib import pyplot as plt
-import matplotlib.font_manager as mplf
-from marslab.compat.mertools import (
-    MERSPECT_COLOR_MAPPINGS,
-    WAVELENGTH_TO_FILTER,
-)
 import textwrap
+from itertools import cycle
+from numbers import Integral
+from pathlib import Path
 
+import matplotlib.font_manager as mplf
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
 
-# Define the inverse operation to map filter designation to center wavelength
-# TODO: This should probably live in marslab.compat.mertools
-#  [michael]: this is also the purpose of some components of
-#  marslab.compat.xcam.make_xcam_filter_dict() and we should discuss how to
-#  share functionality
+from asdf_settings import rapidlooks
+from marslab.compat.mertools import (
+    MERSPECT_COLOR_MAPPINGS, WAVELENGTH_TO_FILTER,
+)
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.pltutils import despine
 
@@ -25,6 +21,7 @@ for k, v in WAVELENGTH_TO_FILTER["ZCAM"]["R"].items():
     f2w[v] = [k]
 filter_to_wavelength = pd.DataFrame(f2w)
 
+EDGES = ("left", "right", "top", "bottom")
 
 def plot_filter_profiles(ax, datarange, inst="ZCAM"):
     # Underplot the filter profiles
@@ -34,7 +31,8 @@ def plot_filter_profiles(ax, datarange, inst="ZCAM"):
         filter_profile = pd.read_csv(fn, header=None)
         if ("R0" in str(fn)) or ("R1" in str(fn)):
             continue
-        # The filter responses are on the interval [0,1]. Scale this to the data range.
+        # The filter responses are on the interval [0,1]. Scale this to the
+        # data range.
         scaled_response = (
             filter_profile[1].values * datarange[1] / filter_profile[1].max()
         )
@@ -47,46 +45,6 @@ def plot_filter_profiles(ax, datarange, inst="ZCAM"):
             f'k{":" if ("L0" in str(fn)) else "--"}',
             alpha=0.07 if ("L0" in str(fn)) else 0.08,
         )
-
-
-def plot_lab_spectra(ax, minerals=[]):
-    # Define the right axis for the lab data labels
-    pry = ax.twinx()
-    despine(pry)  # remove the bounding box
-    pry.set_yticks([])  # wipe auto-ticks or they stick around
-    pry.set_ylim(ax.get_ylim())
-
-    # Plot the requested lab spectra
-    s = {}
-    _ = [s.update(lab_spectra[k]) for k in lab_spectra.keys()]
-    ticks, labels = [], []
-    for i, m in enumerate(minerals):
-        data = pd.read_csv(
-            s[m], skiprows=17
-        )  # pd.read_csv(s[m],names=['Wavelength','Response'])
-        data_inplot = data.loc[data["Wavelength"] >= pry.get_xlim()[0]].loc[
-            data["Wavelength"] < pry.get_xlim()[1]
-        ]
-        ylim = (pry.get_ylim()[0] + 0.1, ax.get_ylim()[1] - 0.1)
-        data_scaled = (
-            data_inplot["Response"] - np.min(data_inplot["Response"])
-        ) * np.diff(ylim) / (
-            np.max(data_inplot["Response"]) - np.min(data_inplot["Response"])
-        ) + ylim[
-            0
-        ]
-        pry.plot(
-            data_inplot["Wavelength"],
-            # data_scaled,
-            data_inplot["Response"],
-            "k",
-            alpha=0.7,
-            linewidth=2,
-        )
-        ticks += [data_inplot["Response"].values[-1]]
-        labels += [m.replace(" ", "\n")]
-    pry.set_yticks(ticks)
-    pry.set_yticklabels(labels, fontproperties=legend_fp)
 
 
 def find_longest_filter(data):
@@ -119,75 +77,55 @@ def pretty_plot(
     credit="Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC",
     sym=None,
 ):
-    from numbers import Integral
+    # for files where we've replaced nulls with '-' to make people feel better
+    data = data.replace("-", None)
+    # for many circumstances
+    data = data.replace("", None)
+    # set up annotation text
     annotation_parts = []
     if isinstance(sol, (str, Integral)):
-        if sol:
-            annotation_parts.append(f"Sol{str(sol).zfill(3)}")
+        annotation_parts.append(f"Sol{str(sol).zfill(3)}")
     if isinstance(seq_id, str, ):
         if seq_id:
             annotation_parts.append(seq_id)
     if not (target_name.strip().strip("-") == ""):
         annotation_parts.append(target_name)
     annotation_string = " : ".join(annotation_parts)
-    assert (
-        edge in ["left", "right", "top", "bottom"] for edge in plot_edges
-    )  # Tests that the variable has a valid value
-    assert underplot in [
-        None,
-        "filter",
-        "grid",
-    ]  # Tests that the variable has a valid value
-    assert scale_method in [
-        "scale_to_left",
-        "scale_to_avg",
-        None,
-    ]  # Tests that the variable has a valid value
-    # Remap the colors to feature names; add morphology / soil location when
-    # available
+    # make sure call kwargs have valid values
+    try:
+        assert (edge in EDGES for edge in plot_edges)
+        assert underplot in [None, "filter", "grid"]
+        assert scale_method in ["scale_to_left", "scale_to_avg", None]
+    except AssertionError:
+        raise TypeError("invalid argument")
+    # set up the legend: use FEATURE + FEATURE_SUBTYPE when possible,
+    # FEATURE when not, COLOR as a last resort
     roi_labels = {}
     for row_ix, row in data.iterrows():
-        if pd.isnull(row["FEATURE"]) or (row["FEATURE"] == "-"):
+        if pd.isnull(row["FEATURE"]):
             label = row["COLOR"]
         else:
             label = row["FEATURE"]
-            if (
-                (label == "rock")
-                and not pd.isnull(row["MORPHOLOGY"])
-                and (row["MORPHOLOGY"] != "-")
-            ):
-                label += f" ({row['MORPHOLOGY']})"
-            elif (
-                (label == "soil")
-                and not pd.isnull(row["SOIL_LOCATION"])
-                and (row["SOIL_LOCATION"] != "-")
-            ):
-                label += f" ({row['SOIL_LOCATION']})"
+            if not pd.isnull(row["FEATURE_SUBTYPE"]):
+                label += f" ({row['FEATURE_SUBTYPE']})"
         roi_labels[row_ix] = label
     # adding this to slightly increase robustness
-    for k in data.keys():
-        if (data[k] == "-").all():
-            data = data.drop(k, axis=1)
+    data = data.drop(columns=data.columns[data.isna().all()])
     # path to file containing referenced font
     titillium = Path(
         Path(__file__).parent.parent, "static/fonts/TitilliumWeb-Light.ttf"
     )
     # can also include other face properties, different fonts, etc.
-    # TODO: possibly allow these to reference asdf_settings, or expose ability
-    #  to pass these fontproperties as a dict
-    label_fp = mplf.FontProperties(fname=titillium, size=20.5)
-    title_fp = mplf.FontProperties(fname=titillium, size=18)  # TODO: not used
-    tick_fp = mplf.FontProperties(fname=titillium, size=15)
-    legend_fp = mplf.FontProperties(fname=titillium, size=14)
-    tick_minor_fp = mplf.FontProperties(fname=titillium, size=11)
-    citation_fp = mplf.FontProperties(fname=titillium, size=12)
-    metadata_fp = mplf.FontProperties(fname=titillium, size=22)
+    label_fp = mplf.FontProperties(fname=titillium, size=26)
+    tick_fp = mplf.FontProperties(fname=titillium, size=23)
+    legend_fp = mplf.FontProperties(fname=titillium, size=20)
+    tick_minor_fp = mplf.FontProperties(fname=titillium, size=20)
+    metadata_fp = mplf.FontProperties(fname=titillium, size=28)
 
     # TODO: Handle the case where solar_elevation is not the same for all of
     #  the spectra in the input marslab file, e.g. a file composited across
     #  observations. Can fix the existence check and make sure solar_elevation
     #  is an np.array but that will create an interface hassle...
-
     theta_rad = (
         (90 - solar_elevation) * 2 * np.pi / 360
         if solar_elevation is not None
@@ -201,36 +139,31 @@ def pretty_plot(
     if units is None and solar_elevation is None:
         y_axis_units = "IOF"
     else:
-        y_axis_units = "R* = IOF/cos(" r"$\theta$)"
+        y_axis_units = "Relative Reflectance"
 
     # Pre-define the plot extents so that they are easy to reuse
-    lpad, rpad = (
-        20,
-        60,
-    )  # Creates a x-axis buffer for graphical layout reasons.
+    lpad, rpad = (20, 60)
+    # add a x-axis buffer for graphical layout reasons.
     datadomain = [400 - lpad, 1100 + rpad]
     # To define the y-axis extent, we add a little margin to the actual
     # min/max data values and then round to the nearest tenth. The ylims
     # will always be even tenths.
-    available_filters = [
+    available_bands = [
         k for k in data.keys() if k in DERIVED_CAM_DICT["ZCAM"]["filters"]
     ]
-    scale = 10 / photometric_scaling
+    scale = 1 / photometric_scaling
     datarange = [
-        np.floor(0.25 * scale * np.nanmin(data[available_filters].values))
-        / 10,
-        np.ceil(1.05 * scale * np.nanmax(data[available_filters].values)) / 10,
+        0.1 * scale * np.nanmin(data[available_bands].values),
+        1.1 * scale * np.nanmax(data[available_bands].values),
     ]
 
+    # create the matplotlib figure we will render the plot in
     fig, ax = plt.subplots(
         figsize=(plot_width, plot_height), facecolor=bgcolor
     )
-
-    # Remove the bounding box
+    # Remove the bounding box and fix the domain
     despine(ax)
-
     ax.set_xlim(datadomain)
-
     # Set the ticks for the bottom axis
     xtick_pos = np.linspace(datadomain[0] + lpad, datadomain[1] - rpad, 8)
     ax.set_xticks(xtick_pos)
@@ -238,20 +171,10 @@ def pretty_plot(
         xtick_pos.astype(np.int16).tolist(), fontproperties=tick_fp
     )
     ax.set_xlabel("wavelength (nm)", fontproperties=label_fp)
-
     # Set the minor ticks of the top axis with the bayer filters
     prx = ax.twiny()
-    #                  Remove spines _not_ listed in `plot_edges`
-    despine(
-        prx,
-        edges=[
-            d
-            for d in ["left", "right", "top", "bottom"]
-            if d not in plot_edges
-        ],
-    )
-    prx.set_xticks([])  # wipe auto-ticks or they stick around
-
+    # Remove spines _not_ listed in `plot_edges`
+    despine(prx, edges=list(set(EDGES).difference(set(plot_edges))))
     left_bayers = [k for k in data.keys() if re.match(r"L0[RGB]$", k)]
     prx.set_xticks(
         (filter_to_wavelength[left_bayers].values[0] - datadomain[0])
@@ -259,25 +182,25 @@ def pretty_plot(
         minor=True,
     )
     prx.set_xticklabels(
-        [f"L0{k[-1]}\nR0{k[-1]}" for k in left_bayers],
+        [f"0{k[-1]}\n" for k in left_bayers],
         minor=True,
         fontproperties=tick_minor_fp,
     )
     # Set the major ticks of the top axis with the narrowband filters
     # only graph L1 from L1/R1, if it's available
-    if "L1" in available_filters:
+    if "L1" in available_bands:
         narrowband = [
-            k for k in available_filters if ("0" not in k) and ("R1" not in k)
+            k for k in available_bands if ("0" not in k) and ("R1" not in k)
         ]
     else:
-        narrowband = [k for k in available_filters if ("0" not in k)]
+        narrowband = [k for k in available_bands if ("0" not in k)]
     prx.set_xticks(
         (filter_to_wavelength[narrowband].values[0] - datadomain[0])
         / (datadomain[1] - datadomain[0])
     )
-    if ("L1" in available_filters) and ("R1" in available_filters):
+    if ("L1" in available_bands) and ("R1" in available_bands):
         L1_R1_label = "L1\nR1"
-    elif "L1" in available_filters:
+    elif "L1" in available_bands:
         L1_R1_label = "L1"
     else:
         L1_R1_label = "R1"
@@ -406,44 +329,29 @@ def pretty_plot(
             0.99,
         ],
         labelspacing=0.3,
-        borderpad=0.3,
+        borderpad=0.1,
         prop=legend_fp,
         facecolor="white",
         markerscale=0.8,
-        handletextpad=0.1,
+        handletextpad=0,
         handlelength=3,
     )
-
-    # Add an annotation to define the observation
-    ax.annotate(
-        annotation_string,
-        xy=(0, 0),
+    line = data.to_dict('records')[0]
+    annotation = ""
+    if "NAME" in line.keys():
+        annotation += f'{line["NAME"]}, '
+    if 'SOL' in line.keys():
+        annotation += f'sol {line["SOL"]}, '
+    if 'SEQ_ID' in line.keys():
+        annotation += f'seq_id {line["SEQ_ID"][4:]}, '
+    if 'RSM' in line.keys():
+        annotation += f'rsm {line["RSM"]}'
+    annotation = "\n".join((annotation, rapidlooks.CREDIT_TEXT))
+    fig.axes[1].annotate(
+        annotation,
+        xy=(-0.05, -0.19),
         xycoords="axes fraction",
-        xytext=(5, 5),
-        textcoords="offset pixels",
-        horizontalalignment="left",
-        verticalalignment="bottom",
         fontproperties=metadata_fp,
     )
-
-    # Add the citation string w/ information about scaling
-    ax.annotate(
-        {
-            "scale_to_avg": f"All filters scaled to average at 800nm",
-            "scale_to_left": f"Right filter scaled to left at 800nm",
-            None: "",
-        }[scale_method]
-        + "\n"
-        + credit,
-        xy=(1, 0),
-        xycoords="axes fraction",
-        xytext=(-5, 5),
-        textcoords="offset pixels",
-        horizontalalignment="right",
-        verticalalignment="bottom",
-        fontproperties=citation_fp,
-    )
-
     if plot_fn:
-
-        fig.savefig(plot_fn)
+        fig.savefig(plot_fn, bbox_inches="tight")

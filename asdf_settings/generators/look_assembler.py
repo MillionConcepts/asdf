@@ -34,7 +34,7 @@ def make_recolored_bandmap_looks(looks, _, cmap: str):
         if look["look"] not in SPECTOP_NAMES:
             continue
         recolored_bandmap = deepcopy(look)
-        recolored_bandmap["name"] = "{look} {bands} {cmap}"
+        recolored_bandmap["name"] += " {cmap}"
 
         # noinspection PyTypeChecker
         recolored_bandmap["plotter"]["params"]["cmap"] = cmap
@@ -43,10 +43,14 @@ def make_recolored_bandmap_looks(looks, _, cmap: str):
 
 
 def glom_instruction(inst, part):
-    inst = part | inst
+    inst = deepcopy(part) | deepcopy(inst)
     for k in part.keys():
         if not isinstance(part[k], Mapping):
             continue
+        if (new_inst := part[k].get("instructions")) is not None:
+            inst[k]["instructions"] = inst[k].get(
+                "instructions", []
+            ) + new_inst
         if k == "params":
             inst["params"] = inst.get("params", {}) | part[k]
             continue
@@ -97,18 +101,18 @@ for category in CATEGORIES:
         RAPIDLOOKS.append(instruction)
 
 
-GENERATED_INSTRUCTIONS = []
-
 # assemble procedurally generated looks
+# TODO, maybe: something to selectively let generators
+#  recursively build on one another
+generated_instructions = []
 for category, look_listing in LOOK_GENERATORS.items():
     assembly_function = GENERATED_LOOK_DISPATCH[category]
     category_defaults = getattr(rapidlooks, category.upper() + "_DEFAULTS")
     for gen_look in look_listing:
-        GENERATED_INSTRUCTIONS += assembly_function(
+        generated_instructions += assembly_function(
             RAPIDLOOKS, category_defaults, gen_look
         )
-    RAPIDLOOKS += GENERATED_INSTRUCTIONS
-
+RAPIDLOOKS += generated_instructions
 
 for look_inst in RAPIDLOOKS:
     # add crop settings
@@ -117,4 +121,4 @@ for look_inst in RAPIDLOOKS:
     look_inst["name"] = insert_name_elements(look_inst)
 # deepcopy everything to ensure that later mutation
 # does not result in undesirably shared state
-RAPIDLOOKS = [deepcopy(look_inst) for look_inst in RAPIDLOOKS]
+RAPIDLOOKS = [deepcopy(look_inst) for look_inst in RAPIDLOOKS if "masked" in look_inst["name"]]
