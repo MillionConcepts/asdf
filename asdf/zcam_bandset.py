@@ -469,10 +469,9 @@ class ZcamBandSet(BandSet):
             "name": "context image " + eye,
             "no_band_names": True,
             "look": "composite",
-            "params": {"special_constants": [0]},
-            "limiter": {
+            "prefilter": {
                 "function": normalize_range,
-                "params": {"stretch": 0.1},
+                "params": {"stretch": (1.25, 1)},
             },
         }
         initial = eye[0].upper()
