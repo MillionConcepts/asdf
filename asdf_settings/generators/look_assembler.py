@@ -121,4 +121,4 @@ for look_inst in RAPIDLOOKS:
     look_inst["name"] = insert_name_elements(look_inst)
 # deepcopy everything to ensure that later mutation
 # does not result in undesirably shared state
-RAPIDLOOKS = [deepcopy(look_inst) for look_inst in RAPIDLOOKS if "masked" in look_inst["name"]]
+RAPIDLOOKS = [deepcopy(r) for r in sorted(RAPIDLOOKS, key=lambda i: i['name'])]

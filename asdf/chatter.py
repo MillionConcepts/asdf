@@ -633,16 +633,13 @@ def fdsa_insert(marslab_data, prototype):
             )
             continue
         fields_used = Text("")
-        fields_skipped = Text("")
+        fields_skipped = []
         for field in ROI_METADATA_FIELDS:
             if field not in prototype.columns:
                 if field in LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS:
                     # who cares!
                     continue
-                fields_skipped.append(
-                    f"note: no {field} field in this marslab file, probably "
-                    f"from an earlier asdf version\n"
-                )
+                fields_skipped.append(field)
                 marslab_data[field] = ""
                 continue
             proto_value = proto_slice[field].iloc[0]
@@ -663,8 +660,12 @@ def fdsa_insert(marslab_data, prototype):
                 marslab_data["COLOR"] == color, target
             ] = proto_value
         aprint(colorize_merspect_roi_name(color).append_text(fields_used))
-        if fields_skipped:
-            aprint(fields_skipped)
+
+    if len(fields_skipped) > 0:
+        aprint(
+            f"note: no {', '.join(set(fields_skipped))} field(s) in this marslab file, "
+            f"probably from an earlier asdf version\n"
+        )
 
     return marslab_data
 

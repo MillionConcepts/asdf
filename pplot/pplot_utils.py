@@ -152,9 +152,11 @@ def pretty_plot(
         k for k in data.keys() if k in DERIVED_CAM_DICT["ZCAM"]["filters"]
     ]
     scale = 1 / photometric_scaling
+    max_sig = [data[f] + data[f"{f}_STD"] for f in available_bands]
+    min_sig = [data[f] - data[f"{f}_STD"] for f in available_bands]
     datarange = [
-        0.1 * scale * np.nanmin(data[available_bands].values),
-        1.1 * scale * np.nanmax(data[available_bands].values),
+        0.05 * scale * np.nanmin(min_sig),
+        1.05 * scale * np.nanmax(max_sig),
     ]
 
     # create the matplotlib figure we will render the plot in

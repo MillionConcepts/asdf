@@ -42,7 +42,9 @@ FEATURE_EXCLUSIVE_ROI_FIELDS = {
 # don't mess with this statement if you want to be able to use exclusive_fields
 # later. it pulls all the lists out of FEATURE_EXCLUSIVE_ROI_FIELDS
 exclusive_fields = list(
-    chain.from_iterable(FEATURE_EXCLUSIVE_ROI_FIELDS.values())
+    set(
+        chain.from_iterable(FEATURE_EXCLUSIVE_ROI_FIELDS.values())
+    )
 )
 
 # fields we want to ask the user about at each ROI. This order is preserved.
