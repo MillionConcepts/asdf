@@ -156,6 +156,9 @@ examples/
 # deployment
 vendor/
 
+# logs
+logs/
+
 # test data
 /asdf/tests/data/e2e*
 /asdf/tests/data/input_products/*/

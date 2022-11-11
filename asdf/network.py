@@ -13,6 +13,7 @@ import urllib.request
 from collections.abc import Callable, MutableMapping
 from numbers import Number
 from pathlib import Path
+from random import shuffle
 from typing import Any, Union
 
 import boto3
@@ -310,10 +311,8 @@ class DriveBot(GoogleDrive):
 
 
 def upload_bandset_to_gdrive(bandset, debug=False):
-    # reversing this list is a silly hack to make the progress timer
-    # more realistic, because the smallest files (csv and fits.tar.gz)
-    # will generally be at the front of the list.
-    bandset.local_files.reverse()
+    # shuffling is a silly hack to speed up parallel uploads
+    shuffle(bandset.local_files)
     # id of root folder
     if debug is True:
         root = DEBUG_GOOGLE_DRIVE_ROOT

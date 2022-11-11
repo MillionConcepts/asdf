@@ -89,7 +89,7 @@ def pretty_plot(
     # FEATURE when not, COLOR as a last resort
     roi_labels = {}
     for row_ix, row in data.iterrows():
-        if pd.isnull(row["FEATURE"]):
+        if "FEATURE" not in row.keys() or pd.isnull(row["FEATURE"]):
             label = row["COLOR"]
         else:
             label = row["FEATURE"]

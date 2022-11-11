@@ -4,7 +4,7 @@ settings will not be optimal across environments.
 """
 
 THREADS = {
-    'save': None,
-    'look': None,
+    'save': 4,
+    'look': 4,
     'upload': 3
 }

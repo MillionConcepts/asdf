@@ -137,3 +137,4 @@ ASDF_RPH = RichProgressHandler(prog=ASDF_PROGRESS)
 ASDF_RPH_SPIN = RichProgressHandler(prog=ASDF_PROGRESS_SPIN)
 
 ASDFLOG = logging.getLogger(__name__)
+ASDFLOG.addHandler(logging.FileHandler("logs/asdf.log"))

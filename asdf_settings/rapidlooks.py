@@ -104,6 +104,15 @@ SHADOW_MASK = [
     },
 ]
 
+DARK_SHADOW_MASK = [
+    {
+        "function": threshold_mask,
+        "params": {"percentiles": (5, 100), "operator": "and"},
+        "pass": True,
+        "send": False
+    }
+]
+
 SKY_MASK = [
     {
         "function": skymask,
@@ -238,7 +247,6 @@ CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
 
 MODIFIED_BANDMAP_DEFAULTS = deepcopy(BANDMAP_DEFAULTS)
 
-# noinspection PyTypeChecker
 MASKED_OPTIONS = {
     "mask": {"instructions": SHADOW_MASK + SKY_MASK}, "suffix": "masked",
     "limiter": {"function": std_clip, "params": {"sigma": 0.9}},
@@ -247,8 +255,8 @@ MASKED_OPTIONS = {
 MODIFIED_STRETCHY_DEFAULTS = deepcopy(STRETCHY_DEFAULTS)
 
 SKYMASK_DCS_OPTIONS = {
-    "mask": {"instructions": SKY_MASK}, "suffix": "masked",
-    "prefilter": {"function": centile_clip, "params": {"centiles": (1, 99)}}
+    "mask": {"instructions": SKY_MASK + DARK_SHADOW_MASK}, "suffix": "masked",
+    "prefilter": {"function": centile_clip, "params": {"centiles": (1, 98)}}
 }
 
 # dictionary of all procedural looks to be generated. general syntax is:

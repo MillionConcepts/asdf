@@ -177,11 +177,7 @@ def parse_abbreviated_inputs(
 def make_rapidlook_thumbnails(thumblooks, size):
     aprint("... making thumbnails (if necessary) ...")
     thumbnails = {}
-    number = 2
     for name, image in thumblooks.items():
-        with open(name.replace(" ", "_") + str(number), "wb") as stream:
-            import pickle
-            pickle.dump(image, stream)
         thumbnails[name] = make_thumbnail(image, size)
     return thumbnails
 
