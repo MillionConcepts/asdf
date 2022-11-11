@@ -301,9 +301,13 @@ class DriveBot(GoogleDrive):
     def cd(self, folder_name, parent_id):
         root_filelist = self.ls(parent_id)
         folder_list = [
-            file for file in root_filelist if file["title"] == folder_name
+            file for file in root_filelist
+            if (
+                (file["title"] == folder_name)
+                and (file['explicitlyTrashed'] is False)
+            )
         ]
-        if folder_list:
+        if len(folder_list) > 0:
             folder_id = folder_list[0]["id"]
         else:
             folder_id = self.mkdir(folder_name, parent_id)
