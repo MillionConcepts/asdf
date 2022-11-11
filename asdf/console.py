@@ -37,7 +37,7 @@ class ASDFGH(RegexHighlighter):
     base_style = "ASDF."
     highlights = [
         r"(?P<missing>(skipping))",
-        r"(?P<prep>(loaded|generated|found|converted))",
+        r"(?P<prep>(uploaded|loaded|generated|found|converted))",
         r"(?P<output>(wrote|completed))",
         r"(?<=[Z _])(?P<id>[R|L]\d[RGB]?)",
         r"(?P<id>(zcam|ZCAM)\d\d\d\d\d)",

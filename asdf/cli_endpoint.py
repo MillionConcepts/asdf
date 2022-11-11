@@ -167,8 +167,8 @@ def fdsa_initiate(
     do_empties: "de" = "True"
 ):
     """reprocesses and archives everything"""
-    if do_empties.title() in ("True", "False"):
-        do_empties = bool(do_empties.title())
+    if (argument := do_empties.title()) in ("True", "False"):
+        do_empties = True if argument == "True" else False
     console = ASDF_CONSOLE
     console.style = "FDSA"
     with console.status(
