@@ -370,6 +370,7 @@ def upload_bandset_to_gdrive(bandset, debug=False):
         wait_for_it(
             pool, results, ASDFLOG, message=f"uploaded "
         )
+        pool.terminate()
     url = f"https://drive.google.com/drive/folders/{obs_folder_id}"
     bandset.summary[
         "NAME"

@@ -1,3 +1,6 @@
+import re
+from pathlib import Path
+
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
 # NOTE: ignore any complaints from static analyzers about parameter annotations
@@ -150,6 +153,21 @@ def initialize_loggers():
         log.addHandler(ASDF_RPH)
 
 
+def check_successes(marslab_fn, roi_fn, logfile='logs/asdf.log'):
+    with open(logfile) as stream:
+        log = stream.readlines()
+    successes = [line for line in log if 'successfully processed' in line]
+    marslab_fn, roi_fn = map(lambda p: Path(p).name, (marslab_fn, roi_fn))
+    for success in successes:
+        marslab, roi = (
+            re.search('marslab.*csv', success).group(),
+            re.search(r'roi.*fits\.gz', success).group()
+        )
+        if (marslab == marslab_fn) and (roi == roi_fn):
+            return True
+    return False
+
+
 def fdsa_initiate(
     marslab_path,
     image_path,
@@ -164,11 +182,14 @@ def fdsa_initiate(
     image_regex: "ir" = ".*IOF_N.*",
     config=None,
     skip_pixmaps: "sp" = False,
-    do_empties: "de" = "True"
+    do_empties: "de" = "True",
+    skip_successes: "ss" = "False"
 ):
     """reprocesses and archives everything"""
     if (argument := do_empties.title()) in ("True", "False"):
         do_empties = True if argument == "True" else False
+    if (argument := skip_successes.title()) in ("True", "False"):
+        skip_successes = True if argument == "True" else False
     console = ASDF_CONSOLE
     console.style = "FDSA"
     with console.status(
@@ -205,6 +226,13 @@ def fdsa_initiate(
                 f":confused_face"
             )
             return
+        if skip_successes is True:
+            if check_successes(marslab_fn, roi_fn):
+                aprint(
+                    f"skip_successes = True and "
+                    f"{(marslab_fn, roi_fn)} in asdf success log, skipping..."
+                )
+                continue
         aprint(
             f"\n[bold italic]... fdsa: processing observation {ix + 1} of "
             f"{len(reprocess_pairs)}"
@@ -223,3 +251,4 @@ def fdsa_initiate(
             skip_pixmaps=skip_pixmaps,
         )
         console.style = "FDSA"
+        ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")

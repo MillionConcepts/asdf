@@ -107,7 +107,7 @@ def pretty_plot(
     tick_fp = mplf.FontProperties(fname=titillium, size=23)
     legend_fp = mplf.FontProperties(fname=titillium, size=23)
     tick_minor_fp = mplf.FontProperties(fname=titillium, size=12)
-    metadata_fp = mplf.FontProperties(fname=titillium, size=26)
+    metadata_fp = mplf.FontProperties(fname=titillium, size=22)
 
     # TODO: Handle the case where solar_elevation is not the same for all of
     #  the spectra in the input marslab file, e.g. a file composited across
@@ -328,14 +328,19 @@ def pretty_plot(
     )
     titleprint = partial(
         fig.axes[0].text,
-        x=0.5,
-        horizontalalignment="center",
+        horizontalalignment="left",
         verticalalignment="center",
         transform=fig.axes[0].transAxes,
         fontproperties=metadata_fp
     )
-    titleprint(s=make_pplot_annotation(data), y=-0.128)
-    titleprint(s=rapidlooks.CREDIT_TEXT, y=-0.173)
+    # titleprint(s=make_pplot_annotation(data), x=0.458, y=-0.132)
+    titleprint(s=make_pplot_annotation(data), x=-0.088, y=-0.1182)
+
+    # titleprint(s=rapidlooks.CREDIT_TEXT, x=0.348, y=-0.177)
+    titleprint(
+        s=rapidlooks.CREDIT_TEXT.replace("Credit:", ""), x=-0.088, y=-0.1520
+    )
+
     if plot_fn:
         fig.savefig(plot_fn, bbox_inches="tight")
 
@@ -348,7 +353,7 @@ def make_pplot_annotation(data):
     if 'SOL' in line.keys():
         annotation += f'sol {line["SOL"]}, '
     if 'SEQ_ID' in line.keys():
-        annotation += f'seq_id {line["SEQ_ID"][4:]}, '
+        annotation += f'zcam{line["SEQ_ID"][4:]}, '
     if 'RSM' in line.keys():
         annotation += f'rsm {line["RSM"]}'
     return annotation

@@ -28,10 +28,10 @@ def get_zcam_bandset(
         ]
     clusters = cluster_observations(
         observations, keep_caltarget=keep_caltarget
-    )
+    )[0]
     if rsm is not None:
-        clusters = {k: v for k, v in clusters.items() if rsm in v['RSM']()}
-    observation = list(clusters[0].values())[observation_ix]
+        clusters = {k: v for k, v in clusters.items() if rsm in v['RSM'].tolist()}
+    observation = list(clusters.values())[observation_ix]
     zband = ZcamBandSet(observation)
     if use_pixmaps is True:
         pixes = find_obs_metamaps(zband.metadata["PATH"], code="pix_map")[0]
