@@ -4,6 +4,7 @@ lightweight shared objects for formatting output to terminal
 import logging
 from functools import reduce
 from operator import add
+from pathlib import Path
 
 from rich.console import Console
 from rich.highlighter import RegexHighlighter
@@ -137,4 +138,6 @@ ASDF_RPH = RichProgressHandler(prog=ASDF_PROGRESS)
 ASDF_RPH_SPIN = RichProgressHandler(prog=ASDF_PROGRESS_SPIN)
 
 ASDFLOG = logging.getLogger(__name__)
-ASDFLOG.addHandler(logging.FileHandler("logs/asdf.log"))
+log_dir = Path(Path(__file__).parent.parent, "logs")
+log_dir.mkdir(exist_ok=True)
+ASDFLOG.addHandler(logging.FileHandler(Path(log_dir, "asdf.log")))
