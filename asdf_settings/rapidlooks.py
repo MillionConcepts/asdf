@@ -117,11 +117,11 @@ SKY_MASK = [
     {
         "function": skymask,
         "params": {
-            "percentile": 75,
+            "percentile": 77,
             "opening_radius": 3,
             "floodfill": True,
-            "coverage_cutoff": 0.93,
-            "extent_cutoff": 0.05
+            "coverage_cutoff": 0.8,
+            "extent_cutoff": 0.03
         },
         "colorfill": {"color": 0, "mask_alpha": 1},
         "pass": True,
@@ -236,8 +236,8 @@ RGB_BANDMAP = [
 
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
-CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
-# CATEGORIES = ["STRETCHY", "ENHANCED"]
+# CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
+CATEGORIES = ["STRETCHY", "ENHANCED"]
 ############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################
@@ -256,7 +256,6 @@ MODIFIED_STRETCHY_DEFAULTS = deepcopy(STRETCHY_DEFAULTS)
 
 SKYMASK_DCS_OPTIONS = {
     "mask": {"instructions": SKY_MASK + DARK_SHADOW_MASK}, "suffix": "masked",
-    "prefilter": {"function": centile_clip, "params": {"centiles": (1, 98)}}
 }
 
 # dictionary of all procedural looks to be generated. general syntax is:

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from copy import deepcopy
 from typing import Mapping
 
@@ -43,21 +44,28 @@ def make_recolored_bandmap_looks(looks, _, cmap: str):
 
 
 def glom_instruction(inst, part):
-    inst = deepcopy(part) | deepcopy(inst)
+    new = defaultdict(dict, deepcopy(inst))
     for k in part.keys():
         if not isinstance(part[k], Mapping):
+            new[k] = part[k]
             continue
+        new[k] |= deepcopy(part[k])
         if (new_inst := part[k].get("instructions")) is not None:
-            inst[k]["instructions"] = inst[k].get(
-                "instructions", []
-            ) + new_inst
+            if k not in inst.keys():
+                new[k]["instructions"] = new_inst
+            else:
+                old = inst[k].get("instructions", []).copy()
+                new[k]["instructions"] = old + new_inst
         if k == "params":
-            inst["params"] = inst.get("params", {}) | part[k]
+            new["params"] = inst.get("params", {}) | part[k]
             continue
         if (new_params := part[k].get("params")) is None:
             continue
-        inst[k]["params"] = inst[k].get("params", {}) | new_params
-    return inst
+        if k not in inst.keys():
+            new[k]["params"] = new_params
+        else:
+            new[k]["params"] = inst[k].get("params", {}) | new_params
+    return dict(new)
 
 
 def edit_looks(looks, defaults, settings, look_filter):

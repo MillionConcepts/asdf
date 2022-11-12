@@ -13,15 +13,24 @@ np.seterr(divide="ignore", invalid="ignore")
 def get_zcam_bandset(
     image_path,
     roi_path=None,
+    rsm=None,
+    seq_id=None,
     observation_ix=0,
     use_pixmaps=True,
     keep_caltarget=False,
     use_errmaps=True,
+    load=True
 ):
     observations = scan_zcam_files(image_path)
+    if seq_id is not None:
+        observations = observations.loc[
+            observations['SEQ_ID'].str.lower().str.contains(str(seq_id).lower())
+        ]
     clusters = cluster_observations(
         observations, keep_caltarget=keep_caltarget
     )
+    if rsm is not None:
+        clusters = {k: v for k, v in clusters.items() if rsm in v['RSM']()}
     observation = list(clusters[0].values())[observation_ix]
     zband = ZcamBandSet(observation)
     if use_pixmaps is True:
@@ -34,9 +43,9 @@ def get_zcam_bandset(
         if errors:
             zband.associate_metamaps(errors, code='iof_err')
             zband.load_metamaps(code="iof_err")
-
-    zband.load("all")
-    zband.bulk_debayer("all")
+    if load is True:
+        zband.load("all")
+        zband.bulk_debayer("all")
     if roi_path is not None:
         zband.rois = roi_path
         zband.load_rois()
