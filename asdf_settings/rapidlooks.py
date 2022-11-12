@@ -117,7 +117,7 @@ SKY_MASK = [
     {
         "function": skymask,
         "params": {
-            "percentile": 77,
+            "percentile": 70,
             "opening_radius": 3,
             "floodfill": True,
             "coverage_cutoff": 0.8,
@@ -236,8 +236,8 @@ RGB_BANDMAP = [
 
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
-# CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
-CATEGORIES = ["STRETCHY", "ENHANCED"]
+CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
+# CATEGORIES = ["STRETCHY", "ENHANCED"]
 ############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################
@@ -273,10 +273,10 @@ CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
 # and will also be linked in the Google Sheet if columns are made for them.
 THUMBNAILS = (
     "enhanced color L2_L5_L6",
-    "dcs L2_L5_L6",
+    "dcs L2_L5_L6 masked",
     "enhanced color R0R_R0G_R0B",
     "context image left",
     "context image right",
-    "dcs R6_R3_R1",
+    "dcs R6_R3_R1 masked",
 )
 THUMBNAIL_SIZE = (240, 330)
