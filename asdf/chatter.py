@@ -55,7 +55,7 @@ from asdf.scan import (
     add_public_waypoints_to_metadata,
     add_effective_taus,
     cluster_observations,
-    find_matching_observations,
+    find_matching_observations, find_obs_dtm,
 )
 from asdf_settings.metadata import (
     ROI_METADATA_FIELDS,
@@ -279,6 +279,25 @@ def input_roi_metadata(marslab_data, ci):
         for field, value in user_provided_metadata.items():
             marslab_data.loc[marslab_data["COLOR"] == region, field] = value
     return marslab_data
+
+
+def handle_dtm_checks(bandset, code="depthmap"):
+    dtm, dtm_metadata, source_metadata, dwarnings = find_obs_dtm(bandset, code)
+    if len(dwarnings) > 0:
+        for warning in dwarnings:
+            aprint("[bold purple]" + warning)
+    if dtm is None:
+        aprint(
+            f"[bold dark_orange]no matching {code}s found; "
+            f"cancelling {code} processing."
+        )
+        return
+    aprint(f"... found matching {code} for observation ...")
+    big = code.upper()
+    bandset.metadata[f"{big}_ARCHIVE"] = dtm_metadata['ARCHIVE_PATH'].iloc[0]
+    bandset.metadata[f"{big}_ARCHIVE"] = dtm_metadata['ARCHIVE_PATH'].iloc[0]
+    bandset.metadata[f"{big}_STEM"] = dtm_metadata['STEM'].iloc[0]
+    bandset.raw[code] = dtm
 
 
 def handle_map_checks(bandset,code="pix_map"):

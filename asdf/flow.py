@@ -1,25 +1,22 @@
 """
 top-level handler loop for asdf / fdsa
 """
+import os
+import warnings
 import zlib
 from functools import partial
 from operator import contains
-import os
 from pathlib import Path
-import warnings
 
-import matplotlib.figure
-from cytoolz.curried import keyfilter
-from marslab.compat.mertools import merspect_to_marslab
-from marslab.imgops.imgutils import mapfilter
 import matplotlib as mpl
+import matplotlib.figure
 import pandas as pd
+from dustgoggles.func import catch_interaction
 from rich.rule import Rule
 
 from asdf.asdf_utils import (
     null_marslab_data_section,
 )
-from dustgoggles.func import catch_interaction
 from asdf.chatter import (
     input_roi_metadata,
     handle_map_checks,
@@ -42,6 +39,8 @@ from asdf.zcam_bandset import ZcamBandSet
 from asdf_settings import (
     process, metadata as metadata_settings, rapidlooks
 )
+from marslab.compat.mertools import merspect_to_marslab
+from marslab.imgops.imgutils import mapfilter
 
 
 # TODO: add dry-run options for testing
@@ -156,6 +155,11 @@ def asdf_body(
         aprint(
             "[dark_orange]skip-errmaps flag active; skipping error map handling"
         )
+
+    if skip_rangemaps is not True:
+        aprint(Rule(" looking for error maps "))
+        with console.status("... handling error maps ...", spinner="star"):
+            handle_map_checks(bandset, code='iof_err')
 
     # handle ROI file conversion, ROI counting, user input per-ROI metadata
     if we_do_not_have_rois:

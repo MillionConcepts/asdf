@@ -4,14 +4,14 @@ of products
 """
 import os
 from collections import defaultdict
-from functools import reduce
+from functools import reduce, partial
 from operator import mul
 from pathlib import Path
 import re
 from typing import Union, Sequence
 from urllib.error import URLError
 
-from cytoolz.dicttoolz import valfilter
+from cytoolz.dicttoolz import valfilter, keyfilter
 from cytoolz.functoolz import curry
 from cytoolz.itertoolz import partition
 from dustgoggles.scrape import cached_ls, cached_exists
@@ -20,6 +20,8 @@ import numpy as np
 import pandas as pd
 from more_itertools import all_equal
 
+from asdf.dtm import parse_dtm_zip_fn, open_dtm_zipfile, \
+    load_rangemap_from_bytes
 from asdf_settings import sources
 from asdf.asdf_utils import dir_fs
 from dustgoggles.structures import listify
@@ -463,7 +465,61 @@ def match_in_dirs(search_dirs, product_path, predicate=None):
     return possible_matches
 
 
-def find_obs_metamaps(product_paths: Union[list, pd.DataFrame], code="pix_map"):
+def dtm_predicate(fn, sol, seq, ptype):
+    if ptype not in fn.name:
+        return False
+    try:
+       parsed = parse_dtm_zip_fn(fn)
+    except (ValueError, KeyError, IndexError):
+        return False
+    if (parsed['SOL'] == sol) and (parsed['SEQ_ID'] == seq):
+        return True
+    return False
+
+
+def find_obs_dtm(bandset, ptype="depthmap"):
+    product_path = Path(bandset.metadata['PATH'].iloc[0])
+    sol_dir = product_path.parent.parent
+    search_dirs = [Path(sol_dir, ptype)]
+    search_dirs += [
+        Path(root, sol_dir.name, ptype) for root in sources.META_ROOTS
+    ]
+    pred = partial(
+        dtm_predicate,
+        sol=bandset.metadata['SOL'].iloc[0],
+        seq=bandset.metadata['SEQ_ID'].iloc[0].lower(),
+        ptype=ptype
+    )
+    matches = match_in_dirs(search_dirs, product_path, pred)
+    warnings = []
+    if len(matches) == 0:
+        return None, [], [], []
+    if len(matches) > 1:
+        # TODO: better
+        warnings.append("too many dtm archives")
+    match = matches[0]
+    # TODO, maybe: don't open all the DTMs here? not really that big though
+    dtm_files, dtm_metadata, dtm_source_metadata = open_dtm_zipfile(match)
+    obs_dtm_metadata = dtm_metadata.loc[
+        dtm_metadata['RSM'] == bandset.metadata['RSM'].min()
+    ]
+    obs_dtms = keyfilter(
+        lambda k: k.endswith('tif') and k in obs_dtm_metadata['PATH'].tolist(),
+        dtm_files
+    )
+    if len(obs_dtms) == 0:
+        return None, [], [], []
+    return (
+        load_rangemap_from_bytes(next(iter(obs_dtms.values()))),
+        obs_dtm_metadata,
+        dtm_source_metadata,
+        warnings
+    )
+
+
+def find_obs_metamaps(
+    product_paths: Union[list, pd.DataFrame], code="pix_map"
+):
     if not code in ["pix_map", "iof_err", "rad_err"]:
         raise TypeError(f"metamap {code} is invalid")
     all_match_warnings = []
