@@ -118,10 +118,10 @@ SKY_MASK = [
         "function": skymask,
         "params": {
             "percentile": 70,
-            "opening_radius": 3,
+            'edge_params': {'sigma': 3},
+            "median": {'input': 5, 'segments': 5},
             "floodfill": True,
-            "coverage_cutoff": 0.8,
-            "extent_cutoff": 0.03
+            "cutoffs": {'coverage': 0.8, 'extent': 0.03, 'v': 0.9, 'h': 0.3},
         },
         "colorfill": {"color": 0, "mask_alpha": 1},
         "pass": True,
