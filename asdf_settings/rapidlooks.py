@@ -175,8 +175,7 @@ RGB_BANDMAP_THRESHOLD = [
 
 # RGB_BANDMAP_DEFAULTS are added to these
 # noinspection PyTypeChecker
-RGB_BANDMAP = [
-    {
+mafic_map = {
         # placing single quotes causes asdf to print the title verbatim
         "name": "'mafic bandmap: R0R/R1 BD910 R1/R5'",
         "params": {
@@ -232,7 +231,11 @@ RGB_BANDMAP = [
             },
         },
     }
-]
+mmap_unmasked = deepcopy(mafic_map)
+for channel in ("red", "green", "blue"):
+    del mmap_unmasked["params"][channel]["mask"]
+mmap_unmasked['name'] = "'mafic bandmap: R0R/R1 BD910 R1/R5 um'"
+RGB_BANDMAP = [mafic_map, mmap_unmasked]
 
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
@@ -273,10 +276,10 @@ CREDIT_TEXT = "Credit:NASA/JPL/ASU/MSSS/Cornell/WWU/MC"
 # and will also be linked in the Google Sheet if columns are made for them.
 THUMBNAILS = (
     "enhanced color L2_L5_L6",
-    "dcs L2_L5_L6 masked",
+    "dcs L2_L5_L6",
     "enhanced color R0R_R0G_R0B",
     "context image left",
     "context image right",
-    "dcs R6_R3_R1 masked",
+    "dcs R6_R3_R1",
 )
 THUMBNAIL_SIZE = (240, 330)
