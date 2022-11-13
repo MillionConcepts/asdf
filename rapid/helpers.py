@@ -1,12 +1,8 @@
-import warnings
-
 import numpy as np
-from rasterio.errors import NotGeoreferencedWarning
 
 from asdf.scan import find_obs_metamaps, cluster_observations, scan_zcam_files
 from asdf.zcam_bandset import ZcamBandSet
 
-warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
 np.seterr(divide="ignore", invalid="ignore")
 
 
