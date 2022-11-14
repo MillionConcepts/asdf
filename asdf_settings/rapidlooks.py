@@ -117,11 +117,12 @@ SKY_MASK = [
     {
         "function": skymask,
         "params": {
-            "percentile": 70,
-            'edge_params': {'sigma': 3},
+            "percentile": 75,
+            'edge_params': {'sigma': 5, 'edge_thresholds': (60, 110)},
             "median": {'input': 5, 'segments': 5},
+            "refit_params": {"cut": True, "cut_depth": 5},
             "floodfill": True,
-            "cutoffs": {'coverage': 0.8, 'extent': 0.03, 'v': 0.9, 'h': 0.3},
+            "cutoffs": {'coverage': 0.9, 'extent': 0.015, 'v': 0.9, 'h': 0.3},
         },
         "colorfill": {"color": 0, "mask_alpha": 1},
         "pass": True,
@@ -154,7 +155,6 @@ NATURAL = (
     {"bands": ("L0R", "L0G", "L0B")},
     {"bands": ("R0R", "R0G", "R0B")},
 )
-
 # STRETCHY_DEFAULTS are added to these
 STRETCHY = (
     {"bands": ("L2", "L5", "L6")},
@@ -162,7 +162,6 @@ STRETCHY = (
     {"bands": ("L0R", "L0G", "L0B")},
     {"bands": ("R6", "R3", "R1")},
 )
-
 # inline 'shadow mask' for the RGB bandmaps
 RGB_BANDMAP_THRESHOLD = [
     {
@@ -172,7 +171,6 @@ RGB_BANDMAP_THRESHOLD = [
         "send": False,
     },
 ]
-
 # RGB_BANDMAP_DEFAULTS are added to these
 # noinspection PyTypeChecker
 mafic_map = {
@@ -240,7 +238,7 @@ RGB_BANDMAP = [mafic_map, mmap_unmasked]
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
 CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
-# CATEGORIES = ["STRETCHY", "ENHANCED"]
+# CATEGORIES = ["BANDMAP", "STRETCHY"]
 ############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################
