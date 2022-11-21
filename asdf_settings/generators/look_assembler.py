@@ -17,8 +17,9 @@ def insert_name_elements(look_instruction):
         substitutions.append(("{look}", look_instruction.get("look")))
     if "{bands}" in name:
         bands = look_instruction.get("bands")
-        if "band_depth" in look_instruction.get("look"):
-            bands = [bands[0], bands[2], bands[1]]
+        if isinstance(look_instruction.get("look"), str):
+            if "band_depth" in look_instruction.get("look"):
+                bands = [bands[0], bands[2], bands[1]]
         substitutions.append(("{bands}", "_".join(bands)))
     if "{cmap}" in name:
         substitutions.append(

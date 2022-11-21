@@ -113,15 +113,14 @@ DARK_SHADOW_MASK = [
     }
 ]
 
+
 SKY_MASK = [
     {
         "function": skymask,
         "params": {
             "percentile": 75,
-            'edge_params': {'sigma': 5, 'edge_thresholds': (60, 110)},
-            "median": {'input': 5, 'segments': 5},
-            "refit_params": {"cut": True, "cut_depth": 5},
-            "floodfill": True,
+            "edge_params": {'maximum': 5, 'edge_thresholds': (60, 110)},
+            "trace_maximum": 5,
             "cutoffs": {'coverage': 0.9, 'extent': 0.015, 'v': 0.9, 'h': 0.3},
         },
         "colorfill": {"color": 0, "mask_alpha": 1},
@@ -129,7 +128,6 @@ SKY_MASK = [
         "send": True
     }
 ]
-
 
 #############################################################################
 #                      explicit rapidlook definitions
@@ -209,7 +207,7 @@ mafic_map = {
                 "postfilter": {
                     # "function": lambda array: np.zeros(array.shape)
                     "function": centile_clip,
-                    "params": {"centiles": (0, 98)},
+                    "params": {"centiles": (10, 98)},
                 },
             },
             "blue": {
@@ -223,7 +221,7 @@ mafic_map = {
                 "postfilter": {
                     # "function": lambda array: np.zeros(array.shape)
                     "function": centile_clip,
-                    "params": {"centiles": (0, 98)},
+                    "params": {"centiles": (10, 98)},
                 }
                 # postfilter with percentile clip maybe just on the top
             },
@@ -235,10 +233,10 @@ for channel in ("red", "green", "blue"):
 mmap_unmasked['name'] = "'mafic bandmap: R0R/R1 BD910 R1/R5 um'"
 RGB_BANDMAP = [mafic_map, mmap_unmasked]
 
+
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
 CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
-# CATEGORIES = ["BANDMAP", "STRETCHY"]
 ############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################
