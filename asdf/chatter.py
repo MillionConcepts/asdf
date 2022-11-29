@@ -257,6 +257,14 @@ def input_roi_metadata(marslab_data, ci):
             )
             if options is None:
                 continue
+        if field == "FEATURE_SUBTYPE":
+            if "FEATURE" not in constants.keys():
+                continue
+            if field not in (
+                FEATURE_EXCLUSIVE_ROI_FIELDS.get(constants["FEATURE"], [])
+            ):
+                continue
+            options = FEATURE_SUBTYPES[constants["FEATURE"]]
         constant_query = ci(
             metadata_choice_prompt,
             Text(f"Is the value of {field} the same for all ROIs?"),

@@ -28,7 +28,7 @@ LEGACY_METADATA_FIELDS = [
 
 # TODO: this can be removed shortly
 # treat these fields as "FEATURE_SUBTYPE" during fdsa
-LEGACY_SUBTYPE_FIELDS = ["ROCK_SURFACE", "SOIL_LOCATION"]
+LEGACY_SUBTYPE_FIELDS = []
 
 # fields relevant only to specific feature types. users will only be queried
 # about these fields if they have set FEATURE = the key of the list. Don't put
@@ -63,9 +63,9 @@ ROI_METADATA_FIELDS = (
 # {title} is replaced with the title of the ROI, currently always its color
 # {field} is replaced with the field name
 ROI_METADATA_FIELD_PROMPTS = {
-    "FLOAT": "Is / are the rock(s) associated with {title} ROI(s) a {field}?",
     "FEATURE": "What category of {field} is / are {title} ROI(s)?",
-    "FEATURE_SUBTYPE": "What subtype of that feature are {title} ROI(s)?",
+    "FEATURE_SUBTYPE": "What category of {field} are {title} ROI(s)?",
+    "FLOAT": "Is / are the rock(s) associated with {title} ROI(s) a {field}?",
     "DESCRIPTION": "Enter any additional {field} for {title} ROI(s)"
     "(press Enter to skip)",
     "TARGET": "What named {field} do / does {title} ROI(s) cover? "
@@ -79,7 +79,7 @@ ROI_METADATA_FIELD_PROMPTS = {
 }
 
 FEATURE_SUBTYPES = {
-    "soil": {
+    "soil": (
         "undisturbed regolith",
         "on rock",
         "wheel track compressed",
@@ -87,8 +87,8 @@ FEATURE_SUBTYPES = {
         "disturbed surface (not wheel track)",
         "bedform crest/slope",
         "on hardware",
-    },
-    "rock": {
+    ),
+    "rock": (
         "bright natural surface",
         "dark natural surface",
         "thick dust",
@@ -98,7 +98,7 @@ FEATURE_SUBTYPES = {
         "coating (not dust)",
         "clast/inclusion",
         "tailings",
-    }
+    )
 }
 
 # restrictions, if any, on value choices for these fields.
