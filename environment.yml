@@ -2,7 +2,7 @@ name: asdf
 channels:
   - conda-forge
 dependencies:
-  - python=3.9
+  - python=3.10
   - numpy
   - dustgoggles
   - pandas
@@ -12,7 +12,6 @@ dependencies:
   - pdr
   - clize
   - ipython
-  - pvl
   - python-Levenshtein
   - scipy
   - opencv
