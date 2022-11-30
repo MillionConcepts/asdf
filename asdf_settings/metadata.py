@@ -28,7 +28,7 @@ LEGACY_METADATA_FIELDS = [
 
 # TODO: this can be removed shortly
 # treat these fields as "FEATURE_SUBTYPE" during fdsa
-LEGACY_SUBTYPE_FIELDS = []
+LEGACY_SUBTYPE_FIELDS = ["ROCK_SURFACE", "SOIL_LOCATION"]
 
 # fields relevant only to specific feature types. users will only be queried
 # about these fields if they have set FEATURE = the key of the list. Don't put

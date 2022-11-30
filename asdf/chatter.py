@@ -1,22 +1,22 @@
 """
 secondary-level handlers & wrappers for asdf workflow
 """
-import os
 from itertools import chain
+import os
 from pathlib import Path
 from typing import Callable
 import warnings
 
-import pandas as pd
 from cytoolz.dicttoolz import valfilter
+from dustgoggles.func import pass_parameters
 from dustgoggles.scrape import cached_exists
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.poolutils import wait_for_it
+import pandas as pd
 from pathos.multiprocessing import ProcessPool
 from rich.rule import Rule
 from rich.text import Text
 
-from dustgoggles.func import pass_parameters
 from asdf.console import (
     ASDF_CONSOLE,
     ASDF_PROGRESS_SPIN,
@@ -660,7 +660,10 @@ def fdsa_insert(marslab_data, prototype):
             ).append_text(Text(str(proto_value), style="bold hot_pink"))
             # TODO: can cut this shortly
             if field in LEGACY_SUBTYPE_FIELDS:
-                target = "FEATURE_SUBTYPE"
+                if isinstance(proto_value, str):
+                    target = "FEATURE_SUBTYPE"
+                else:
+                    continue
             else:
                 target = field
             marslab_data.loc[
