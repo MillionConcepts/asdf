@@ -60,6 +60,7 @@ def asdf_body(
     skip_pixmaps=False,
     skip_errmaps=True,
     recreate_from=None,
+    seriously_no_images=False
 ):
     """
     body component of the asdf command line function -- can be called multiple
@@ -257,6 +258,11 @@ def asdf_body(
             "[dark_orange]skip-rapidlooks flag active; skipping "
             "rapidlook generation"
         )
+    elif seriously_no_images:
+        aprint(
+            "[dark_orange]seriously-no-images flag active; skipping "
+            "rapidlook generation"
+        )
     else:
         aprint(Rule(" generating rapidlooks "))
         look_instructions = compile_looks()
@@ -298,15 +304,23 @@ def asdf_body(
 
     # make context images and write them out
     if bandset.rois or bandset.pixmaps:
-        aprint(Rule(" making context images "))
-        with ASDF_CONSOLE.status("... processing context ...", spinner="star"):
-            bandset.make_context_images(verbose=True)
-            if not (skip_rapidlooks and not upload):
-                thumbnail_staging |= pick_thumbs(bandset.looks)
-            save_images(
-                outpath=Path(outpath, "data"),
-                basename=bandset.name + bandset.suffix,
+        if seriously_no_images:
+            aprint(
+                "[dark_orange]seriously-no-images flag active; skipping "
+                "context image generation"
             )
+        else:
+            aprint(Rule(" making context images "))
+            with ASDF_CONSOLE.status(
+                "... processing context ...", spinner="star"
+            ):
+                bandset.make_context_images(verbose=True)
+                if not (skip_rapidlooks and not upload):
+                    thumbnail_staging |= pick_thumbs(bandset.looks)
+                save_images(
+                    outpath=Path(outpath, "data"),
+                    basename=bandset.name + bandset.suffix,
+                )
 
     bandset.purge()
 

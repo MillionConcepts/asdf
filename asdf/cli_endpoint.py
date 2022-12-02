@@ -30,6 +30,7 @@ def asdf_initiate(
     config=None,
     skip_pixmaps: "sp" = False,
     skip_errmaps: "se" = True,
+    seriously_no_images: "sn" = False
 ):
     """
     processes and archives everything
@@ -112,7 +113,8 @@ def asdf_initiate(
         console,
         save_plain_images,
         skip_pixmaps,
-        skip_errmaps
+        skip_errmaps,
+        seriously_no_images
     )
     from asdf.flow import asdf_body
 
@@ -183,7 +185,8 @@ def fdsa_initiate(
     config=None,
     skip_pixmaps: "sp" = False,
     do_empties: "de" = "True",
-    skip_successes: "ss" = "False"
+    skip_successes: "ss" = "False",
+    seriously_no_images: "sn" = False
 ):
     """reprocesses and archives everything"""
     if (argument := do_empties.title()) in ("True", "False"):
@@ -249,6 +252,7 @@ def fdsa_initiate(
             recreate_from=marslab_fn,
             noninteractive=True,
             skip_pixmaps=skip_pixmaps,
+            seriously_no_images=seriously_no_images
         )
         console.style = "FDSA"
         ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")
