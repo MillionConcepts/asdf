@@ -201,7 +201,7 @@ def ask_user_about_roi(
     roi_metadata = {}
     for field in metadata_fields:
         # ignore legacy fields
-        if field in LEGACY_METADATA_FIELDS:
+        if field in LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS:
             continue
         # fill 'empty' fields like notes
         if field in EMPTY_METADATA_FIELDS:
