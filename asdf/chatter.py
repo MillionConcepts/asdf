@@ -243,8 +243,10 @@ def input_roi_metadata(marslab_data, ci):
     for field in ROI_METADATA_FIELDS:
         # TODO: this may all be excessively sloppy
         options = None
-        if field in chain.from_iterable(
-            [EMPTY_METADATA_FIELDS + LEGACY_METADATA_FIELDS]
+        if field in (
+            EMPTY_METADATA_FIELDS
+            + LEGACY_METADATA_FIELDS
+            + LEGACY_SUBTYPE_FIELDS
         ):
             continue
         if is_feature_mismatch(constants, field):
