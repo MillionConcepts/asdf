@@ -224,7 +224,7 @@ def convert_for_plot(
             )
         except IOError:
             marslab_data = pd.read_csv(fn, index_col=None, na_values="-")
-        data = data.append(marslab_data, ignore_index=True)
+        data = pd.concat([data, marslab_data], ignore_index=True)
     data = scale_eyes(data, method=scale_method)
     data.replace(np.nan, "-", inplace=True)
     return data
