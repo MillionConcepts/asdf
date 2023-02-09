@@ -106,29 +106,97 @@ def parse_zcam_rc_fn(path):
         "FILTER": split[1],
         "VERSION": int(split[4]),
         "PRODUCT_TYPE": split[0].upper(),
-        "PATH": str(path)
+        "PATH": str(path),
+        "THUMBNAIL": False
     }
+
+
+def parse_zcam_mosaic_fn(mosaic_fn):
+    mosaic_path = Path(mosaic_fn)
+    # multispectral mosaics
+    try:
+        parsed = parse_zcam_standard_image_fn(mosaic_path)
+        parsed |= {
+            "PRODUCT_TYPE": "mosaic",
+            "MOSAIC_TYPE": "nonstrategic",
+            # TODO: maybe not always?
+            "MOSAIC_SUBTYPE": "multispectral",
+            "LTST": "UNK"
+        }
+        # TODO: presumably there are others
+        if "CYL" in mosaic_path.name:
+            parsed["PROJ"] = "CYL"
+        return parsed
+    except KeyError:
+        pass
+    if not mosaic_path.name.startswith("CZ"):
+        raise ValueError("unknown mosaic type.")
+    # strategic mosaics
+    parts = mosaic_path.stem.split("_")
+    parsed = {
+        "SOL": int(parts[1][3:]),
+        "SITE": "UNK",
+        "DRIVE": "UNK",
+        "CTIME": -9999,
+        "SEQ_ID": parts[2],
+        "ZOOM": parts[3],
+        "FILTER": parts[4],
+        "UNKNOWN_2": parts[6],
+        "PROJ": parts[7],
+        "PATH": mosaic_path.absolute(),
+        "PRODUCT_TYPE": "mosaic",
+        "MOSAIC_TYPE": "strategic",
+        "MOSAIC_SUBTYPE": parts[5],
+        "THUMBNAIL": "N",
+        "LTST": "UNK"
+    }
+    target_name = []
+    for part in parts[8:]:
+        if "flag" in part:
+            parsed["FLAG"] = part
+            parsed["MOSAIC_SUBTYPE"] += f"_{part}"
+        elif part.isnumeric():
+            parsed["VERSION"] = part
+        else:
+            target_name.append(part)
+    if parsed["FILTER"] == "L0R0":
+        parsed["MOSAIC_SUBTYPE"] += "_L0R0"
+    return parsed | {"TARGET": "_".join(target_name)}
 
 
 def parse_zcam_fn(path):
     """use mp.parse rules to get basic file identifiers"""
-    filename = Path(path).name
+    path = Path(path)
+    filename = path.name
     try:
+        if filename.endswith("IMG") and (
+            # strategic mosaics
+            filename.startswith("CZ")
+            # multispectral mosaics
+            or (filename[-9:-6] == "LUQ")
+            # TODO: presumably other projections can exist
+            or (filename[-8:-5] == "CYL")
+        ):
+            return parse_zcam_mosaic_fn(path)
         if filename.startswith("rc_"):
             return parse_zcam_rc_fn(path)
-        values = list(juxt(*ZCAM_FN_PARSERS.values())(filename))
-        # chop off currently not-used-as-specified stereo counter
-        values[5] = values[5][1:]
-        # just keep filter name, not SIS-nominal wavelength
-        values[6] = values[6][:2]
-        parsed = {
-            field: value
-            for field, value in zip(ZCAM_FN_PARSERS.keys(), values)
-        }
-        parsed["PATH"] = str(path)
-        return parsed
+        return parse_zcam_standard_image_fn(path)
     except (KeyError, IndexError, ValueError):
         return None
+
+
+def parse_zcam_standard_image_fn(path):
+    values = list(juxt(*ZCAM_FN_PARSERS.values())(path.name))
+    # chop off currently not-used-as-specified stereo counter
+    values[5] = values[5][1:]
+    # just keep filter name, not SIS-nominal wavelength
+    values[6] = values[6][:2]
+    parsed = {
+        field: value
+        for field, value in zip(ZCAM_FN_PARSERS.keys(), values)
+    }
+    parsed["PATH"] = str(path)
+    return parsed
 
 
 def pix_reference(thing):

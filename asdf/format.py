@@ -14,6 +14,7 @@ from marslab.imgops.imgutils import absolutely_destroy
 from marslab.imgops.regions import count_rois_on_image, roi_stats
 from marslab.imgops.render import make_thumbnail, simple_figure
 import matplotlib.figure
+import matplotlib.font_manager as mplf
 import numpy as np
 import pandas as pd
 
@@ -40,10 +41,13 @@ def compile_looks():
 def folder_names(bandset):
     sol_folder_name = str(bandset.metadata["SOL"].iloc[0]).zfill(4)
     obs_folder_name = (
-        bandset.metadata["SEQ_ID"].iloc[0].lower()
-        + f" {bandset.metadata['NAME'].iloc[0]}"
-        + f" RSM {bandset.metadata['RSM'].iloc[0]}"
+          bandset.metadata["SEQ_ID"].iloc[0].lower()
+          + f" {bandset.metadata['NAME'].iloc[0]}"
     )
+    if bandset.metadata['PRODUCT_TYPE'].iloc[0] == 'mosaic':
+        obs_folder_name += " mosaics"
+    else:
+        obs_folder_name += f" RSM {bandset.metadata['RSM'].iloc[0]}"
     return sol_folder_name, obs_folder_name
 
 
@@ -65,12 +69,13 @@ def make_asdf_outpath(output, bandset):
 
 def make_bandset_annotation(metadata):
     line = metadata.iloc[0]
-    return (
-        f"{line['NAME']}, "
-        f"sol {line['SOL']}, "
-        f"seq_id {line['SEQ_ID'][4:]}, "
-        f"rsm {line['RSM']}"
-    )
+    annotation = ""
+    if line["NAME"] != "":
+        annotation += f"{line['NAME']}, "
+    annotation += f"sol {line['SOL']}, seq_id {line['SEQ_ID'][4:]}"
+    if 'RSM' in line.index:
+        annotation += ", rsm {line['RSM']}"
+    return annotation
 
 
 def save_plainly(look, filename, outpath):
@@ -91,12 +96,12 @@ def annotate_and_save(title, annotation, look, filename, outpath):
     # TODO: decide if these annotation things should live on zcambandset --
     #  this is not urgent. I think _maybe_ they should be separate.
     if not isinstance(look, matplotlib.figure.Figure):
-        print('beeeeep')
         look = simple_figure(look)
-    ax = look.axes[0]
-    render_figure_labels(ax, title, annotation)
+    render_figure_labels(look.axes[0], title, annotation)
+    image_shape = look.axes[0].get_images()[0].get_size()
+    dpi = round(0.000146 * image_shape[0] * image_shape[1])
     look.savefig(
-        Path(outpath, filename), dpi=275, bbox_inches="tight", pad_inches=0
+        Path(outpath, filename), dpi=dpi, bbox_inches="tight", pad_inches=0
     )
     absolutely_destroy(look)
     return 0
@@ -110,16 +115,17 @@ def render_figure_labels(ax, title, annotation):
         verticalalignment="center",
         transform=ax.transAxes,
     )
-    render(
-        y=rapidlooks.TITLE_POSITION,
-        s=title,
-        fontproperties=rapidlooks.TITLE_FONT,
-    )
-    render(
-        y=rapidlooks.ANNOTATION_POSITION,
-        s=annotation,
-        fontproperties=rapidlooks.ANNOTATION_FONT,
-    )
+    image_shape = ax.get_images()[0].get_size()
+    image_size = image_shape[0] * image_shape[1]
+    t_font = mplf.FontProperties(fname=rapidlooks.TITILLIUM, size=11.2)
+    a_font = mplf.FontProperties(fname=rapidlooks.TITILLIUM, size=8.8)
+    if image_shape[0] / image_shape[1] > 0.6:
+        t_x, t_y, a_x, a_y = 0.5, -0.028, 0.5, -0.088
+    else:
+        t_x, t_y, a_x, a_y = 0.5, -0.1, 0.5, -0.25
+        annotation = annotation.replace("\n", " -- ")
+    render(x=t_x, y=t_y, s=title, fontproperties=t_font)
+    render(x=a_x, y=a_y, s=annotation, fontproperties=a_font)
 
 
 def clean_sequence_id(seq_id):

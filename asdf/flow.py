@@ -1,25 +1,22 @@
 """
 top-level handler loop for asdf / fdsa
 """
+import os
+import warnings
 import zlib
 from functools import partial
 from operator import contains
-import os
 from pathlib import Path
-import warnings
 
-import matplotlib.figure
-from cytoolz.curried import keyfilter
-from marslab.compat.mertools import merspect_to_marslab
-from marslab.imgops.imgutils import mapfilter
 import matplotlib as mpl
+import matplotlib.figure
 import pandas as pd
+from dustgoggles.func import catch_interaction
 from rich.rule import Rule
 
 from asdf.asdf_utils import (
     null_marslab_data_section,
 )
-from dustgoggles.func import catch_interaction
 from asdf.chatter import (
     input_roi_metadata,
     handle_map_checks,
@@ -36,15 +33,95 @@ from asdf.format import (
     compile_looks,
     add_image_hashes,
 )
-from asdf.network import upload_asdf_analysis
+from asdf.network import upload_asdf_analysis, upload_rapidlooks
 from asdf.pretty import name_prompt
 from asdf.zcam_bandset import ZcamBandSet
-from asdf_settings import (
-    process, metadata as metadata_settings, rapidlooks
-)
+from asdf.zcam_mosaic_bandset import ZcamMosaicBandSet
+from asdf_settings import process, metadata as metadata_settings, rapidlooks
+from marslab.compat.mertools import merspect_to_marslab
+from marslab.imgops.imgutils import mapfilter
 
 
 # TODO: add dry-run options for testing
+
+
+def process_mosaic(
+    observation,
+    roi_path,
+    output,
+    upload,
+    skip_rapidlooks,
+    debug,
+    console,
+    save_plain_images,
+    seriously_no_images,
+    ci
+):
+    if observation["MOSAIC_TYPE"].iloc[0] == "strategic":
+        aprint(
+            "Sorry, strategic mosaics are not currently supported.",
+            style="bold dark_orange",
+        )
+        return
+    if roi_path is not None:
+        aprint(
+            "Sorry, ROI counting is not supported on mosaics.",
+            style="bold dark_orange",
+        )
+        return
+    aprint(
+        f"[dark_turquoise]NOTE: entering truncated processing pipeline for "
+        f"mosaics"
+    )
+    bandset = ZcamMosaicBandSet(observation)
+    bandset.metadata["CREATOR"] = os.getlogin()
+    bandset.metadata["NAME"] = ci(name_prompt)
+    # hacky placeholder for uploads
+    bandset.summary = {"NAME": ""}
+    outpath = make_asdf_outpath(output, bandset)
+    aprint(f"[bold green]NOTE: files will be written to {outpath}")
+    aprint(Rule(" loading images "))
+    with console.status("", spinner="star"):
+        bandset.load("all")
+    mpl.use("agg")
+    if skip_rapidlooks:
+        aprint(
+            "[dark_orange]skip-rapidlooks flag active; skipping "
+            "rapidlook generation"
+        )
+    elif seriously_no_images:
+        aprint(
+            "[dark_orange]seriously-no-images flag active; skipping "
+            "rapidlook generation"
+        )
+    else:
+        aprint(Rule(" generating and writing rapidlooks "))
+        save_images = partial(
+            save_looks,
+            bandset,
+            Path(outpath, "browse"),
+            bandset.name,
+            plain=save_plain_images,
+        )
+        look_instructions = compile_looks()
+        with ASDF_PROGRESS as prog:
+            ASDF_RPH.task_id = prog.add_task("", total=len(look_instructions) * 2)
+            # suppressing irrelevant warnings from numpy about divides-by-zero
+            # and matplotlib about opening a bunch of figures
+            for instruction in look_instructions:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    bandset.make_look_set([instruction])
+                save_images()
+                bandset.purge("looks")
+            prog.remove_task(ASDF_RPH.task_id)
+        bandset.purge()
+        if upload is True:
+            aprint(Rule(" uploading rapidlooks "))
+            upload_rapidlooks(bandset, debug)
+    aprint("\n:star: ... all done ... :star:", style="bold orchid1")
+
+
 def asdf_body(
     observation,
     roi_path=None,
@@ -60,15 +137,30 @@ def asdf_body(
     skip_pixmaps=False,
     skip_errmaps=True,
     recreate_from=None,
-    seriously_no_images=False
+    seriously_no_images=False,
 ):
     """
     body component of the asdf command line function -- can be called multiple
     times from asdf_hello in some cases.
     """
+    # wrapper that suppresses input calls in non-interactive mode
+    ci = partial(catch_interaction, noninteractive)
 
     # do we have an roi file? if so, turn passed string into a Path
     roi_path = Path(roi_path) if roi_path else None
+    if observation["PRODUCT_TYPE"].iloc[0] == "mosaic":
+        return process_mosaic(
+            observation,
+            roi_path,
+            output,
+            upload,
+            skip_rapidlooks,
+            debug,
+            console,
+            save_plain_images,
+            seriously_no_images,
+            ci
+        )
     # ok? great. initialize BandSet object from these paths
     aprint(Rule(" gathering metadata "))
     if recreate_from:
@@ -96,9 +188,6 @@ def asdf_body(
     # do we have any ROIs? maybe not? there are lots of things we don't
     # do if we haven't been passed an ROI file.
     we_do_not_have_rois = (roi_path is None) and (merspect is None)
-
-    # wrapper that suppresses input calls in non-interactive mode
-    ci = partial(catch_interaction, noninteractive)
 
     # get observation name
     if recreate_from:
@@ -142,8 +231,10 @@ def asdf_body(
 
     if skip_pixmaps is not True:
         aprint(Rule(" looking for pixel flag maps "))
-        with console.status("... handling pixel flag maps ...", spinner="star"):
-            handle_map_checks(bandset,code='pix_map')
+        with console.status(
+            "... handling pixel flag maps ...", spinner="star"
+        ):
+            handle_map_checks(bandset, code="pix_map")
     else:
         aprint(
             "[dark_orange]skip-pixmaps flag active; skipping pixel flag map handling"
@@ -152,7 +243,7 @@ def asdf_body(
     if skip_errmaps is not True:
         aprint(Rule(" looking for error maps "))
         with console.status("... handling error maps ...", spinner="star"):
-            handle_map_checks(bandset,code='iof_err')
+            handle_map_checks(bandset, code="iof_err")
     else:
         aprint(
             "[dark_orange]skip-errmaps flag active; skipping error map handling"
@@ -299,7 +390,6 @@ def asdf_body(
                 thumbnail_staging |= pick_thumbs(bandset.looks)
             save_images(outpath=Path(outpath, "browse"), basename=bandset.name)
             prog.remove_task(ASDF_RPH.task_id)
-
         bandset.purge("looks")
 
     # make context images and write them out

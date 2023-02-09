@@ -215,25 +215,26 @@ def format_observation(observation: pd.DataFrame):
     elif constant_dict.get("FRAME_TYPE") == "MONO":
         tailtext.append("repointed stereo")
     # TODO: this colorizing gets overwritten by the default table header style
-    if constant_dict.get("COMPLETION") != "COMPLETE_CHECKSUM_PASS":
+    if constant_dict['PRODUCT_TYPE'] == 'mosaic':
+        tailtext.append("mosaic", style="dark_turquoise")
+    elif constant_dict.get("COMPLETION") != "COMPLETE_CHECKSUM_PASS":
         tailtext.append(", ")
         tailtext.append("contains partial(s)", style="dark_orange")
     if constant_dict.get("THUMBNAIL") in ["T", "Y"]:
         tailtext.append(", ")
         tailtext.append("thumbnails", style="dark_orange")
     headline_keys = ["SOL", "SEQ_ID", "SITE", "DRIVE"]
-
     headline = Text(
         ", ".join(
             key + " " + str(constant_dict.get(key)) for key in headline_keys
         )
     )
-
-    if constant_dict.get("LTST"):  # single simultaneous stereo pair case
-        starting_ltst = constant_dict["LTST"]
-    else:
-        starting_ltst = filterframe["LTST"].iloc[0]
-    tailtext.append(", starting LTST " + str(starting_ltst))
+    if constant_dict['PRODUCT_TYPE'] != 'mosaic':
+        if constant_dict.get("LTST"):  # single simultaneous stereo pair case
+            starting_ltst = constant_dict["LTST"]
+        else:
+            starting_ltst = filterframe["LTST"].iloc[0]
+        tailtext.append(", starting LTST " + str(starting_ltst))
     return headline, tailtext, printframe
 
 

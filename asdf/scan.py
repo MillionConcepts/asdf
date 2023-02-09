@@ -61,16 +61,21 @@ def skim_products(
             )
             products = filtered_products
     ASDFLOG.info("... skimming headers for grouping information ...")
-    products = products.sort_values(by="CTIME").reset_index(drop=True)
+    products = products.sort_values(
+        by=["CTIME", "FILTER"]
+    ).reset_index(drop=True)
     skim_results = []
     bad_files = []
     keep_paths = []
-    for product in products["PATH"]:
+    for _, product in products.iterrows():
+        if product["PRODUCT_TYPE"] == "mosaic":
+            keep_paths.append(product['PATH'])
+            continue
         try:
-            skim_results.append(aux_skimmer(product))
-            keep_paths.append(product)
+            skim_results.append(aux_skimmer(product['PATH']))
+            keep_paths.append(product['PATH'])
         except (FileNotFoundError, TypeError, KeyError, SyntaxError) as _error:
-            bad_files.append(product)
+            bad_files.append(product['PATH'])
     if len(bad_files) > 0:
         ASDFLOG.warning(
             f"... only {str(len(skim_results))} "
@@ -186,6 +191,15 @@ def cluster_observations(
         if target_file and (target_file not in group["PATH"].values):
             continue
         sol, seq_id, product_type, thumb = group_ix
+        if product_type == "mosaic":
+            # TODO: figure out if this ever needs to be more complicated
+            mosaic_groups = group.groupby("MOSAIC_SUBTYPE")
+            for subtype, mgroup in mosaic_groups:
+                name = "_".join(
+                    [format(sol, "0>4"), seq_id, product_type, subtype]
+                )
+                observations[name] = mgroup
+            continue
         if keep_broadband is False:
             if group["FILTER"].isin(("L0", "R0")).all() or (
                 int(seq_id[4:]) > 5000

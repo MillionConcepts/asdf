@@ -23,6 +23,7 @@ import pandas as pd
 import pydrive2.files
 from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import ClientError
+from cytoolz import merge
 from dustgoggles.pivot import itemize_numpy
 
 # TODO: handling authentication differently in gspread and pydrive
@@ -314,7 +315,7 @@ class DriveBot(GoogleDrive):
         return folder_id
 
 
-def upload_bandset_to_gdrive(bandset, debug=False):
+def upload_bandset_to_gdrive(bandset, debug=False, no_data_folder=False):
     # shuffling is a silly hack to speed up parallel uploads
     shuffle(bandset.local_files)
     # id of root folder
@@ -329,14 +330,14 @@ def upload_bandset_to_gdrive(bandset, debug=False):
     # remove the default copy suffixes, etc.
     sol_folder_id = drivebot.cd(sol_folder_name, root)
     obs_folder_id = drivebot.cd(obs_folder_name, sol_folder_id)
-    data_folder_id = drivebot.cd("data", obs_folder_id)
-    browse_folder_id = drivebot.cd("browse", obs_folder_id)
-    pixmap_folder_id = drivebot.cd("pixmaps", data_folder_id)
+    subfolders = {}
+    if no_data_folder is not True:
+        subfolders['data'] = drivebot.cd("data", obs_folder_id)
+        subfolders['pixmaps'] = drivebot.cd("pixmaps", subfolders['data'])
+    subfolders['browse'] = drivebot.cd("browse", obs_folder_id)
     aprint(f"uploading all files to {sol_folder_name}/{obs_folder_name}")
-    title_checksum_dict = (
-        drivebot.get_checksums(data_folder_id)
-        | drivebot.get_checksums(pixmap_folder_id)
-        | drivebot.get_checksums(browse_folder_id)
+    title_checksum_dict = merge(
+        drivebot.get_checksums(folder_id) for folder_id in subfolders.values()
     )
     if THREADS.get("upload") is not None:
         from multiprocessing import Pool
@@ -352,11 +353,11 @@ def upload_bandset_to_gdrive(bandset, debug=False):
             )
             continue
         if "pixmap" in file:
-            folder_id = pixmap_folder_id
+            folder_id = subfolders["pixmap"]
         elif "data" in Path(file).parts:
-            folder_id = data_folder_id
+            folder_id = subfolders["data"]
         elif "browse" in Path(file).parts:
-            folder_id = browse_folder_id
+            folder_id = subfolders["browse"]
         else:
             raise ValueError("invalid name")
         if pool is not None:
@@ -367,9 +368,7 @@ def upload_bandset_to_gdrive(bandset, debug=False):
             drivebot.cp(file, folder_id)
             ASDFLOG.info(f"uploaded {file}")
     if pool is not None:
-        wait_for_it(
-            pool, results, ASDFLOG, message=f"uploaded "
-        )
+        wait_for_it(pool, results, ASDFLOG, message=f"uploaded ")
         pool.terminate()
     url = f"https://drive.google.com/drive/folders/{obs_folder_id}"
     bandset.summary[
@@ -483,3 +482,22 @@ def upload_asdf_analysis(
                 + str(api_error),
                 style="bold red",
             )
+
+
+def upload_rapidlooks(bandset, debug):
+    aprint("... uploading rapidlooks to Google Drive space ...")
+    with ASDF_PROGRESS as prog:
+        ASDF_RPH.task_id = prog.add_task(
+            "",
+            total=len(bandset.local_files) + 1,
+        )
+        try:
+            upload_bandset_to_gdrive(bandset, debug, no_data_folder=True)
+            aprint("completed Google Drive upload")
+        except (pydrive2.files.ApiRequestError, socket.timeout) as api_error:
+            aprint(
+                ":confused_face: Sorry, couldn't upload files to drive: "
+                + str(api_error),
+                style="bold red",
+            )
+        prog.remove_task(ASDF_RPH.task_id)
