@@ -146,6 +146,10 @@ def crop_outer(array):
     return crop(array, (nzx.min(), nzx.max(), nzy.min(), nzy.max()))
 
 
+def concat_mosaic_fn(sol, seq_id, eye):
+    return f"sol{str(sol).zfill(4)}_{seq_id.lower()}_{eye.lower()}_mosaic.fits"
+
+
 def make_eye_mosaics(eye, tiff_info):
     eye_name = {"L": "left", "R": "right"}[eye]
     available_bands = tiff_info["band"].tolist()
@@ -159,7 +163,8 @@ def make_eye_mosaics(eye, tiff_info):
     ref_paths, ref_fovs = ref_slice["path"].tolist(), ref_slice["fov"]
     _, ref_pto_file = zcam_pto_gen(ref_paths, float(np.mean(ref_fovs)))
     hugin_assistant(ref_pto_file)
-    pano_modify(ref_pto_file, canvas="AUTO")
+    pano_modify(ref_pto_file, can
+    vas="AUTO")
     remove_hugin_crop_instruction(ref_pto_file)
     with open(ref_pto_file) as stream:
         ref_text = stream.read()
@@ -218,14 +223,13 @@ def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
     )
     meta_hdu.name = "metadata"
     hdus.append(meta_hdu)
-    mosaic_fn = (
-        f"SOL{str(meta_hdu.data['SOL'][0]).zfill(4)}_"
-        f"{meta_hdu.data['SEQ_ID'][0]}_"
-        f"{meta_hdu.data['BAND'][0][0]}_mosaic.fits"
-    )
+
     hdul = fits.HDUList(hdus)
     if outpath is None:
         outpath = Path(list(eye_pto_files.values())[0]).parent
+    mosaic_fn = concat_mosaic_fn(
+        meta_hdu.data['SOL'][0], meta_hdu.data['SEQ_ID'][0], eye
+    )
     if Path(outpath, mosaic_fn).exists():
         Path(outpath, mosaic_fn).unlink()
     hdul.writeto(Path(outpath, mosaic_fn))
@@ -249,7 +253,7 @@ def simple_fits_load(path, metadata, bands, precached=None):
     return arrays
 
 
-class ZcamMosaicBandSet(BandSet):
+class ZMosaicBandSet(BandSet):
     def __init__(self, mosaic_fits, namestem=""):
         # TODO, maybe: assess whether this holds too much stuff in memory
         self.precached = fits.open(mosaic_fits)

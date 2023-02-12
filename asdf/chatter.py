@@ -724,3 +724,29 @@ def complain_about_pixmap_counts(quality_df):
                 ]
             )
             aprint(header.append(roi).append(complaint).append(values))
+
+
+def check_mosaic_paths(bandsets, outpath):
+    """for reuse_mosaics workflow."""
+    from asdf.mosaic import concat_mosaic_fn
+
+    mosaic_filenames = {
+        eye: concat_mosaic_fn(
+            bandsets[0].metadata["SOL"].iloc[0],
+            bandsets[0].metadata["SEQ_ID"].iloc[0],
+            eye
+        )
+        for eye in ("L", "R")
+    }
+    mosaic_paths = {
+        k: Path(outpath, "data", v) for k, v in mosaic_filenames.items()
+    }
+    for k, v in mosaic_paths.items():
+        if not Path(v).exists():
+            aprint(
+                "[red bold]--reuse_mosaics passed, but concatenated "
+                "mosaic files not available. Please run again without "
+                "this flag or provide the files. Bailing out."
+            )
+            return None
+    return mosaic_paths

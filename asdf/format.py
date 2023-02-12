@@ -11,6 +11,7 @@ import re
 from dustgoggles.structures import NestingDict
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.imgutils import absolutely_destroy
+from marslab.imgops.pltutils import dpi_from_image
 from marslab.imgops.regions import count_rois_on_image, roi_stats
 from marslab.imgops.render import make_thumbnail, simple_figure
 import matplotlib.figure
@@ -111,16 +112,17 @@ def annotate_and_save(title, annotation, look, filename, outpath):
     if not isinstance(look, matplotlib.figure.Figure):
         look = simple_figure(look)
     render_figure_labels(look.axes[0], title, annotation)
-    image_shape = look.axes[0].get_images()[0].get_size()
-    dpi = round(0.000146 * image_shape[0] * image_shape[1])
     look.savefig(
-        Path(outpath, filename), dpi=dpi, bbox_inches="tight", pad_inches=0
+        Path(outpath, filename),
+        dpi=dpi_from_image(look),
+        bbox_inches="tight",
+        pad_inches=0
     )
     absolutely_destroy(look)
     return 0
 
 
-def render_figure_labels(ax, title, annotation):
+def render_figure_labels(ax, title, annot):
     render = partial(
         ax.text,
         x=0.5,
@@ -129,16 +131,14 @@ def render_figure_labels(ax, title, annotation):
         transform=ax.transAxes,
     )
     image_shape = ax.get_images()[0].get_size()
-    image_size = image_shape[0] * image_shape[1]
-    t_font = mplf.FontProperties(fname=rapidlooks.TITILLIUM, size=11.2)
-    a_font = mplf.FontProperties(fname=rapidlooks.TITILLIUM, size=8.8)
+    # TODO, maybe: more resopnsive typesetting
     if image_shape[0] / image_shape[1] > 0.6:
         t_x, t_y, a_x, a_y = 0.5, -0.028, 0.5, -0.088
     else:
         t_x, t_y, a_x, a_y = 0.5, -0.1, 0.5, -0.25
-        annotation = annotation.replace("\n", " -- ")
-    render(x=t_x, y=t_y, s=title, fontproperties=t_font)
-    render(x=a_x, y=a_y, s=annotation, fontproperties=a_font)
+        annot = annot.replace("\n", " -- ")
+    render(x=t_x, y=t_y, s=title, fontproperties=rapidlooks.TITLE_FONT)
+    render(x=a_x, y=a_y, s=annot, fontproperties=rapidlooks.ANNOTATION_FONT)
 
 
 def clean_sequence_id(seq_id):

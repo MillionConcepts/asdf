@@ -25,7 +25,7 @@ from asdf.chatter import (
     save_looks,
     pretty_plot_bandset,
     fdsa_insert,
-    complain_about_pixmap_counts,
+    complain_about_pixmap_counts, check_mosaic_paths,
 )
 from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint
 from asdf.format import (
@@ -49,8 +49,10 @@ def _process_mosaic(
     noninteractive,
     upload,
     console,
-    save_plain_images
-, skip_rapidlooks):
+    save_plain_images,
+    skip_rapidlooks,
+    reuse_mosaic
+):
     if roi_path is not None:
         raise ValueError("Sorry, ROI counting on mosaic is not supported.")
     from asdf.mosaic import (
@@ -58,12 +60,13 @@ def _process_mosaic(
         preprocess_mosaic_metadata,
         concatenate_mosaic,
         bounce_mosaic_input_files,
-        ZcamMosaicBandSet,
+        ZMosaicBandSet,
     )
 
     aprint(Rule(" gathering metadata "))
     aprint("... scraping image file headers ...")
     bandsets = [ZcamBandSet(pointing[1]) for pointing in observation]
+    # TODO: messy, probably only need to do it for one
     if USE_PUBLIC_WAYPOINTS:
         aprint(
             "... scraping localization information from public waypoints file "
@@ -79,34 +82,44 @@ def _process_mosaic(
     outpath, temp_path = mosaic_folder_names(bandsets, output)
     aprint(f"[bold green]NOTE: files will be written to {outpath}")
     # TODO, maybe: add pixmap stuff
-    aprint(Rule(" generating intermediate mosaic files "))
-    with console.status("", spinner="star"):
-        aprint("... converting inputs to TIFF ...")
-        tiff_info = bounce_mosaic_input_files(bandsets, temp_path)
-    aprint("... stitching single-band mosaics ...")
-    process_info = {}
-    with ASDF_PROGRESS as prog:
-        ASDF_RPH.task_id = prog.add_task(
-            "",
-            total=len(bandsets[0].metadata["BAND"].unique()) + 2,
+    if reuse_mosaic is True:
+        mosaic_paths = check_mosaic_paths(bandsets, outpath)
+        # meaningful output for this case provided in check_mosaic_paths
+        if mosaic_paths is None:
+            return
+        aprint(
+            "[dark_orange]note: --reuse_mosaics passed, using existing "
+            "mosaic.fits files"
         )
-        for eye in ("L", "R"):
-            process_info[eye] = make_eye_mosaics(eye, tiff_info)
-        prog.remove_task(ASDF_RPH.task_id)
-    aprint(Rule("generating multi-band mosaic files"))
-    with console.status("", spinner="star"):
-        mosaic_metadata = preprocess_mosaic_metadata(bandsets)
-        data_dir = Path(outpath, "data")
-        data_dir.mkdir(parents=True, exist_ok=True)
-        mosaic_paths = {}
-        for eye in ("L", "R"):
-            mosaic_paths[eye] = concatenate_mosaic(
-                process_info, eye, mosaic_metadata, Path(outpath, "data")
+    else:
+        aprint(Rule(" generating intermediate mosaic files "))
+        with console.status("", spinner="star"):
+            aprint("... converting inputs to TIFF ...")
+            tiff_info = bounce_mosaic_input_files(bandsets, temp_path)
+        aprint("... stitching single-band mosaics ...")
+        process_info = {}
+        with ASDF_PROGRESS as prog:
+            ASDF_RPH.task_id = prog.add_task(
+                "",
+                total=len(bandsets[0].metadata["BAND"].unique()) + 2,
             )
-            eye_name = {"L": "left", "R": "right"}[eye]
-            aprint(f"wrote {eye_name}-eye mosaic")
+            for eye in ("L", "R"):
+                process_info[eye] = make_eye_mosaics(eye, tiff_info)
+            prog.remove_task(ASDF_RPH.task_id)
+        aprint(Rule("generating multi-band mosaic files"))
+        with console.status("", spinner="star"):
+            mosaic_metadata = preprocess_mosaic_metadata(bandsets)
+            data_dir = Path(outpath, "data")
+            data_dir.mkdir(parents=True, exist_ok=True)
+            mosaic_paths = {}
+            for eye in ("L", "R"):
+                mosaic_paths[eye] = concatenate_mosaic(
+                    process_info, eye, mosaic_metadata, Path(outpath, "data")
+                )
+                eye_name = {"L": "left", "R": "right"}[eye]
+                aprint(f"wrote {eye_name}-eye mosaic")
     mosaics = {
-        eye: ZcamMosaicBandSet(str(mosaic_paths[eye])) for eye in ("L", "R")
+        eye: ZMosaicBandSet(str(mosaic_paths[eye])) for eye in ("L", "R")
     }
 
     def pick_thumbs(rapids):
@@ -179,14 +192,14 @@ def asdf_body(
     save_plain_images=False,
     skip_pixmaps=False,
     skip_errmaps=True,
-    recreate_from=None,
     seriously_no_images=False,
+    reuse_mosaic=False,
+    recreate_from=None,
 ):
     """
     body component of the asdf command line function -- can be called multiple
-    times from asdf_hello in some cases.
+    times from asdf_initiate in some cases.
     """
-
     # do we have an roi file? if so, turn passed string into a Path
     roi_path = Path(roi_path) if roi_path else None
     if mosaic is True:
@@ -198,7 +211,8 @@ def asdf_body(
             upload,
             console,
             save_plain_images,
-            skip_rapidlooks
+            skip_rapidlooks,
+            reuse_mosaic
         )
     # ok? great. initialize BandSet object from these paths
     aprint(Rule(" gathering metadata "))

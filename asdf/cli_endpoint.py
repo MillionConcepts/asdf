@@ -32,7 +32,8 @@ def asdf_initiate(
     config=None,
     skip_pixmaps: "sp" = False,
     skip_errmaps: "se" = True,
-    seriously_no_images: "sn" = False
+    seriously_no_images: "sn" = False,
+    reuse_mosaic: "rm" = False
 ):
     """
     processes and archives everything
@@ -70,6 +71,8 @@ def asdf_initiate(
     :param skip_pixmaps: don't look for and process pixel flag maps
     :param skip_errmaps: don't look for and process error maps
     :param seriously_no_images: don't generate images. ever. really.
+    :param reuse_mosaic: reuse existing intermediate mosaic products if
+        present?
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
@@ -88,9 +91,7 @@ def asdf_initiate(
         directory, seq_id = parse_abbreviated_inputs(*path.split(","))
         explicit_path = None
     else:  # use the path provided, willy-nilly
-        directory = None
-        seq_id = None
-        explicit_path = path
+        directory, seq_id, explicit_path = None, None, path
     from asdf.chatter import find_and_offer_observations
 
     observation, is_multiple = find_and_offer_observations(
@@ -103,7 +104,7 @@ def asdf_initiate(
         keep_thumbnails=keep_thumbnails,
         recursive=recursive,
         regex_filter=image_regex,
-        mosaic=mosaic
+        mosaic=mosaic,
     )
     if observation is None:
         # meaningful log/output for this case was already provided by
@@ -125,7 +126,8 @@ def asdf_initiate(
         save_plain_images,
         skip_pixmaps,
         skip_errmaps,
-        seriously_no_images
+        seriously_no_images,
+        reuse_mosaic
     )
     from asdf.flow import asdf_body
 
@@ -133,7 +135,8 @@ def asdf_initiate(
         return asdf_body(observation, *asdf_args)
     for ix, obs in enumerate(observation):
         aprint(
-            f"[bold cyan1]... processing observation {ix+1} of {len(observation)} ... "
+            f"[bold cyan1]... processing observation {ix+1} of "
+            f"{len(observation)} ... "
         )
         asdf_body(obs, *asdf_args)
 
