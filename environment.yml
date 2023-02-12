@@ -25,3 +25,5 @@ dependencies:
   - pytest
   - pydrive2
   - marslab
+  - hugin
+  - scikit-image

@@ -177,9 +177,9 @@ def metadata_open_prompt(text) -> str:
 
 
 def dispatched_metadata_prompt(
-        field: str,
-        title: str = None,
-        sideload_options: Optional[Sequence[str]] = None,
+    field: str,
+    title: str = None,
+    sideload_options: Optional[Sequence[str]] = None,
 ) -> str:
     """
     ask user for the value of a metadata field. calls specific functions as
@@ -222,7 +222,6 @@ def format_observation(observation: pd.DataFrame):
         tailtext.append(", ")
         tailtext.append("thumbnails", style="dark_orange")
     headline_keys = ["SOL", "SEQ_ID", "SITE", "DRIVE"]
-
     headline = Text(
         ", ".join(
             key + " " + str(constant_dict.get(key)) for key in headline_keys

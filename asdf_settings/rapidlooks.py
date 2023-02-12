@@ -173,7 +173,7 @@ RGB_BANDMAP_THRESHOLD = [
 # noinspection PyTypeChecker
 mafic_map = {
         # placing single quotes causes asdf to print the title verbatim
-        "name": "'mafic bandmap: R0R/R1 BD910 R1/R5'",
+        "name": "'mafic bandmap R0R/R1 BD910 R1/R5'",
         "params": {
             "norm_kwargs": {"bounds": (0.2, 1)},
             "red": {
