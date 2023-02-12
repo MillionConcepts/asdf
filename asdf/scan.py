@@ -295,22 +295,22 @@ def cluster_observations(
         # elif (group["FRAME_TYPE"] == "MONO").all():
         else:
             # try to filter ranging shots here
-            if not (group["FRAME_TYPE"] == "MONO").all():
-                stereo = group.loc[group["FRAME_TYPE"] == "STEREO"]
-                if (set(stereo["FILTER"]) == {"L0", "R0"}) and (
-                    set(group["FILTER"] != {"L0", "R0"})
-                ):
-                    rejects['ranging'] += group.loc[
-                        group['FRAME_TYPE'] != 'MONO']['PATH'
-                    ].to_list()
-                    group = group.loc[group["FRAME_TYPE"] == "MONO"]
-                else:
-                    parser_warnings.append(
-                        f"warning: MONO and STEREO mixed in {seq_id}; could "
-                        f"not be clustered."
-                    )
-                    rejects["mono_stereo"] += group["PATH"].tolist()
-                    continue
+            # if not (group["FRAME_TYPE"] == "MONO").all():
+                # stereo = group.loc[group["FRAME_TYPE"] == "STEREO"]
+                # if (set(stereo["FILTER"]) == {"L0", "R0"}) and (
+                #     set(group["FILTER"] != {"L0", "R0"})
+                # ):
+                #     rejects['ranging'] += group.loc[
+                #         group['FRAME_TYPE'] != 'MONO']['PATH'
+                #     ].to_list()
+                #     group = group.loc[group["FRAME_TYPE"] == "MONO"]
+                # else:
+                #     parser_warnings.append(
+                #         f"warning: MONO and STEREO mixed in {seq_id}; could "
+                #         f"not be clustered."
+                #     )
+                #     rejects["mono_stereo"] += group["PATH"].tolist()
+                #     continue
             # handle repointed-stereo-observation case: split by pairs of RSM
             # TODO: this will currently fail if all filters from a single eye
             #  are missing

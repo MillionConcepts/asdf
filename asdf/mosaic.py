@@ -13,7 +13,7 @@ from pdr.np_utils import enforce_order_and_object
 
 from asdf.asdf_utils import cast_to_reference
 from asdf.console import aprint, ASDFLOG
-from asdf_settings.qa_rapidlooks_scratch import CROP_SETTINGS
+from asdf_settings.rapidlooks import CROP_SETTINGS
 from marslab.bandset import BandSet
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.imgutils import crop
@@ -163,12 +163,11 @@ def make_eye_mosaics(eye, tiff_info):
     ref_paths, ref_fovs = ref_slice["path"].tolist(), ref_slice["fov"]
     _, ref_pto_file = zcam_pto_gen(ref_paths, float(np.mean(ref_fovs)))
     hugin_assistant(ref_pto_file)
-    pano_modify(ref_pto_file, can
-    vas="AUTO")
+    pano_modify(ref_pto_file, canvas="AUTO")
     remove_hugin_crop_instruction(ref_pto_file)
     with open(ref_pto_file) as stream:
         ref_text = stream.read()
-    pto_files = {ref_band: ref_pto_file}
+    pto_files, tif_files = {ref_band: ref_pto_file}, {}
     for band in filter(lambda b: b != ref_band, eye_bands):
         band_slice = tiff_info.loc[tiff_info["band"] == band]
         if len(band_slice) != len(ref_slice):
@@ -188,9 +187,11 @@ def make_eye_mosaics(eye, tiff_info):
         pto_files[band] = pto_file
     ASDFLOG.info(f"generated projection for {eye_name}-eye mosaic")
     for band, pto_file in pto_files.items():
-        execute_hugin_stitch(pto_file)
+        stdout = execute_hugin_stitch(pto_file).stdout.decode('utf-8')
+        intermediate_tif_file = re.search(r'saving (.*?.tif)', stdout).group(1)
+        tif_files[band] = f"{intermediate_tif_file[:-8]}.tif"
         ASDFLOG.info(f"wrote {band} intermediate mosaic file")
-    return pto_files, ref_text
+    return pto_files, tif_files, ref_text
 
 
 def preprocess_mosaic_metadata(bandsets):
@@ -200,10 +201,10 @@ def preprocess_mosaic_metadata(bandsets):
 
 
 def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
-    eye_pto_files, eye_ref_text = process_info[eye]
+    eye_pto_files, eye_tif_files, eye_ref_text = process_info[eye]
+    parent_directory = Path(list(eye_pto_files.values())[0]).parent
     paths = {
-        band: Path(p.parent, p.name.replace(".pto", ".tif"))
-        for band, p in eye_pto_files.items()
+        band: Path(parent_directory, p) for band, p in eye_tif_files.items()
     }
     arrays = {
         band: crop_outer(read_first_channel(phot))
@@ -226,7 +227,7 @@ def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
 
     hdul = fits.HDUList(hdus)
     if outpath is None:
-        outpath = Path(list(eye_pto_files.values())[0]).parent
+        outpath = parent_directory
     mosaic_fn = concat_mosaic_fn(
         meta_hdu.data['SOL'][0], meta_hdu.data['SEQ_ID'][0], eye
     )

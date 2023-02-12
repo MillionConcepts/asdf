@@ -1,5 +1,6 @@
 name: asdf
 channels:
+  # note: packages _must_ be installed from conda-forge. defaults has a newer/incompatible version of libgsl.
   - conda-forge
 dependencies:
   - python=3.10
@@ -27,3 +28,4 @@ dependencies:
   - marslab
   - hugin
   - scikit-image
+  - sh
