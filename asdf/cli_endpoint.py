@@ -3,6 +3,7 @@ from pathlib import Path
 
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
+
 # NOTE: ignore any complaints from static analyzers about parameter annotations
 # for the following function. THEY ARE NOT MALFORMED TYPE HINTS, but
 # instructions to clize to create single-letter aliases for parameters in the
@@ -16,14 +17,15 @@ def asdf_initiate(
     abbreviate: "a" = False,
     skip_rapidlooks: "r" = False,
     suffix: "s" = "",
-    merspect: "m" = None,
     noninteractive: "n" = False,
     noninteractive_all: "na" = False,
     debug: "d" = False,
     keep_broadband: "kb" = False,
     keep_caltarget: "kg" = False,
     keep_thumbnails: "kt" = False,
-    recursive=False,
+    mosaic: "m"=False,
+    merspect: "mer" = None,
+    recursive: "v"=False,
     dump_paths: "dp" = "",
     save_plain_images=False,
     image_regex: "ir" = None,
@@ -43,7 +45,7 @@ def asdf_initiate(
     :param output: output path; default is "output/$username/$sol"
     :param abbreviate: pass abbreviated version of iof location:
         sol, seq_id, (optional) root root_dir code, (optional)
-        product type. root_dir defaults to "proj" and product type defaults to "iof"
+        product type. root_dir defaults to "proj" and product type to "iof".
         examples: (1) 36,03107,scratch,iof (2) 36,03107
     :param skip_rapidlooks: don't write default rapidlooks
     :param suffix: add suffix for this analysis/group of ROIs to data,
@@ -51,7 +53,7 @@ def asdf_initiate(
     :param merspect: take data from passed merspect file
     :param noninteractive: run automatically; collect nothing from user
     :param noninteractive_all: run automatically on all detected sequences;
-            collect nothing from user
+        collect nothing from user
     :param debug: turn debug mode on
     :param keep_broadband: include frames from broadband-only sequences in
         searches
@@ -60,12 +62,18 @@ def asdf_initiate(
     :param recursive: search all directories under the chosen path
     :param dump_paths: dump paths and quit after producing file list
     :param keep_thumbnails: include thumbnails in searches
+    :param mosaic: run in mosaic creation mode
     :param save_plain_images: save images without labels or borders
-
+    :param image_regex: only consider images matching this regular expression
+    :param config: use the asdf_settings module at the specified path rather
+        than the default asdf_settings
+    :param skip_pixmaps: don't look for and process pixel flag maps
+    :param skip_errmaps: don't look for and process error maps
+    :param seriously_no_images: don't generate images. ever. really.
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
-    console = ASDF_CONSOLE  # a rich.Console object with the asdf styleguide implemented
+    console = ASDF_CONSOLE  # rich.Console object following the asdf styleguide
     with console.status(".. initializing ...", spinner="star"):
         initialize_loggers()
         insert_settings_module_path(config)
@@ -75,7 +83,8 @@ def asdf_initiate(
     if abbreviate:  # construct a path from the abbreviated template
         from asdf.format import parse_abbreviated_inputs
 
-        # TODO: Accept separators other than commas and robustify against white space.
+        # TODO: Accept separators other than commas and robustify against
+        #  white space.
         directory, seq_id = parse_abbreviated_inputs(*path.split(","))
         explicit_path = None
     else:  # use the path provided, willy-nilly
@@ -94,6 +103,7 @@ def asdf_initiate(
         keep_thumbnails=keep_thumbnails,
         recursive=recursive,
         regex_filter=image_regex,
+        mosaic=mosaic
     )
     if observation is None:
         # meaningful log/output for this case was already provided by
@@ -111,6 +121,7 @@ def asdf_initiate(
         noninteractive,
         debug,
         console,
+        mosaic,
         save_plain_images,
         skip_pixmaps,
         skip_errmaps,

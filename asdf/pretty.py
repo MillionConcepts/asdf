@@ -177,9 +177,9 @@ def metadata_open_prompt(text) -> str:
 
 
 def dispatched_metadata_prompt(
-    field: str,
-    title: str = None,
-    sideload_options: Optional[Sequence[str]] = None,
+        field: str,
+        title: str = None,
+        sideload_options: Optional[Sequence[str]] = None,
 ) -> str:
     """
     ask user for the value of a metadata field. calls specific functions as
@@ -253,15 +253,30 @@ def print_observation(observation, ix=0, is_multiple=False):
     aprint("\n")
 
 
-def print_scan_results(results):
+def _print_mosaic_scan_results(results):
+    if len(results) > 1:
+        is_multiple = True
+        aprint(f"found {len(results)} multi-frame sequences:")
+    else:
+        is_multiple = False
+        aprint(f"found 1 multi-frame sequence:")
+    aprint("\n")
+    for ix, observation in enumerate(results.values()):
+        printobs = pd.concat(o[1] for o in observation).reset_index(drop=True)
+        print_observation(printobs, ix, is_multiple)
+
+
+def print_scan_results(results, mosaic=False):
     aprint("\n")
     if len(results) == 0:
         return
+    if mosaic is True:
+        return _print_mosaic_scan_results(results)
     if len(results) > 1:
         is_multiple = True
         aprint(
-            "found {} observations (ordered by seq_id / "
-            "chronologically within seq_ids):".format(len(results)),
+            f"found {len(results)} observations (ordered by seq_id / "
+            f"chronologically within seq_ids):"
         )
     else:
         is_multiple = False

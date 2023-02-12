@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable
 import warnings
 
+from cytoolz import groupby
 from cytoolz.dicttoolz import valfilter
 from dustgoggles.func import pass_parameters
 from dustgoggles.scrape import cached_exists
@@ -98,10 +99,11 @@ def get_scan_results(
 
 def find_and_offer_observations(
     root_dir,
-    explicit_path,
-    noninteractive,
-    keep_broadband,
-    keep_caltarget,
+    explicit_path=None,
+    noninteractive=False,
+    keep_broadband=False,
+    keep_caltarget=False,
+    mosaic=False,
     **scan_kwargs,
 ):
     """
@@ -118,7 +120,12 @@ def find_and_offer_observations(
     # get_scan_results
     if results is None:
         return None, None
-    print_scan_results(results)
+    if mosaic is True:
+        results = groupby(
+            lambda item: item[1]['SEQ_ID'].iloc[0], results.items()
+        )
+        results = {k: v for k, v in results.items() if len(v) > 1}
+    print_scan_results(results, mosaic)
     for category, color in zip((problems, hidden), ("dark_orange", "purple")):
         if len(category) == 0:
             continue
@@ -133,6 +140,8 @@ def find_and_offer_observations(
                     "This observation seems to be too complicated for "
                     "the automated clustering algorithm. "
                 )
+        elif mosaic is True:
+            suffix = "Can't perform mosaicking on a single-frame observation."
         return reject_scan(
             f"Sorry, no usable observations found. {suffix}:confused_face:\n"
         )
@@ -291,7 +300,7 @@ def input_roi_metadata(marslab_data, ci):
     return marslab_data
 
 
-def handle_map_checks(bandset,code="pix_map"):
+def handle_map_checks(bandset, code="pix_map"):
     metamaps, match_warnings = find_obs_metamaps(
         bandset.metadata["PATH"].unique(),code=code,
     )
@@ -518,17 +527,17 @@ def reject_scan(msg):
     return None, None
 
 
-def collect_dispersed_metadata(metadata):
+def collect_dispersed_metadata(metadata, silent=False):
     """
     handler function for asdf.cli that runs around to several distinct
     sources asking them for additional info prior to ROI evaluation
     """
-
     if USE_PUBLIC_WAYPOINTS:
-        aprint(
-            "... scraping localization information from public "
-            "waypoints file ..."
-        )
+        if not silent:
+            aprint(
+                "... scraping localization information from public "
+                "waypoints file ..."
+            )
         metadata = add_public_waypoints_to_metadata(metadata)
     if FIND_EFFECTIVE_TAUS:
         metadata = add_effective_taus(metadata)
