@@ -53,6 +53,7 @@ from asdf_settings.sources import (
     GOOGLE_SHEET_ID,
     METADATA_BACKUP_FOLDER_ID,
 )
+from marslab.bandset import BandSet
 from marslab.poolutils import wait_for_it
 
 
@@ -314,7 +315,7 @@ class DriveBot(GoogleDrive):
         return folder_id
 
 
-def upload_bandset_to_gdrive(bandset, debug=False):
+def upload_bandset_to_gdrive(bandset, debug=False, mosaic=False):
     # shuffling is a silly hack to speed up parallel uploads
     shuffle(bandset.local_files)
     # id of root folder
@@ -323,10 +324,10 @@ def upload_bandset_to_gdrive(bandset, debug=False):
     else:
         root = GOOGLE_DRIVE_ROOT
     drivebot = make_asdf_pydrive_client()
-    ASDFLOG.info("checking folder structure")
-    sol_folder_name, obs_folder_name = folder_names(bandset)
-    # note: this may produce unexpected behavior if people dupe folders and
-    # remove the default copy suffixes, etc.
+    # ASDFLOG.info("checking folder structure")
+    sol_folder_name, obs_folder_name = folder_names(bandset, mosaic)
+    # # note: this may produce unexpected behavior if people dupe folders and
+    # # remove the default copy suffixes, etc.
     sol_folder_id = drivebot.cd(sol_folder_name, root)
     obs_folder_id = drivebot.cd(obs_folder_name, sol_folder_id)
     data_folder_id = drivebot.cd("data", obs_folder_id)
@@ -471,6 +472,51 @@ def upload_asdf_analysis(
             sheetbot = gspread.service_account(GOOGLE_CLIENT_SECRETS_FILE)
             update_google_sheet(
                 bandset, sheet_backup_folder_id, sheet_id, sheetbot
+            )
+        except (
+            gspread.exceptions.APIError,
+            BaseSSLError,
+            socket.timeout,
+            gspread.exceptions.NoValidUrlKeyFound,
+        ) as api_error:
+            aprint(
+                ":confused_face: Sorry, couldn't update online metadata: "
+                + str(api_error),
+                style="bold red",
+            )
+
+
+def upload_mosaic(mosaic: BandSet, thumbnails, debug):
+    if debug is True:
+        sheet_id = DEBUG_GOOGLE_SHEET_ID
+        sheet_backup_folder_id = DEBUG_METADATA_BACKUP_FOLDER_ID
+        s3_debug_prefix = "debug/"
+    else:
+        sheet_id = GOOGLE_SHEET_ID
+        sheet_backup_folder_id = METADATA_BACKUP_FOLDER_ID
+        s3_debug_prefix = ""
+    aprint("... uploading files to Google Drive space ...")
+    with ASDF_PROGRESS as prog:
+        ASDF_RPH.task_id = prog.add_task(
+            "",
+            total=len(mosaic.local_files) + 1
+        )
+        try:
+            upload_bandset_to_gdrive(mosaic, debug, True)
+            aprint("completed Google Drive upload")
+        except (pydrive2.files.ApiRequestError, socket.timeout) as api_error:
+            aprint(
+                ":confused_face: Sorry, couldn't upload files to drive: "
+                + str(api_error),
+                style="bold red",
+            )
+        prog.remove_task(ASDF_RPH.task_id)
+    with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
+        try:
+            upload_and_link_thumbnails(mosaic, s3_debug_prefix, thumbnails)
+            sheetbot = gspread.service_account(GOOGLE_CLIENT_SECRETS_FILE)
+            update_google_sheet(
+                mosaic, sheet_backup_folder_id, sheet_id, sheetbot
             )
         except (
             gspread.exceptions.APIError,

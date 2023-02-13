@@ -1,3 +1,4 @@
+import datetime as dt
 import re
 from itertools import product
 from pathlib import Path
@@ -9,10 +10,17 @@ import sh
 import skimage
 from astropy.io import fits
 from astropy.table import Table
+from dustgoggles.func import gmap
+from dustgoggles.pivot import dupe_df_block
 from pdr.np_utils import enforce_order_and_object
 
-from asdf.asdf_utils import cast_to_reference
+import asdf
+from asdf.asdf_utils import cast_to_reference, null_marslab_data_section
 from asdf.console import aprint, ASDFLOG
+from asdf.format import drop_excess_stats, melt_metadata
+from asdf.parse import parse_pointing
+from asdf.zcam_bandset import polish_metadata
+from asdf_settings.metadata import COMPACT_ZCAM_MARSLAB_FIELDS
 from asdf_settings.rapidlooks import CROP_SETTINGS
 from marslab.bandset import BandSet
 from marslab.compat.xcam import DERIVED_CAM_DICT
@@ -113,6 +121,12 @@ def remove_hugin_crop_instruction(pto_file):
 def hugin_assistant(pto_file):
     return sh.hugin_executor("--assistant", pto_file)
 
+#
+# def autooptimiser(pto_file):
+#     return sh.autooptimiser(
+#         *("-o", str(pto_file)), "-a", "-s", "-p", pto_file
+#     )
+
 
 def execute_hugin_stitch(pto_file, prefix=None):
     command_parts = ["-s", pto_file]
@@ -156,15 +170,10 @@ def make_eye_mosaics(eye, tiff_info):
     eye_bands = [b for b in available_bands if b.startswith(eye)]
     if len(eye_bands) == 0:
         return {}, None
-    ref_band = next(
-        (f"{eye}{n}" for n in PREFERRED_REF_BANDS if f"{eye}{n}" in eye_bands)
+    tried_bands = []
+    ref_band, ref_pto_file, ref_slice, tried_bands = ref_projection(
+        eye, eye_bands, tiff_info, tried_bands
     )
-    ref_slice = tiff_info.loc[tiff_info["band"] == ref_band]
-    ref_paths, ref_fovs = ref_slice["path"].tolist(), ref_slice["fov"]
-    _, ref_pto_file = zcam_pto_gen(ref_paths, float(np.mean(ref_fovs)))
-    hugin_assistant(ref_pto_file)
-    pano_modify(ref_pto_file, canvas="AUTO")
-    remove_hugin_crop_instruction(ref_pto_file)
     with open(ref_pto_file) as stream:
         ref_text = stream.read()
     pto_files, tif_files = {ref_band: ref_pto_file}, {}
@@ -186,12 +195,45 @@ def make_eye_mosaics(eye, tiff_info):
             stream.write(band_text)
         pto_files[band] = pto_file
     ASDFLOG.info(f"generated projection for {eye_name}-eye mosaic")
+    ok = False
+    while (ok is False) and (len(tried_bands) < len(PREFERRED_REF_BANDS)):
+        try:
+            create_intermediate_mosaics(pto_files, tif_files)
+            ok = True
+        except sh.ErrorReturnCode:
+            aprint("[bold dark_orange] bad projection solution. retrying...")
+            ref_band, ref_pto_file, ref_slice, tried_bands = ref_projection(
+                eye, eye_bands, tiff_info, tried_bands
+            )
+    if ok is False:
+        raise ValueError("Unable to find usable reference projection.")
+    return pto_files, tif_files, ref_text
+
+
+def create_intermediate_mosaics(pto_files, tif_files):
     for band, pto_file in pto_files.items():
         stdout = execute_hugin_stitch(pto_file).stdout.decode('utf-8')
         intermediate_tif_file = re.search(r'saving (.*?.tif)', stdout).group(1)
         tif_files[band] = f"{intermediate_tif_file[:-8]}.tif"
         ASDFLOG.info(f"wrote {band} intermediate mosaic file")
-    return pto_files, tif_files, ref_text
+
+
+def ref_projection(eye, eye_bands, tiff_info, tried_bands):
+    ref_band = next(
+        (
+            f"{eye}{n}" for n in PREFERRED_REF_BANDS
+            if f"{eye}{n}" in eye_bands
+            and f"{eye}{n}" not in tried_bands
+        )
+    )
+    tried_bands.append(ref_band)
+    ref_slice = tiff_info.loc[tiff_info["band"] == ref_band]
+    ref_paths, ref_fovs = ref_slice["path"].tolist(), ref_slice["fov"]
+    _, ref_pto_file = zcam_pto_gen(ref_paths, float(np.mean(ref_fovs)))
+    hugin_assistant(ref_pto_file)
+    pano_modify(ref_pto_file, canvas="AUTO")
+    remove_hugin_crop_instruction(ref_pto_file)
+    return ref_band, ref_pto_file, ref_slice, tried_bands
 
 
 def preprocess_mosaic_metadata(bandsets):
@@ -237,53 +279,70 @@ def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
     return Path(outpath, mosaic_fn)
 
 
-def simple_fits_load(path, metadata, bands, precached=None):
+def simple_fits_load(path, metadata, bands):
     """
     extremely simple fits loader for BandSet.
     Loads from specified HDUs within a FITS file.
     """
-    if precached is not None:
-        hdul = fits.open(path)
-    else:
-        hdul = precached
+    hdul = fits.open(path)
     arrays = {}
     for band in bands:
-        arrays[band] = hdul[
-            metadata.loc[metadata["BAND"] == band, "IX"].iloc[0]
-        ].data
+        band_ix = metadata.loc[metadata["BAND"] == band, "IX"]
+        if len(band_ix) == 0:
+            continue
+        arrays[band] = hdul[band_ix.iloc[0]].data
     return arrays
 
 
 class ZMosaicBandSet(BandSet):
-    def __init__(self, mosaic_fits, namestem=""):
-        # TODO, maybe: assess whether this holds too much stuff in memory
-        self.precached = fits.open(mosaic_fits)
-        band_hdu = {
-            info[1]: info[0]
-            for info in self.precached.info(False)
-            if info[3] == "ImageHDU"
-        }
-        metadata_shell = pd.DataFrame(
-            {
-                "BAND": list(band_hdu.keys()),
-                "IX": list(band_hdu.values()),
-                "PATH": mosaic_fits,
+    def __init__(self, mosaic_fits_files):
+        mosaic_fits_files = gmap(str, mosaic_fits_files)
+        metadata, extended = [], []
+        for file in mosaic_fits_files:
+            hdul = fits.open(file)
+            band_hdu = {
+                info[1]: info[0]
+                for info in hdul.info(False)
+                if info[3] == "ImageHDU"
             }
-        )
-        metadata_shell["WAVELENGTH"] = [
+            eye_metadata = pd.DataFrame(
+                {
+                    "BAND": list(band_hdu.keys()),
+                    "IX": list(band_hdu.values()),
+                    "PATH": file,
+                }
+            )
+            ext_records = hdul[-1].data
+            eye_ext = pd.DataFrame(enforce_order_and_object(ext_records))
+            for c in eye_ext.columns:
+                if isinstance(eye_ext[c].iloc[0], bytes):
+                    eye_ext[c] = eye_ext[c].map(lambda b: b.decode("utf-8"))
+            metadata.append(eye_metadata)
+            extended.append(eye_ext)
+        metadata = pd.concat(metadata).reset_index(drop=True)
+        metadata["WAVELENGTH"] = [
             DERIVED_CAM_DICT["ZCAM"]["filters"][band]
-            for band in metadata_shell["BAND"]
+            for band in metadata["BAND"]
         ]
-        super().__init__(metadata=metadata_shell, load_method=simple_fits_load)
-        metadata_records = fits.open(mosaic_fits)[-1].data
-        extended = pd.DataFrame(enforce_order_and_object(metadata_records))
-        for c in extended.columns:
-            if isinstance(extended[c].iloc[0], bytes):
-                extended[c] = extended[c].map(lambda b: b.decode("utf-8"))
-        self.extended = extended
+        super().__init__(metadata=metadata, load_method=simple_fits_load)
+        self.extended = pd.concat(extended).reset_index(drop=True)
         for id_key in ('SOL', 'NAME', 'SEQ_ID', 'SITE', 'DRIVE'):
             self.metadata[id_key] = self.extended[id_key].iloc[0]
         self.name = (
             f"{str(self.extended['SOL'].iloc[0]).zfill(4)}_"
             f"{self.extended['SEQ_ID'].iloc[0].lower()}_mosaic"
         )
+        self.local_files = list(mosaic_fits_files)
+
+    def format_metadata(self):
+        # "summary" values made from chronologically first image
+        summary = self.extended.sort_values(by=["SCLK", "BAND"]).iloc[0].copy()
+        # write canonical pointing-identifying values into all frames
+        for field, value in parse_pointing(summary).items():
+            summary[field] = value
+            self.extended[field] = value
+        creation_time = dt.datetime.utcnow().isoformat()
+        summary["FILE_TIMESTAMP"] = creation_time
+        self.extended["ASDF_VERSION"] = asdf.__version__
+        self.summary = summary
+        self.extended = polish_metadata(self.extended, creation_time)

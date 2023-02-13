@@ -1,6 +1,7 @@
 """
 top-level handler loop for asdf / fdsa
 """
+import getpass
 import zlib
 from functools import partial
 from operator import contains
@@ -33,25 +34,44 @@ from asdf.format import (
     make_asdf_outpath,
     compile_looks,
     add_image_hashes,
-    mosaic_folder_names,
 )
-from asdf.network import upload_asdf_analysis
+from asdf.network import upload_asdf_analysis, upload_mosaic
 from asdf.pretty import name_prompt
 from asdf.zcam_bandset import ZcamBandSet
 from asdf_settings import process, metadata as metadata_settings, rapidlooks
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS
 
 
+def pick_thumbs(rapids):
+    """
+    keep images that are to be thumbnailed for upload, discard those that are
+    not. waste not memory, want not memory.
+    """
+    cache = {}
+    # this convoluted-looking selector is to avoid getting figures
+    # we want to thumbnail mutated during annotation
+    for name, look in rapids.items():
+        if name not in rapidlooks.THUMBNAILS:
+            continue
+        if isinstance(look, matplotlib.figure.Figure):
+            from marslab.imgops.pltutils import get_mpl_image
+
+            cache[name] = get_mpl_image(look).convert("RGB")
+        else:
+            cache[name] = look
+    return cache
+
+
 def _process_mosaic(
     observation,
     roi_path,
-    output,
     noninteractive,
     upload,
     console,
     save_plain_images,
     skip_rapidlooks,
-    reuse_mosaic
+    reuse_mosaic,
+    debug
 ):
     if roi_path is not None:
         raise ValueError("Sorry, ROI counting on mosaic is not supported.")
@@ -62,7 +82,9 @@ def _process_mosaic(
         bounce_mosaic_input_files,
         ZMosaicBandSet,
     )
-
+    from asdf.format import folder_names
+    # TODO, maybe: all these preliminaries are utterly superfluous if
+    #  reuse_mosaics is True.
     aprint(Rule(" gathering metadata "))
     aprint("... scraping image file headers ...")
     bandsets = [ZcamBandSet(pointing[1]) for pointing in observation]
@@ -79,7 +101,13 @@ def _process_mosaic(
     name = ci(name_prompt)
     for bandset in bandsets:
         bandset.metadata["NAME"] = name
-    outpath, temp_path = mosaic_folder_names(bandsets, output)
+    # TODO: fold this business into make_asdf_outpath
+    sol_folder_name, obs_folder_name = folder_names(bandsets[0], True)
+    outpath = Path(
+        "output", getpass.getuser(), sol_folder_name, obs_folder_name
+    )
+    temp_path = Path(outpath, 'temp')
+    temp_path.mkdir(parents=True, exist_ok=True)
     aprint(f"[bold green]NOTE: files will be written to {outpath}")
     # TODO, maybe: add pixmap stuff
     if reuse_mosaic is True:
@@ -118,23 +146,8 @@ def _process_mosaic(
                 )
                 eye_name = {"L": "left", "R": "right"}[eye]
                 aprint(f"wrote {eye_name}-eye mosaic")
-    mosaics = {
-        eye: ZMosaicBandSet(str(mosaic_paths[eye])) for eye in ("L", "R")
-    }
-
-    def pick_thumbs(rapids):
-        cache = {}
-        for rname, look in rapids.items():
-            if name not in rapidlooks.THUMBNAILS:
-                continue
-            if isinstance(look, matplotlib.figure.Figure):
-                from marslab.imgops.pltutils import get_mpl_image
-
-                cache[name] = get_mpl_image(look).convert("RGB")
-            else:
-                cache[name] = look
-        return cache
-
+    mosaic = ZMosaicBandSet(tuple(mosaic_paths.values()))
+    mosaic.format_metadata()
     thumbnail_staging = {}
     if skip_rapidlooks and not upload:
         aprint(
@@ -144,36 +157,34 @@ def _process_mosaic(
     else:
         aprint(Rule("generating rapidlooks"))
         from asdf_settings.generators.look_assembler import RAPIDLOOKS
-        for eye in ("L", "R"):
-            # noinspection PyTypeChecker
-            eye_looks = gmap(
-                lambda r: dig_for_value(r, "bands")[0].startswith(eye),
-                RAPIDLOOKS,
-                mapper=filter,
-            )
-            with ASDF_PROGRESS as prog:
-                ASDF_RPH.task_id = prog.add_task("", total=len(eye_looks))
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", category=RuntimeWarning)
-                    mosaics[eye].make_look_set(eye_looks)
+        with ASDF_PROGRESS as prog:
+            ASDF_RPH.task_id = prog.add_task("", total=len(RAPIDLOOKS))
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                mosaic.make_look_set(RAPIDLOOKS)
                 prog.remove_task(ASDF_RPH.task_id)
         aprint(Rule(" saving rapidlooks "))
-        for eye in ("L", "R"):
-            save_images = partial(
-                save_looks, mosaics[eye], plain=save_plain_images
+        save_images = partial(save_looks, mosaic, plain=save_plain_images)
+        with ASDF_PROGRESS as prog:
+            ASDF_RPH.task_id = prog.add_task(
+                "",
+                total=len(mosaic.looks),
             )
-            with ASDF_PROGRESS as prog:
-                ASDF_RPH.task_id = prog.add_task(
-                    "",
-                    total=len(mosaics[eye].looks),
-                )
-                if upload:
-                    thumbnail_staging |= pick_thumbs(mosaics[eye].looks)
-                save_images(
-                    outpath=Path(outpath, "browse"), basename=mosaics[eye].name
-                )
-                prog.remove_task(ASDF_RPH.task_id)
-            mosaics[eye].purge("looks")
+            if upload is True:
+                thumbnail_staging |= pick_thumbs(mosaic.looks)
+            save_images(
+                outpath=Path(outpath, "browse"), basename=mosaic.name
+            )
+            prog.remove_task(ASDF_RPH.task_id)
+            mosaic.purge("looks")
+    # handle metadata and thumbnail uploads
+    if upload is True:
+        aprint(Rule(" uploading asdf outputs "))
+        thumbnails = make_rapidlook_thumbnails(
+            thumbnail_staging, rapidlooks.THUMBNAIL_SIZE
+        )
+        upload_mosaic(mosaic, thumbnails, debug)
+    aprint("\n:star: ... all done ... :star:", style="bold orchid1")
 
 
 # TODO: add dry-run options for testing
@@ -206,13 +217,13 @@ def asdf_body(
         return _process_mosaic(
             observation,
             roi_path,
-            output,
             noninteractive,
             upload,
             console,
             save_plain_images,
             skip_rapidlooks,
-            reuse_mosaic
+            reuse_mosaic,
+            debug
         )
     # ok? great. initialize BandSet object from these paths
     aprint(Rule(" gathering metadata "))
@@ -284,7 +295,6 @@ def asdf_body(
             add_image_hashes(bandset)
     # much safer and more consistent than any of the GUI backends
     mpl.use("agg")
-
     if skip_pixmaps is not True:
         aprint(Rule(" looking for pixel flag maps "))
         with console.status(
@@ -293,7 +303,8 @@ def asdf_body(
             handle_map_checks(bandset, code="pix_map")
     else:
         aprint(
-            "[dark_orange]skip-pixmaps flag active; skipping pixel flag map handling"
+            "[dark_orange]skip-pixmaps flag active; skipping pixel "
+            "flag map handling"
         )
 
     if skip_errmaps is not True:
@@ -379,24 +390,6 @@ def asdf_body(
         threads=bandset.threads.get("save"),
         plain=save_plain_images,
     )
-    # keep images that are to be thumbnailed for upload, discard those
-    # that are not; waste not memory, want not memory;
-    # this convoluted selector is to avoid getting figures
-    # we want to thumbnail mutated during annotation
-
-    def pick_thumbs(rapids):
-        cache = {}
-        for name, look in rapids.items():
-            if name not in rapidlooks.THUMBNAILS:
-                continue
-            if isinstance(look, matplotlib.figure.Figure):
-                from marslab.imgops.pltutils import get_mpl_image
-
-                cache[name] = get_mpl_image(look).convert("RGB")
-            else:
-                cache[name] = look
-        return cache
-
     # set up thumbnail cache
     thumbnail_staging = {}
     # generate rapidlooks
@@ -446,9 +439,7 @@ def asdf_body(
                 thumbnail_staging |= pick_thumbs(bandset.looks)
             save_images(outpath=Path(outpath, "browse"), basename=bandset.name)
             prog.remove_task(ASDF_RPH.task_id)
-
         bandset.purge("looks")
-
     # make context images and write them out
     if bandset.rois or bandset.pixmaps:
         if seriously_no_images:
@@ -468,7 +459,6 @@ def asdf_body(
                     outpath=Path(outpath, "data"),
                     basename=bandset.name + bandset.suffix,
                 )
-
     bandset.purge()
 
     # pretty-plot data if we've got it

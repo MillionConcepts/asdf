@@ -39,29 +39,16 @@ def compile_looks():
     )
 
 
-def mosaic_folder_names(bandsets, output):
-    if output is None:
-        sol, _ = folder_names(bandsets[0])
-        seq_id = bandsets[0].metadata['SEQ_ID'].iloc[0].lower()
-        name = bandsets[0].metadata['NAME'].iloc[0]
-        outpath = Path(
-            "output/", getpass.getuser(), sol, f"{seq_id} {name} mosaic"
-        )
-    else:
-        outpath = Path(output)
-    temp_path = Path(outpath, ".temp")
-    outpath.mkdir(parents=True, exist_ok=True)
-    temp_path.mkdir(parents=True, exist_ok=True)
-    return outpath, temp_path
-
-
-def folder_names(bandset):
+def folder_names(bandset, mosaic=False):
     sol_folder_name = str(bandset.metadata["SOL"].iloc[0]).zfill(4)
     obs_folder_name = (
         bandset.metadata["SEQ_ID"].iloc[0].lower()
         + f" {bandset.metadata['NAME'].iloc[0]}"
-        + f" RSM {bandset.metadata['RSM'].iloc[0]}"
     )
+    if mosaic is True:
+        obs_folder_name += " mosaic"
+    else:
+        obs_folder_name += f" RSM {bandset.metadata['RSM'].iloc[0]}"
     return sol_folder_name, obs_folder_name
 
 
