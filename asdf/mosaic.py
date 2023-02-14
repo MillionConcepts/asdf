@@ -1,5 +1,7 @@
 import datetime as dt
 import re
+import time
+from functools import partial
 from itertools import product
 from pathlib import Path
 
@@ -11,20 +13,19 @@ import skimage
 from astropy.io import fits
 from astropy.table import Table
 from dustgoggles.func import gmap
-from dustgoggles.pivot import dupe_df_block
 from pdr.np_utils import enforce_order_and_object
+from scipy.ndimage import label
 
 import asdf
-from asdf.asdf_utils import cast_to_reference, null_marslab_data_section
+from asdf.asdf_utils import cast_to_reference
 from asdf.console import aprint, ASDFLOG
-from asdf.format import drop_excess_stats, melt_metadata
 from asdf.parse import parse_pointing
 from asdf.zcam_bandset import polish_metadata
-from asdf_settings.metadata import COMPACT_ZCAM_MARSLAB_FIELDS
 from asdf_settings.rapidlooks import CROP_SETTINGS
 from marslab.bandset import BandSet
 from marslab.compat.xcam import DERIVED_CAM_DICT
-from marslab.imgops.imgutils import crop
+from marslab.imgops.imgutils import crop, normalize_range, centile_clip
+from marslab.imgops.masking import outline
 
 PREFERRED_REF_BANDS = (1, 2, 3, 4, 5, 6, "0R", "0G", "0B")
 
@@ -112,15 +113,25 @@ def remove_hugin_crop_instruction(pto_file):
     dimension_match = re.search(r"f\d+ w(\d+) h(\d+)", text)
     width, height = dimension_match.group(1), dimension_match.group(2)
     crop_match = re.search(r'k\d+ E\d+ R\d+ (S(\d|,)+) n"TIFF', text)
+    # TODO: is this a pathological condition?
+    if crop_match is None:
+        return width, height
     text = text.replace(crop_match.group(1), f"S0,{width},0,{height}")
     with open(pto_file, "w") as stream:
         stream.write(text)
     return width, height
 
-
-def hugin_assistant(pto_file):
-    return sh.hugin_executor("--assistant", pto_file)
-
+from killscreen.subutils import Viewer
+def hugin_assistant(pto_file, timeout=15):
+    cmd = Viewer(sh.hugin_executor("--assistant", pto_file, _bg=True))
+    # cmd = sh.hugin_executor("--assistant", pto_file, _bg=True)
+    start = time.time()
+    while cmd.is_alive():
+        time.sleep(0.1)
+        runtime = time.time() - start
+        if runtime > timeout:
+            raise TimeoutError
+    return cmd
 #
 # def autooptimiser(pto_file):
 #     return sh.autooptimiser(
@@ -142,7 +153,7 @@ def read_first_channel(path):
 def pano_modify(
     pto_file,
     output_type="NORMAL",
-    # projection: 0=equirectangular, 1=cylindrical, ...?
+    # projection: 0=rectilinear, 1=cylindrical, 2=equirectangular, 3=fisheye
     projection=1,
     **kwargs,
 ):
@@ -160,24 +171,78 @@ def crop_outer(array):
     return crop(array, (nzx.min(), nzx.max(), nzy.min(), nzy.max()))
 
 
+def mark_borders(
+    array,
+    border_threshold=0,
+    how=np.less_equal,
+    special_constant=-9999,
+    inplace=True
+):
+    """marks outer borders of array with a special constant"""
+    if inplace is False:
+        array = array.copy()
+    zeromask = how(array, border_threshold)
+    borderlabels = label(~zeromask)[0]
+    exterior = np.zeros(array.shape, dtype=bool)
+    for label_ix in np.unique(borderlabels):
+        region = borderlabels == label_ix
+        zero_pred = zeromask[region].all()
+        if zero_pred:
+            exterior[region] = True
+    array[np.nonzero(exterior)] = special_constant
+    return array
+
+
 def concat_mosaic_fn(sol, seq_id, eye):
     return f"sol{str(sol).zfill(4)}_{seq_id.lower()}_{eye.lower()}_mosaic.fits"
 
 
-def make_eye_mosaics(eye, tiff_info):
+# TODO: add thread-limiting commands
+def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
     eye_name = {"L": "left", "R": "right"}[eye]
     available_bands = tiff_info["band"].tolist()
     eye_bands = [b for b in available_bands if b.startswith(eye)]
     if len(eye_bands) == 0:
         return {}, None
-    tried_bands = []
-    ref_band, ref_pto_file, ref_slice, tried_bands = ref_projection(
-        eye, eye_bands, tiff_info, tried_bands
+    ref_band = next(
+        (
+            f"{eye}{n}" for n in PREFERRED_REF_BANDS
+            if f"{eye}{n}" in eye_bands
+        )
     )
+    ref_slice = tiff_info.loc[tiff_info['band'] == ref_band]
+    ref_tiffs = []
+    for bandset in bandsets:
+        bandset.load([ref_band])
+        bandset.bulk_debayer([ref_band])
+        reference_image = normalize_range(
+            crop(bandset.get_band(ref_band), CROP_SETTINGS["crop"]), (0, 1), 5
+        )
+        tiff_path = Path(
+            Path(ref_slice['path'].iloc[0]).parent,
+            f"{ref_band}_reference_{bandset.name}.tiff"
+        )
+        cv2.imwrite(str(tiff_path), reference_image)
+        rsm = bandset.metadata['RSM'].iloc[0]
+        ref_tiffs.append({'path': tiff_path, 'rsm': rsm})
+        aprint(f"wrote {eye_name} reference image for RSM {rsm}")
+    try:
+        ref_pto_file, _ = ref_projection(
+            [rt['path'] for rt in ref_tiffs],
+            np.mean(ref_slice['fov']),
+            **pto_kwargs
+        )
+    except TimeoutError:
+        aprint(
+            f"[bold red] Unable to find usable reference projection for "
+            f"{eye_name}-eye mosaic."
+        )
+        return None, None, None
+    ASDFLOG.info(f"generated projection for {eye_name}-eye mosaic")
     with open(ref_pto_file) as stream:
         ref_text = stream.read()
     pto_files, tif_files = {ref_band: ref_pto_file}, {}
-    for band in filter(lambda b: b != ref_band, eye_bands):
+    for band in eye_bands:
         band_slice = tiff_info.loc[tiff_info["band"] == band]
         if len(band_slice) != len(ref_slice):
             raise ValueError("mismatched availability between bands.")
@@ -185,28 +250,24 @@ def make_eye_mosaics(eye, tiff_info):
             ref_pto_file.parent, ref_pto_file.name.replace(ref_band, band)
         )
         band_text = ref_text
-        for _, row in ref_slice.iterrows():
-            ref_path = row["path"]
+        for rec in ref_tiffs:
             band_path = band_slice.loc[
-                band_slice["rsm"] == row["rsm"], "path"
-            ].iloc[0]
-            band_text = band_text.replace(ref_path.name, band_path.name)
+                (band_slice['band'] == band)
+                & (band_slice['rsm'] == rec['rsm'])
+            ]['path'].iloc[0]
+            band_text = band_text.replace(rec['path'].name, band_path.name)
         with pto_file.open("w") as stream:
             stream.write(band_text)
         pto_files[band] = pto_file
-    ASDFLOG.info(f"generated projection for {eye_name}-eye mosaic")
-    ok = False
-    while (ok is False) and (len(tried_bands) < len(PREFERRED_REF_BANDS)):
-        try:
-            create_intermediate_mosaics(pto_files, tif_files)
-            ok = True
-        except sh.ErrorReturnCode:
-            aprint("[bold dark_orange] bad projection solution. retrying...")
-            ref_band, ref_pto_file, ref_slice, tried_bands = ref_projection(
-                eye, eye_bands, tiff_info, tried_bands
-            )
-    if ok is False:
-        raise ValueError("Unable to find usable reference projection.")
+    try:
+        create_intermediate_mosaics(pto_files, tif_files)
+
+    except sh.ErrorReturnCode:
+        aprint(
+            f"[bold red] reference projection for {eye_name}-eye mosaic failed to "
+            f"generate a usable mosaic."
+        )
+        return None, None, None
     return pto_files, tif_files, ref_text
 
 
@@ -218,22 +279,12 @@ def create_intermediate_mosaics(pto_files, tif_files):
         ASDFLOG.info(f"wrote {band} intermediate mosaic file")
 
 
-def ref_projection(eye, eye_bands, tiff_info, tried_bands):
-    ref_band = next(
-        (
-            f"{eye}{n}" for n in PREFERRED_REF_BANDS
-            if f"{eye}{n}" in eye_bands
-            and f"{eye}{n}" not in tried_bands
-        )
-    )
-    tried_bands.append(ref_band)
-    ref_slice = tiff_info.loc[tiff_info["band"] == ref_band]
-    ref_paths, ref_fovs = ref_slice["path"].tolist(), ref_slice["fov"]
-    _, ref_pto_file = zcam_pto_gen(ref_paths, float(np.mean(ref_fovs)))
-    hugin_assistant(ref_pto_file)
-    pano_modify(ref_pto_file, canvas="AUTO")
+def ref_projection(tiff_files, fov, projection=1):
+    _, ref_pto_file = zcam_pto_gen(tiff_files, fov)
+    assistant_cmd = hugin_assistant(ref_pto_file)
+    pano_modify(ref_pto_file, canvas="AUTO", projection=projection)
     remove_hugin_crop_instruction(ref_pto_file)
-    return ref_band, ref_pto_file, ref_slice, tried_bands
+    return ref_pto_file, assistant_cmd
 
 
 def preprocess_mosaic_metadata(bandsets):
@@ -249,13 +300,12 @@ def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
         band: Path(parent_directory, p) for band, p in eye_tif_files.items()
     }
     arrays = {
-        band: crop_outer(read_first_channel(phot))
+        band: mark_borders(crop_outer(read_first_channel(phot)))
         for band, phot in paths.items()
     }
     if not len({arr.shape for arr in arrays.values()}) == 1:
         raise ValueError("apparent misalignment.")
-    hdus = [fits.PrimaryHDU()]
-    hdus += [
+    image_hdus = [
         fits.ImageHDU(arrays[band], name=band)
         for band in sorted(arrays.keys())
     ]
@@ -265,9 +315,7 @@ def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
         )
     )
     meta_hdu.name = "metadata"
-    hdus.append(meta_hdu)
-
-    hdul = fits.HDUList(hdus)
+    hdul = fits.HDUList([fits.PrimaryHDU(), *image_hdus, meta_hdu])
     if outpath is None:
         outpath = parent_directory
     mosaic_fn = concat_mosaic_fn(
@@ -275,22 +323,28 @@ def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
     )
     if Path(outpath, mosaic_fn).exists():
         Path(outpath, mosaic_fn).unlink()
-    hdul.writeto(Path(outpath, mosaic_fn))
+    hdul.writeto(Path(outpath, mosaic_fn), overwrite=True)
     return Path(outpath, mosaic_fn)
 
 
-def simple_fits_load(path, metadata, bands):
-    """
-    extremely simple fits loader for BandSet.
-    Loads from specified HDUs within a FITS file.
-    """
+def simple_fits_load(
+    path, metadata, bands, _precached, missing_constants=None
+):
+    """extremely simple fits loader for BandSet. Loads from HDUs by index."""
     hdul = fits.open(path)
     arrays = {}
     for band in bands:
         band_ix = metadata.loc[metadata["BAND"] == band, "IX"]
         if len(band_ix) == 0:
             continue
-        arrays[band] = hdul[band_ix.iloc[0]].data
+        array = hdul[band_ix.iloc[0]].data
+        # TODO, maybe: actual scaling rather than just special constant masking
+        #  (although astropy handles that to same extent by default)
+        if missing_constants is not None:
+            array = np.ma.masked_where(
+                np.isin(array, missing_constants), array
+            )
+        arrays[band] = array
     return arrays
 
 
@@ -324,7 +378,10 @@ class ZMosaicBandSet(BandSet):
             DERIVED_CAM_DICT["ZCAM"]["filters"][band]
             for band in metadata["BAND"]
         ]
-        super().__init__(metadata=metadata, load_method=simple_fits_load)
+        super().__init__(
+            metadata=metadata,
+            load_method=partial(simple_fits_load, missing_constants=(-9999,))
+        )
         self.extended = pd.concat(extended).reset_index(drop=True)
         for id_key in ('SOL', 'NAME', 'SEQ_ID', 'SITE', 'DRIVE'):
             self.metadata[id_key] = self.extended[id_key].iloc[0]

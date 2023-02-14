@@ -76,7 +76,7 @@ def _process_mosaic(
     if roi_path is not None:
         raise ValueError("Sorry, ROI counting on mosaic is not supported.")
     from asdf.mosaic import (
-        make_eye_mosaics,
+        make_single_band_mosaics,
         preprocess_mosaic_metadata,
         concatenate_mosaic,
         bounce_mosaic_input_files,
@@ -129,11 +129,18 @@ def _process_mosaic(
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task(
                 "",
-                total=len(bandsets[0].metadata["BAND"].unique()) + 2,
+                total=len(bandsets[0].metadata["BAND"].unique()) * 2 + 2,
             )
             for eye in ("L", "R"):
-                process_info[eye] = make_eye_mosaics(eye, tiff_info)
+                process_info[eye] = make_single_band_mosaics(
+                    eye, tiff_info, bandsets
+                )
             prog.remove_task(ASDF_RPH.task_id)
+        if all(v == (None, None, None) for v in process_info.values()):
+            aprint(
+                "[bold red] Unable to create mosaics for either eye. "
+                "Bailing out."
+            )
         aprint(Rule("generating multi-band mosaic files"))
         with console.status("", spinner="star"):
             mosaic_metadata = preprocess_mosaic_metadata(bandsets)
@@ -141,6 +148,9 @@ def _process_mosaic(
             data_dir.mkdir(parents=True, exist_ok=True)
             mosaic_paths = {}
             for eye in ("L", "R"):
+                if process_info[eye] == (None, None, None):
+                    # this indicates a failed projection
+                    continue
                 mosaic_paths[eye] = concatenate_mosaic(
                     process_info, eye, mosaic_metadata, Path(outpath, "data")
                 )
@@ -157,8 +167,26 @@ def _process_mosaic(
     else:
         aprint(Rule("generating rapidlooks"))
         from asdf_settings.generators.look_assembler import RAPIDLOOKS
+        for rapid in RAPIDLOOKS:
+            # don't apply default zcam detector frame crop to projected images
+            if "crop" in rapid.keys():
+                del rapid['crop']
+            # retain mask for outside-projection regions
+            if rapid['plotter']['function'].__name__ == 'colormapped_plot':
+                rapid['plotter']['params']['drop_mask'] = False
+            # make sky masking algorithm ignore the out-of-projection regions
+            if 'mask' in rapid.keys():
+                for inst in rapid['mask']['instructions']:
+                    if 'function' not in inst.keys():
+                        continue
+                    if inst['function'].__name__ != 'skymask':
+                        continue
+                    inst['params'] |= {
+                        'input_mask_dilation': 10, 'respect_mask': True
+                    }
+
         with ASDF_PROGRESS as prog:
-            ASDF_RPH.task_id = prog.add_task("", total=len(RAPIDLOOKS))
+            ASDF_RPH.task_id = prog.add_task("", total=len(RAPIDLOOKS) + 1)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 mosaic.make_look_set(RAPIDLOOKS)
@@ -168,7 +196,7 @@ def _process_mosaic(
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task(
                 "",
-                total=len(mosaic.looks),
+                total=len(mosaic.looks) + 1,
             )
             if upload is True:
                 thumbnail_staging |= pick_thumbs(mosaic.looks)
@@ -419,7 +447,7 @@ def asdf_body(
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task(
                 "",
-                total=len(look_instructions),
+                total=len(look_instructions) + 1,
             )
             # suppressing irrelevant warnings from numpy about divides-by-zero
             # and matplotlib about opening a bunch of figures
@@ -433,7 +461,7 @@ def asdf_body(
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task(
                 "",
-                total=len(bandset.looks),
+                total=len(bandset.looks) + 1,
             )
             if upload:
                 thumbnail_staging |= pick_thumbs(bandset.looks)
