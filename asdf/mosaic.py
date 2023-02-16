@@ -134,7 +134,7 @@ def hugin_assistant(pto_file, timeout=15):
     cmd = sh.hugin_executor("--assistant", pto_file, _bg=True, _bg_exc=False)
     start = time.time()
     while cmd.is_alive():
-        time.sleep(0.1)
+        time.sleep(0.05)
         runtime = time.time() - start
         if runtime > timeout:
             raise TimeoutError
@@ -201,7 +201,6 @@ def concat_mosaic_fn(sol, seq_id, eye):
     return f"sol{str(sol).zfill(4)}_{seq_id.lower()}_{eye.lower()}_mosaic.fits"
 
 
-# TODO: add thread-limiting commands
 def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
     eye_name = {"L": "left", "R": "right"}[eye]
     available_bands = tiff_info["band"].tolist()
@@ -284,7 +283,7 @@ def insert_band_filenames(pto_file, band_slice, ref_text, ref_tiffs):
 def create_intermediate_mosaics(pto_files, tif_files):
     parent = Path(list(pto_files.values())[0]).parent
     for band, pto_file in pto_files.items():
-        stdout = execute_hugin_stitch(pto_file, threads=THREADS['mosaic'])
+        stdout = execute_hugin_stitch(pto_file, threads=THREADS['mosaic_gen'])
         intermediate_tif_file = re.search(r'saving (.*?.tif)', stdout).group(1)
         tif_files[band] = Path(parent, f"{intermediate_tif_file[:-8]}.tif")
         ASDFLOG.info(f"wrote {band} intermediate mosaic file")
@@ -361,7 +360,7 @@ def simple_fits_load(
 
 
 class ZMosaicBandSet(BandSet):
-    def __init__(self, mosaic_fits_files):
+    def __init__(self, mosaic_fits_files, threads=None):
         mosaic_fits_files = gmap(str, mosaic_fits_files)
         metadata, extended = [], []
         for file in mosaic_fits_files:

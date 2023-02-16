@@ -12,6 +12,8 @@ import warnings
 
 from dustgoggles.func import catch_interaction
 import matplotlib.figure
+
+from asdf_settings.process import THREADS
 from marslab.compat.mertools import merspect_to_marslab
 from marslab.imgops.imgutils import mapfilter
 import matplotlib as mpl
@@ -164,7 +166,12 @@ def _process_mosaic(
                 aprint(f"wrote {eye_name}-eye mosaic")
     if keep_intermediate is False:
         shutil.rmtree(temp_path)
-    mosaic = ZMosaicBandSet(tuple(mosaic_paths.values()))
+    mosaic = ZMosaicBandSet(
+        tuple(mosaic_paths.values()),
+        threads={
+            'save': THREADS['mosaic_save'], 'look': THREADS['mosaic_look']
+        }
+    )
     mosaic.format_metadata()
     thumbnail_staging = {}
     if skip_rapidlooks and not upload:

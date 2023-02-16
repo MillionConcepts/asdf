@@ -7,5 +7,7 @@ THREADS = {
     'save': 5,
     'look': 5,
     'upload': 3,
-    'mosaic': 6
+    'mosaic_gen': 6,
+    'mosaic_save': None,
+    'mosaic_look': None
 }
