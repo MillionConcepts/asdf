@@ -1,8 +1,9 @@
 import datetime as dt
 import re
 import time
-from functools import partial
+from functools import partial, reduce
 from itertools import product
+from operator import eq
 from pathlib import Path
 
 import cv2
@@ -21,11 +22,11 @@ from asdf.asdf_utils import cast_to_reference
 from asdf.console import aprint, ASDFLOG
 from asdf.parse import parse_pointing
 from asdf.zcam_bandset import polish_metadata
+from asdf_settings.process import THREADS
 from asdf_settings.rapidlooks import CROP_SETTINGS
 from marslab.bandset import BandSet
 from marslab.compat.xcam import DERIVED_CAM_DICT
-from marslab.imgops.imgutils import crop, normalize_range, centile_clip
-from marslab.imgops.masking import outline
+from marslab.imgops.imgutils import crop, normalize_range
 
 PREFERRED_REF_BANDS = (1, 2, 3, 4, 5, 6, "0R", "0G", "0B")
 
@@ -56,7 +57,14 @@ LONG_METADATA_DTYPES = {
 
 def bounce_mosaic_input_files(mosaic, scratch_path=".temp/mosaic"):
     Path(scratch_path).mkdir(exist_ok=True)
-    bands = mosaic[0].metadata["BAND"].unique()
+    bandlist = [set(b.metadata["BAND"].unique()) for b in mosaic]
+    if reduce(eq, bandlist) is not True:
+        aprint(
+            "[bold red]Mismatched availability between bands in these frames."
+            " Unable to mosaic."
+        )
+        return
+    bands = sorted(bandlist[0])
     tiff_info = []
     for bandset, band in product(mosaic, bands):
         bandset.load([band])
@@ -121,26 +129,22 @@ def remove_hugin_crop_instruction(pto_file):
         stream.write(text)
     return width, height
 
-from killscreen.subutils import Viewer
+
 def hugin_assistant(pto_file, timeout=15):
-    cmd = Viewer(sh.hugin_executor("--assistant", pto_file, _bg=True))
-    # cmd = sh.hugin_executor("--assistant", pto_file, _bg=True)
+    cmd = sh.hugin_executor("--assistant", pto_file, _bg=True, _bg_exc=False)
     start = time.time()
     while cmd.is_alive():
         time.sleep(0.1)
         runtime = time.time() - start
         if runtime > timeout:
             raise TimeoutError
+    if cmd.exit_code != 0:
+        raise ValueError
     return cmd
-#
-# def autooptimiser(pto_file):
-#     return sh.autooptimiser(
-#         *("-o", str(pto_file)), "-a", "-s", "-p", pto_file
-#     )
 
 
-def execute_hugin_stitch(pto_file, prefix=None):
-    command_parts = ["-s", pto_file]
+def execute_hugin_stitch(pto_file, threads=1, prefix=None):
+    command_parts = ["-s", pto_file, "-t", threads]
     if prefix is not None:
         command_parts = ["-p", prefix] + command_parts
     return sh.hugin_executor(*command_parts)
@@ -225,14 +229,14 @@ def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
         cv2.imwrite(str(tiff_path), reference_image)
         rsm = bandset.metadata['RSM'].iloc[0]
         ref_tiffs.append({'path': tiff_path, 'rsm': rsm})
-        aprint(f"wrote {eye_name} reference image for RSM {rsm}")
+        aprint(f"wrote {eye_name}-eye reference image for RSM {rsm}")
     try:
         ref_pto_file, _ = ref_projection(
             [rt['path'] for rt in ref_tiffs],
             np.mean(ref_slice['fov']),
             **pto_kwargs
         )
-    except TimeoutError:
+    except (TimeoutError, ValueError, sh.ErrorReturnCode):
         aprint(
             f"[bold red] Unable to find usable reference projection for "
             f"{eye_name}-eye mosaic."
@@ -244,38 +248,47 @@ def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
     pto_files, tif_files = {ref_band: ref_pto_file}, {}
     for band in eye_bands:
         band_slice = tiff_info.loc[tiff_info["band"] == band]
-        if len(band_slice) != len(ref_slice):
-            raise ValueError("mismatched availability between bands.")
         pto_file = Path(
             ref_pto_file.parent, ref_pto_file.name.replace(ref_band, band)
         )
-        band_text = ref_text
-        for rec in ref_tiffs:
-            band_path = band_slice.loc[
-                (band_slice['band'] == band)
-                & (band_slice['rsm'] == rec['rsm'])
-            ]['path'].iloc[0]
-            band_text = band_text.replace(rec['path'].name, band_path.name)
-        with pto_file.open("w") as stream:
-            stream.write(band_text)
-        pto_files[band] = pto_file
+        insert_band_filenames(pto_file, band_slice, ref_text, ref_tiffs)
+        sh.pto_var(
+            pto_file,
+            set="Vb=0,Vc=0,Vd=0",
+            output=Path(pto_file.parent, pto_file.stem + "_var.pto")
+        )
+        pto_files[band] = Path(pto_file.parent, pto_file.stem + "_var.pto")
+    ASDFLOG.info("generated per-band projection instructions")
     try:
         create_intermediate_mosaics(pto_files, tif_files)
-
     except sh.ErrorReturnCode:
         aprint(
-            f"[bold red] reference projection for {eye_name}-eye mosaic failed to "
-            f"generate a usable mosaic."
+            f"[bold red] reference projection for {eye_name}-eye mosaic "
+            f"failed to generate a usable mosaic."
         )
         return None, None, None
-    return pto_files, tif_files, ref_text
+    return tif_files, ref_text
+
+
+def insert_band_filenames(pto_file, band_slice, ref_text, ref_tiffs):
+    band_text = ref_text
+    for rec in ref_tiffs:
+        band_path = band_slice.loc[
+            (band_slice['rsm'] == rec['rsm'])
+        ]['path'].iloc[0]
+        band_text = band_text.replace(rec['path'].name, band_path.name)
+    with pto_file.open("w") as stream:
+        stream.write(band_text)
 
 
 def create_intermediate_mosaics(pto_files, tif_files):
+    parent = Path(list(pto_files.values())[0]).parent
     for band, pto_file in pto_files.items():
-        stdout = execute_hugin_stitch(pto_file).stdout.decode('utf-8')
+        stdout = execute_hugin_stitch(
+            pto_file, threads=THREADS['mosaic']
+        ).stdout.decode('utf-8')
         intermediate_tif_file = re.search(r'saving (.*?.tif)', stdout).group(1)
-        tif_files[band] = f"{intermediate_tif_file[:-8]}.tif"
+        tif_files[band] = Path(parent, f"{intermediate_tif_file[:-8]}.tif")
         ASDFLOG.info(f"wrote {band} intermediate mosaic file")
 
 
@@ -294,14 +307,10 @@ def preprocess_mosaic_metadata(bandsets):
 
 
 def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
-    eye_pto_files, eye_tif_files, eye_ref_text = process_info[eye]
-    parent_directory = Path(list(eye_pto_files.values())[0]).parent
-    paths = {
-        band: Path(parent_directory, p) for band, p in eye_tif_files.items()
-    }
+    tif_files, ref_text = process_info[eye]
     arrays = {
-        band: mark_borders(crop_outer(read_first_channel(phot)))
-        for band, phot in paths.items()
+        band: mark_borders(crop_outer(read_first_channel(file)))
+        for band, file in tif_files.items()
     }
     if not len({arr.shape for arr in arrays.values()}) == 1:
         raise ValueError("apparent misalignment.")
@@ -315,9 +324,14 @@ def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
         )
     )
     meta_hdu.name = "metadata"
-    hdul = fits.HDUList([fits.PrimaryHDU(), *image_hdus, meta_hdu])
+    ref_lines = tuple(filter(None, ref_text.split('\n')))
+    text_column = fits.Column(
+        name='text', array=ref_lines, format=f'A{max(map(len, ref_lines))}'
+    )
+    proj_hdu = fits.TableHDU.from_columns([text_column], name='projection')
+    hdul = fits.HDUList([fits.PrimaryHDU(), *image_hdus, proj_hdu, meta_hdu])
     if outpath is None:
-        outpath = parent_directory
+        outpath = tuple(tif_files.values())[0].parent
     mosaic_fn = concat_mosaic_fn(
         meta_hdu.data['SOL'][0], meta_hdu.data['SEQ_ID'][0], eye
     )

@@ -2,6 +2,7 @@
 top-level handler loop for asdf / fdsa
 """
 import getpass
+import shutil
 import zlib
 from functools import partial
 from operator import contains
@@ -9,8 +10,7 @@ import os
 from pathlib import Path
 import warnings
 
-from dustgoggles.func import catch_interaction, gmap
-from dustgoggles.structures import dig_for_value
+from dustgoggles.func import catch_interaction
 import matplotlib.figure
 from marslab.compat.mertools import merspect_to_marslab
 from marslab.imgops.imgutils import mapfilter
@@ -71,6 +71,7 @@ def _process_mosaic(
     save_plain_images,
     skip_rapidlooks,
     reuse_mosaic,
+    keep_intermediate,
     debug
 ):
     if roi_path is not None:
@@ -124,6 +125,10 @@ def _process_mosaic(
         with console.status("", spinner="star"):
             aprint("... converting inputs to TIFF ...")
             tiff_info = bounce_mosaic_input_files(bandsets, temp_path)
+            if tiff_info is None:
+                # mismatched band availability.
+                # useful feedback provided in bounce_mosaic_input_files.
+                return
         aprint("... stitching single-band mosaics ...")
         process_info = {}
         with ASDF_PROGRESS as prog:
@@ -141,6 +146,7 @@ def _process_mosaic(
                 "[bold red] Unable to create mosaics for either eye. "
                 "Bailing out."
             )
+            return
         aprint(Rule("generating multi-band mosaic files"))
         with console.status("", spinner="star"):
             mosaic_metadata = preprocess_mosaic_metadata(bandsets)
@@ -156,6 +162,8 @@ def _process_mosaic(
                 )
                 eye_name = {"L": "left", "R": "right"}[eye]
                 aprint(f"wrote {eye_name}-eye mosaic")
+    if keep_intermediate is False:
+        shutil.rmtree(temp_path)
     mosaic = ZMosaicBandSet(tuple(mosaic_paths.values()))
     mosaic.format_metadata()
     thumbnail_staging = {}
@@ -166,43 +174,47 @@ def _process_mosaic(
         )
     else:
         aprint(Rule("generating rapidlooks"))
-        from asdf_settings.generators.look_assembler import RAPIDLOOKS
-        for rapid in RAPIDLOOKS:
+        instructions = compile_looks()
+        if skip_rapidlooks and upload:
+            aprint(
+                "[dark_orange]skip-rapidlooks flag active; generating only "
+                "rapidlooks required for uploaded thumbnails"
+            )
+            instructions = mapfilter(
+                partial(contains, rapidlooks.THUMBNAILS), "name", instructions
+            )
+
+        for inst in instructions:
             # don't apply default zcam detector frame crop to projected images
-            if "crop" in rapid.keys():
-                del rapid['crop']
+            if "crop" in inst.keys():
+                del inst['crop']
             # retain mask for outside-projection regions
-            if rapid['plotter']['function'].__name__ == 'colormapped_plot':
-                rapid['plotter']['params']['drop_mask'] = False
+            if inst['plotter']['function'].__name__ == 'colormapped_plot':
+                inst['plotter']['params']['drop_mask'] = False
             # make sky masking algorithm ignore the out-of-projection regions
-            if 'mask' in rapid.keys():
-                for inst in rapid['mask']['instructions']:
-                    if 'function' not in inst.keys():
+            if 'mask' in inst.keys():
+                for mask_inst in inst['mask']['instructions']:
+                    if 'function' not in mask_inst.keys():
                         continue
-                    if inst['function'].__name__ != 'skymask':
+                    if mask_inst['function'].__name__ != 'skymask':
                         continue
-                    inst['params'] |= {
+                    mask_inst['params'] |= {
                         'input_mask_dilation': 10, 'respect_mask': True
                     }
 
         with ASDF_PROGRESS as prog:
-            ASDF_RPH.task_id = prog.add_task("", total=len(RAPIDLOOKS) + 1)
+            ASDF_RPH.task_id = prog.add_task("", total=len(instructions) + 1)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
-                mosaic.make_look_set(RAPIDLOOKS)
+                mosaic.make_look_set(instructions)
                 prog.remove_task(ASDF_RPH.task_id)
         aprint(Rule(" saving rapidlooks "))
         save_images = partial(save_looks, mosaic, plain=save_plain_images)
         with ASDF_PROGRESS as prog:
-            ASDF_RPH.task_id = prog.add_task(
-                "",
-                total=len(mosaic.looks) + 1,
-            )
+            ASDF_RPH.task_id = prog.add_task("", total=len(mosaic.looks) + 1)
             if upload is True:
                 thumbnail_staging |= pick_thumbs(mosaic.looks)
-            save_images(
-                outpath=Path(outpath, "browse"), basename=mosaic.name
-            )
+            save_images(outpath=Path(outpath, "browse"), basename=mosaic.name)
             prog.remove_task(ASDF_RPH.task_id)
             mosaic.purge("looks")
     # handle metadata and thumbnail uploads
@@ -211,7 +223,11 @@ def _process_mosaic(
         thumbnails = make_rapidlook_thumbnails(
             thumbnail_staging, rapidlooks.THUMBNAIL_SIZE
         )
-        upload_mosaic(mosaic, thumbnails, debug)
+        try:
+            upload_mosaic(mosaic, thumbnails, debug)
+        except InterruptedError:
+            return   # quit at user request due to dupe filenames
+
     aprint("\n:star: ... all done ... :star:", style="bold orchid1")
 
 
@@ -234,6 +250,7 @@ def asdf_body(
     seriously_no_images=False,
     reuse_mosaic=False,
     recreate_from=None,
+    keep_intermediate=False
 ):
     """
     body component of the asdf command line function -- can be called multiple
@@ -251,6 +268,7 @@ def asdf_body(
             save_plain_images,
             skip_rapidlooks,
             reuse_mosaic,
+            keep_intermediate,
             debug
         )
     # ok? great. initialize BandSet object from these paths
@@ -499,6 +517,9 @@ def asdf_body(
         thumbnails = make_rapidlook_thumbnails(
             thumbnail_staging, rapidlooks.THUMBNAIL_SIZE
         )
-        upload_asdf_analysis(bandset, thumbnails, debug)
+        try:
+            upload_asdf_analysis(bandset, thumbnails, debug)
+        except InterruptedError:
+            return   # quit at user request due to dupe filenames
 
     aprint("\n:star: ... all done ... :star:", style="bold orchid1")

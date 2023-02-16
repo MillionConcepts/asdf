@@ -7,10 +7,12 @@ import datetime as dt
 import io
 import json
 import os
+import shutil
 import socket
 import time
 import urllib.request
 from collections.abc import Callable, MutableMapping
+from functools import partial
 from numbers import Number
 from pathlib import Path
 from random import shuffle
@@ -23,6 +25,8 @@ import pandas as pd
 import pydrive2.files
 from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import ClientError
+from cytoolz import merge
+from dustgoggles.func import catch_interaction
 from dustgoggles.pivot import itemize_numpy
 
 # TODO: handling authentication differently in gspread and pydrive
@@ -36,7 +40,8 @@ from urllib3.connection import BaseSSLError
 
 from asdf.asdf_utils import obfuscated_name, tar_bytes
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
-from asdf.format import md5sum, folder_names
+from asdf.format import folder_names, cached_md5sum
+from asdf.pretty import NumberedChoicePrompt, metadata_open_prompt
 from asdf.zcam_bandset import ZcamBandSet
 from asdf_settings.process import THREADS
 from asdf_settings.sources import (
@@ -286,9 +291,9 @@ class DriveBot(GoogleDrive):
         upload.SetContentFile(source_path)
         upload.Upload()
 
-    def ls(self, folder_id):
+    def ls(self, folder_id, trashed=False):
         filelist = self.ListFile(
-            {"q": "'{}' in parents".format(folder_id)}
+            {"q": f"'{folder_id}' in parents and trashed={trashed}"}
         ).GetList()
         return filelist
 
@@ -315,9 +320,13 @@ class DriveBot(GoogleDrive):
         return folder_id
 
 
-def upload_bandset_to_gdrive(bandset, debug=False, mosaic=False):
-    # shuffling is a silly hack to speed up parallel uploads
-    shuffle(bandset.local_files)
+def upload_bandset_to_gdrive(
+    bandset,
+    debug=False,
+    is_mosaic=False,
+    noninteractive=False,
+    no_dupe_names=True
+):
     # id of root folder
     if debug is True:
         root = DEBUG_GOOGLE_DRIVE_ROOT
@@ -325,62 +334,157 @@ def upload_bandset_to_gdrive(bandset, debug=False, mosaic=False):
         root = GOOGLE_DRIVE_ROOT
     drivebot = make_asdf_pydrive_client()
     # ASDFLOG.info("checking folder structure")
-    sol_folder_name, obs_folder_name = folder_names(bandset, mosaic)
+    sol_folder_name, obs_folder_name = folder_names(bandset, is_mosaic)
     # # note: this may produce unexpected behavior if people dupe folders and
     # # remove the default copy suffixes, etc.
-    sol_folder_id = drivebot.cd(sol_folder_name, root)
-    obs_folder_id = drivebot.cd(obs_folder_name, sol_folder_id)
-    data_folder_id = drivebot.cd("data", obs_folder_id)
-    browse_folder_id = drivebot.cd("browse", obs_folder_id)
-    pixmap_folder_id = drivebot.cd("pixmaps", data_folder_id)
+    folders = {'sol': drivebot.cd(sol_folder_name, root)}
+    folders['obs'] = drivebot.cd(obs_folder_name, folders['sol'])
+    folders['data'] = drivebot.cd("data", folders['obs'])
+    folders['browse'] = drivebot.cd("browse", folders['obs'])
+    if is_mosaic is False:
+        folders['pixmap'] = drivebot.cd("pixmaps", folders["data"])
     aprint(f"uploading all files to {sol_folder_name}/{obs_folder_name}")
-    title_checksum_dict = (
-        drivebot.get_checksums(data_folder_id)
-        | drivebot.get_checksums(pixmap_folder_id)
-        | drivebot.get_checksums(browse_folder_id)
+    dupes, name_dupes, ok_files = check_duplicates(
+        bandset.local_files, drivebot, folders
     )
+    if len(dupes) > 0:
+        aprint(
+            "[dark_orange bold]the following files are exact duplicates of "
+            "files already on Google Drive, not uploading:\n"
+            f"{', '.join(Path(file).name for file in dupes)}\n"
+        )
+    if (no_dupe_names is True) and (len(name_dupes) > 0):
+        choice, rechecks = ask_about_dupe_names(
+            bandset, noninteractive, name_dupes, drivebot, folders
+        )
+        if choice.startswith("retry") or choice.startswith("add a suffix"):
+            ok_files = rechecks
+        elif choice.startswith("quit"):
+            raise InterruptedError
+    else:
+        ok_files += name_dupes
+
     if THREADS.get("upload") is not None:
         from multiprocessing import Pool
-
         pool, results = Pool(THREADS["upload"]), {}
     else:
         pool, results = None, None
-    for file in bandset.local_files:
-        if is_apparent_duplicate(file, title_checksum_dict):
-            ASDFLOG.info(
-                f"{file} appears to be an exact duplicate of an existing "
-                "file on Google Drive, skipping"
-            )
-            continue
-        if "pixmap" in file:
-            folder_id = pixmap_folder_id
-        elif "data" in Path(file).parts:
-            folder_id = data_folder_id
-        elif "browse" in Path(file).parts:
-            folder_id = browse_folder_id
-        else:
-            raise ValueError("invalid name")
-        if pool is not None:
-            results[file] = pool.apply_async(
-                asdf_drive_copy, (file, folder_id)
-            )
-        else:
-            drivebot.cp(file, folder_id)
-            ASDFLOG.info(f"uploaded {file}")
-    if pool is not None:
-        wait_for_it(
-            pool, results, ASDFLOG, message=f"uploaded "
-        )
-        pool.terminate()
-    url = f"https://drive.google.com/drive/folders/{obs_folder_id}"
+    if len(ok_files) > 0:
+        upload_files_to_gdrive(drivebot, folders, ok_files, pool, results)
+    obs_folder_url = f"https://drive.google.com/drive/folders/{folders['obs']}"
     bandset.summary[
         "NAME"
-    ] = f"""=HYPERLINK("{url}", "{bandset.summary['NAME']}")"""
+    ] = f"""=HYPERLINK("{obs_folder_url}", "{bandset.summary['NAME']}")"""
+
+
+def upload_files_to_gdrive(drivebot, folders, ok_files, pool, results):
+    with ASDF_PROGRESS as prog:
+        ASDF_RPH.task_id = prog.add_task("", total=len(ok_files))
+        shuffle(ok_files)  # silly hack to speed up parallel uploads
+        for file in ok_files:
+            try:
+                folder_name = next(
+                    filter(lambda t: t in file, ("pixmap", "data", "browse"))
+                )
+                id_ = folders[folder_name]
+            except StopIteration:
+                ASDFLOG.info(f"{file} has unknown type, not uploading")
+                continue
+            if pool is not None:
+                results[file] = pool.apply_async(asdf_drive_copy, (file, id_))
+            else:
+                drivebot.cp(file, id_)
+                ASDFLOG.info(f"uploaded {file}")
+        if pool is not None:
+            wait_for_it(pool, results, ASDFLOG, message=f"uploaded ")
+            pool.terminate()
+        ASDF_PROGRESS.remove_task(ASDF_RPH.task_id)
+
+
+def check_duplicates(local_files, drivebot, folders):
+    title_checksum_dict = merge(
+        drivebot.get_checksums(id_) for id_ in folders.values()
+    )
+    dupes, name_dupes, ok_files = [], [], []
+    for file in local_files:
+        if is_apparent_duplicate(file, title_checksum_dict):
+            dupes.append(file)
+        elif Path(file).name in title_checksum_dict.keys():
+            name_dupes.append(file)
+        else:
+            ok_files.append(file)
+    return dupes, name_dupes, ok_files
+
+
+def ask_about_dupe_names(
+    bandset, noninteractive, name_dupes, drivebot, folders, rerun=False
+):
+    prefix = {
+        True: "some name matches still exist",
+        False: "files with matching names already exist on Google Drive"
+    }[rerun]
+    suffix = {
+        True: " noninteractive=True, skipping all such files.",
+        False: ". How would you like to handle them?"
+    }[noninteractive]
+    aprint(
+        f"[bold red]{prefix}:\n"
+        f"{', '.join(Path(d).name for d in name_dupes)}{suffix}\n"
+    )
+    if noninteractive is True:
+        return "skip these files", []
+    data_files = [
+        d for d in name_dupes
+        if any(w in d for w in ("context", "marslab", "roi", "pretty"))
+    ]
+    choices = []
+    if len(data_files) > 0:
+        choices.append("add a suffix to marslab/ROI/context files")
+    choices += [
+        "retry (after you manually remove files)",
+        "skip these files",
+        "quit asdf\n"
+    ]
+    choice = NumberedChoicePrompt(
+        choices=choices, skippable=False, console=ASDF_CONSOLE
+    )()
+    if choice.startswith("skip") or choice.startswith("quit"):
+        return choice, []  # noninteractive-mode default is skip
+    if choice.startswith("add a suffix"):
+        suffix = metadata_open_prompt("what suffix would you like to add?")
+        bandset.metadata["ANALYSIS_NAME"] = suffix
+        bandset.suffix = f"-{suffix}"
+        bandset.format_metadata()
+        bandset.write_data_files(outpath=Path(data_files[0]).parent)
+        for file in data_files:
+            if "marslab" not in file:
+                # write_data_files handles this for marslab files
+                parts = file.split(".")
+                suffixed_file = f"{parts[0]}-{suffix}.{'.'.join(parts[1:])}"
+                bandset.local_files.append(str(suffixed_file))
+                shutil.move(file, suffixed_file)
+        bandset.local_files = [
+            f for f in bandset.local_files if f not in data_files
+        ]
+    # handle "retry" case
+    # + also rechecks to see if files are left over after suffixing
+
+    # note: this may have undesired results if multiple asdf uploads are
+    # running at the exact same time, but this is probably an unlikely
+    # edge case.
+    _, name_dupes, ok_files = check_duplicates(
+        bandset.local_files, drivebot, folders
+    )
+    if len(name_dupes) > 0:
+        return ask_about_dupe_names(
+            bandset, noninteractive, name_dupes, drivebot, folders, rerun=True
+        )
+    return choice, ok_files
 
 
 def is_apparent_duplicate(file, existing_title_checksums):
     if Path(file).name in existing_title_checksums.keys():
-        if md5sum(file) == existing_title_checksums[Path(file).name]:
+        if cached_md5sum(file) == existing_title_checksums[Path(file).name]:
             return True
     return False
 
@@ -430,6 +534,22 @@ def upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails):
             bandset.summary[name] = '=IMAGE("' + link + '")'
 
 
+def handle_bandset_file_upload(bandset, debug, is_mosaic=False):
+    try:
+        upload_bandset_to_gdrive(bandset, debug, is_mosaic)
+        aprint("completed Google Drive upload")
+        return "ok"
+    except (pydrive2.files.ApiRequestError, socket.timeout) as api_error:
+        aprint(
+            f"[bold red]:confused_face: Sorry, couldn't upload files to "
+            f"Google Drive: {api_error}"
+        )
+        return "continue"
+    except InterruptedError:
+        aprint("[bold red] halting at user request.")
+    return "quit"
+
+
 # TODO: this and its precursors are excessively baroque. Consider turning
 #  bandset.local_files into a dictionary to simplify this?
 def upload_asdf_analysis(
@@ -437,56 +557,69 @@ def upload_asdf_analysis(
     thumbnails: MutableMapping,
     debug: bool = False,
 ):
-    if debug is True:
-        sheet_id = DEBUG_GOOGLE_SHEET_ID
-        sheet_backup_folder_id = DEBUG_METADATA_BACKUP_FOLDER_ID
-        s3_debug_prefix = "debug/"
-    else:
-        sheet_id = GOOGLE_SHEET_ID
-        sheet_backup_folder_id = METADATA_BACKUP_FOLDER_ID
-        s3_debug_prefix = ""
+    s3_debug_prefix, sheet_backup_folder_id, sheet_id = remote_ids(debug)
     with ASDF_CONSOLE.status(
         "... backing up marslab & ROI files ...", spinner="star"
     ):
         backup_data_to_s3(bandset, s3_debug_prefix)
     aprint("completed marslab and ROI backup")
     aprint("... uploading files to Google Drive space ...")
-    with ASDF_PROGRESS as prog:
-        ASDF_RPH.task_id = prog.add_task(
-            "",
-            total=len(bandset.local_files) + 1,
-        )
-        try:
-            upload_bandset_to_gdrive(bandset, debug)
-            aprint("completed Google Drive upload")
-        except (pydrive2.files.ApiRequestError, socket.timeout) as api_error:
-            aprint(
-                ":confused_face: Sorry, couldn't upload files to drive: "
-                + str(api_error),
-                style="bold red",
-            )
-        prog.remove_task(ASDF_RPH.task_id)
+    upload_result = handle_bandset_file_upload(bandset, debug)
+    if upload_result == "quit":
+        raise InterruptedError
     with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
-        try:
-            upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails)
-            sheetbot = gspread.service_account(GOOGLE_CLIENT_SECRETS_FILE)
-            update_google_sheet(
-                bandset, sheet_backup_folder_id, sheet_id, sheetbot
-            )
-        except (
+        handle_google_sheet(
+            bandset,
+            s3_debug_prefix,
+            sheet_backup_folder_id,
+            sheet_id,
+            thumbnails
+        )
+
+
+def upload_mosaic(mosaic: BandSet, thumbnails, debug):
+    s3_debug_prefix, sheet_backup_folder_id, sheet_id = remote_ids(debug)
+    aprint("... uploading files to Google Drive space ...")
+    upload_result = handle_bandset_file_upload(mosaic, debug, True)
+    if upload_result == "quit":
+        raise InterruptedError
+    with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
+        handle_google_sheet(
+            mosaic,
+            s3_debug_prefix,
+            sheet_backup_folder_id,
+            sheet_id,
+            thumbnails
+        )
+
+
+def handle_google_sheet(
+    mosaic,
+    s3_debug_prefix,
+    sheet_backup_folder_id,
+    sheet_id,
+    thumbnails
+):
+    try:
+        upload_and_link_thumbnails(mosaic, s3_debug_prefix, thumbnails)
+        sheetbot = gspread.service_account(GOOGLE_CLIENT_SECRETS_FILE)
+        update_google_sheet(
+            mosaic, sheet_backup_folder_id, sheet_id, sheetbot
+        )
+    except (
             gspread.exceptions.APIError,
             BaseSSLError,
             socket.timeout,
             gspread.exceptions.NoValidUrlKeyFound,
-        ) as api_error:
-            aprint(
-                ":confused_face: Sorry, couldn't update online metadata: "
-                + str(api_error),
-                style="bold red",
-            )
+    ) as api_error:
+        aprint(
+            ":confused_face: Sorry, couldn't update online metadata: "
+            + str(api_error),
+            style="bold red",
+        )
 
 
-def upload_mosaic(mosaic: BandSet, thumbnails, debug):
+def remote_ids(debug):
     if debug is True:
         sheet_id = DEBUG_GOOGLE_SHEET_ID
         sheet_backup_folder_id = DEBUG_METADATA_BACKUP_FOLDER_ID
@@ -495,37 +628,4 @@ def upload_mosaic(mosaic: BandSet, thumbnails, debug):
         sheet_id = GOOGLE_SHEET_ID
         sheet_backup_folder_id = METADATA_BACKUP_FOLDER_ID
         s3_debug_prefix = ""
-    aprint("... uploading files to Google Drive space ...")
-    with ASDF_PROGRESS as prog:
-        ASDF_RPH.task_id = prog.add_task(
-            "",
-            total=len(mosaic.local_files) + 1
-        )
-        try:
-            upload_bandset_to_gdrive(mosaic, debug, True)
-            aprint("completed Google Drive upload")
-        except (pydrive2.files.ApiRequestError, socket.timeout) as api_error:
-            aprint(
-                ":confused_face: Sorry, couldn't upload files to drive: "
-                + str(api_error),
-                style="bold red",
-            )
-        prog.remove_task(ASDF_RPH.task_id)
-    with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
-        try:
-            upload_and_link_thumbnails(mosaic, s3_debug_prefix, thumbnails)
-            sheetbot = gspread.service_account(GOOGLE_CLIENT_SECRETS_FILE)
-            update_google_sheet(
-                mosaic, sheet_backup_folder_id, sheet_id, sheetbot
-            )
-        except (
-            gspread.exceptions.APIError,
-            BaseSSLError,
-            socket.timeout,
-            gspread.exceptions.NoValidUrlKeyFound,
-        ) as api_error:
-            aprint(
-                ":confused_face: Sorry, couldn't update online metadata: "
-                + str(api_error),
-                style="bold red",
-            )
+    return s3_debug_prefix, sheet_backup_folder_id, sheet_id

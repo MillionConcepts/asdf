@@ -1,7 +1,7 @@
 """
 formatting and helper functions for other asdf modules.
 """
-from functools import partial
+from functools import partial, cache
 import getpass
 from hashlib import md5
 import os
@@ -274,6 +274,10 @@ def md5sum(path_or_file, hash_function=md5):
 
     return hasher.hexdigest()
 
+
+@cache
+def cached_md5sum(file):
+    return md5sum(file)
 
 def add_image_hashes(bandset):
     paths = bandset.metadata["PATH"].unique()

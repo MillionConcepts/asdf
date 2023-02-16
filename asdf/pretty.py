@@ -36,8 +36,7 @@ def style_prog(rich_progress, style):
 
 
 class NumberedChoicePrompt(PromptBase):
-    """prompt type for our enumerated shortcut ROI prompts"""
-
+    """prompt type for our enumerated shortcut prompts"""
     def __init__(self, *args, skippable=True, **kwargs):
         super().__init__(*args, **kwargs)
         choices = kwargs.get("choices")

@@ -33,7 +33,8 @@ def asdf_initiate(
     skip_pixmaps: "sp" = False,
     skip_errmaps: "se" = True,
     seriously_no_images: "sn" = False,
-    reuse_mosaic: "rm" = False
+    reuse_mosaic: "rm" = False,
+    keep_intermediate: "ki" = False
 ):
     """
     processes and archives everything
@@ -73,6 +74,7 @@ def asdf_initiate(
     :param seriously_no_images: don't generate images. ever. really.
     :param reuse_mosaic: reuse existing intermediate mosaic products if
         present?
+    :param keep_intermediate: keep intermediate mosaic files after completion?
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
@@ -127,7 +129,8 @@ def asdf_initiate(
         skip_pixmaps,
         skip_errmaps,
         seriously_no_images,
-        reuse_mosaic
+        reuse_mosaic,
+        keep_intermediate
     )
     from asdf.flow import asdf_body
 
