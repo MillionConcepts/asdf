@@ -774,7 +774,7 @@ def rate_cal_offset(siblings: pd.DataFrame):
         ]
     )
     cal_chron_score = sol_offset + ltst_offset
-    return cal_chron_score == abs(cal_chron_score).min()
+    return cal_chron_score.abs() == cal_chron_score.abs().min()
 
 
 def rate_version(siblings: pd.DataFrame):
