@@ -75,7 +75,7 @@ def make_bandset_annotation(metadata):
         annotation += f"{line['NAME']}, "
     annotation += f"sol {line['SOL']}, seq_id {line['SEQ_ID'][4:]}"
     if 'RSM' in line.index:
-        annotation += ", rsm {line['RSM']}"
+        annotation += f", rsm {line['RSM']}"
     return annotation
 
 
