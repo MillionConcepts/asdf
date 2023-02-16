@@ -58,7 +58,7 @@ LONG_METADATA_DTYPES = {
 def bounce_mosaic_input_files(mosaic, scratch_path=".temp/mosaic"):
     Path(scratch_path).mkdir(exist_ok=True)
     bandlist = [set(b.metadata["BAND"].unique()) for b in mosaic]
-    if reduce(eq, bandlist) is not True:
+    if len(set(map(frozenset, bandlist))) != 1:
         aprint(
             "[bold red]Mismatched availability between bands in these frames."
             " Unable to mosaic."
