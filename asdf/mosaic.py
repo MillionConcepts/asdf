@@ -284,9 +284,7 @@ def insert_band_filenames(pto_file, band_slice, ref_text, ref_tiffs):
 def create_intermediate_mosaics(pto_files, tif_files):
     parent = Path(list(pto_files.values())[0]).parent
     for band, pto_file in pto_files.items():
-        stdout = execute_hugin_stitch(
-            pto_file, threads=THREADS['mosaic']
-        ).stdout.decode('utf-8')
+        stdout = execute_hugin_stitch(pto_file, threads=THREADS['mosaic'])
         intermediate_tif_file = re.search(r'saving (.*?.tif)', stdout).group(1)
         tif_files[band] = Path(parent, f"{intermediate_tif_file[:-8]}.tif")
         ASDFLOG.info(f"wrote {band} intermediate mosaic file")
