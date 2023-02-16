@@ -131,4 +131,3 @@ for look_inst in RAPIDLOOKS:
 # deepcopy everything to ensure that later mutation
 # does not result in undesirably shared state
 RAPIDLOOKS = [deepcopy(r) for r in sorted(RAPIDLOOKS, key=lambda i: i['name'])]
-# RAPIDLOOKS = [r for r in RAPIDLOOKS if "dcs" in r['name']]

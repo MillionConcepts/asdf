@@ -6,5 +6,6 @@ settings will not be optimal across environments.
 THREADS = {
     'save': 5,
     'look': 5,
-    'upload': 3
+    'upload': 3,
+    'mosaic': 6
 }

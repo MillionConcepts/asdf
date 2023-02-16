@@ -47,6 +47,8 @@ exclusive_fields = list(
     )
 )
 
+# TODO: convert distance to per-observation rather than per-ROI
+
 # fields we want to ask the user about at each ROI. This order is preserved.
 # the asterisk is a shorthand for "insert all of these fields at this position"
 ROI_METADATA_FIELDS = (
