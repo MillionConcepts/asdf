@@ -391,7 +391,8 @@ class ZMosaicBandSet(BandSet):
         ]
         super().__init__(
             metadata=metadata,
-            load_method=partial(simple_fits_load, missing_constants=(-9999,))
+            load_method=partial(simple_fits_load, missing_constants=(-9999,)),
+            threads=threads
         )
         self.extended = pd.concat(extended).reset_index(drop=True)
         for id_key in ('SOL', 'NAME', 'SEQ_ID', 'SITE', 'DRIVE'):

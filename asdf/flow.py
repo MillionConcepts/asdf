@@ -210,13 +210,18 @@ def _process_mosaic(
                     }
 
         with ASDF_PROGRESS as prog:
-            ASDF_RPH.task_id = prog.add_task("", total=len(instructions) + 1)
+            ASDF_RPH.task_id = prog.add_task("", total=len(instructions) + 2)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 mosaic.make_look_set(instructions)
                 prog.remove_task(ASDF_RPH.task_id)
         aprint(Rule(" saving rapidlooks "))
-        save_images = partial(save_looks, mosaic, plain=save_plain_images)
+        save_images = partial(
+            save_looks,
+            mosaic,
+            plain=save_plain_images,
+            threads=mosaic.threads['save']
+        )
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task("", total=len(mosaic.looks) + 1)
             if upload is True:
