@@ -269,8 +269,8 @@ def asdf_body(
     skip_errmaps=True,
     seriously_no_images=False,
     reuse_mosaic=False,
+    keep_intermediate=False,
     recreate_from=None,
-    keep_intermediate=False
 ):
     """
     body component of the asdf command line function -- can be called multiple

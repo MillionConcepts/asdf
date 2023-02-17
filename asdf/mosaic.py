@@ -16,7 +16,7 @@ from astropy.io import fits
 from astropy.table import Table
 from dustgoggles.func import gmap
 from pdr.np_utils import enforce_order_and_object
-from scipy.ndimage import label
+import scipy.ndimage as ndi
 
 import asdf
 from asdf.asdf_utils import cast_to_reference
@@ -187,7 +187,7 @@ def mark_borders(
     if inplace is False:
         array = array.copy()
     zeromask = how(array, border_threshold)
-    borderlabels = label(~zeromask)[0]
+    borderlabels = ndi.label(~zeromask)[0]
     exterior = np.zeros(array.shape, dtype=bool)
     for label_ix in np.unique(borderlabels):
         region = borderlabels == label_ix
@@ -202,51 +202,100 @@ def concat_mosaic_fn(sol, seq_id, eye):
     return f"sol{str(sol).zfill(4)}_{seq_id.lower()}_{eye.lower()}_mosaic.fits"
 
 
-def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
+def heavy_contrast(image):
+    return _do_filter(image, 5)
+
+
+def very_heavy_contrast(image):
+    return _do_filter(image, 10)
+
+
+def light_contrast_median(image):
+    return _do_filter(image, 1, 5)
+
+
+def med_contrast_median(image):
+    return _do_filter(image, 3, 4)
+
+
+def _do_filter(image, stretch=None, median_size=None):
+    normed = normalize_range(
+        crop(image, CROP_SETTINGS['crop']), (0, 1), stretch
+    )
+    if median_size is None:
+        return normed
+    return ndi.median_filter(image, median_size)
+
+
+FILTER_SETTINGS = (heavy_contrast, light_contrast_median,)
+
+
+def make_single_band_mosaics(
+    eye, tiff_info, bandsets, iterfilters=None, projections=(1,)
+):
     eye_name = {"L": "left", "R": "right"}[eye]
+    if iterfilters is None:
+        iterfilters = iter(FILTER_SETTINGS)
+        filter_function = next(iterfilters)
+    else:
+        try:
+            filter_function = next(iterfilters)
+            aprint("trying again with alternate filter settings")
+        except StopIteration:
+            aprint(f"[bold red]Projection failed for {eye_name}-eye mosaic.")
+            return None, None, None
     available_bands = tiff_info["band"].tolist()
-    eye_bands = [b for b in available_bands if b.startswith(eye)]
-    if len(eye_bands) == 0:
+    bands = [b for b in available_bands if b.startswith(eye)]
+    if len(bands) == 0:
         return {}, None
     ref_band = next(
-        (
-            f"{eye}{n}" for n in PREFERRED_REF_BANDS
-            if f"{eye}{n}" in eye_bands
-        )
+        (f"{eye}{n}" for n in PREFERRED_REF_BANDS if f"{eye}{n}" in bands)
     )
     ref_slice = tiff_info.loc[tiff_info['band'] == ref_band]
-    ref_tiffs = []
+    ref_arrays, ref_tiffs = [], []
     for bandset in bandsets:
         bandset.load([ref_band])
         bandset.bulk_debayer([ref_band])
-        reference_image = normalize_range(
-            crop(bandset.get_band(ref_band), CROP_SETTINGS["crop"]), (0, 1), 5
-        )
         tiff_path = Path(
             Path(ref_slice['path'].iloc[0]).parent,
             f"{ref_band}_reference_{bandset.name}.tiff"
         )
-        cv2.imwrite(str(tiff_path), reference_image)
+        cv2.imwrite(
+            str(tiff_path), filter_function(bandset.get_band(ref_band))
+        )
         rsm = bandset.metadata['RSM'].iloc[0]
         ref_tiffs.append({'path': tiff_path, 'rsm': rsm})
         aprint(f"wrote {eye_name}-eye reference image for RSM {rsm}")
-    try:
-        ref_pto_file, _ = ref_projection(
-            [rt['path'] for rt in ref_tiffs],
-            np.mean(ref_slice['fov']),
-            **pto_kwargs
-        )
-    except (TimeoutError, ValueError, sh.ErrorReturnCode):
-        aprint(
-            f"[bold red] Unable to find usable reference projection for "
-            f"{eye_name}-eye mosaic."
-        )
-        return None, None, None
+    for projection in projections:
+        try:
+            return project_images(
+                bands,
+                eye_name,
+                ref_band,
+                ref_slice,
+                ref_tiffs,
+                tiff_info,
+                projection
+            )
+        except (TimeoutError, ValueError, sh.ErrorReturnCode) as err:
+            continue
+    return make_single_band_mosaics(eye, tiff_info, bandsets, iterfilters)
+
+
+def project_images(
+    bands, eye_name, ref_band, ref_slice, ref_tiffs, tiff_info, projection
+):
+    aprint("...building reference projection...")
+    ref_pto_file = ref_projection(
+        [rt['path'] for rt in ref_tiffs],
+        np.mean(ref_slice['fov']),
+        projection=projection,
+    )
     ASDFLOG.info(f"generated projection for {eye_name}-eye mosaic")
     with open(ref_pto_file) as stream:
         ref_text = stream.read()
     pto_files, tif_files = {ref_band: ref_pto_file}, {}
-    for band in eye_bands:
+    for band in bands:
         band_slice = tiff_info.loc[tiff_info["band"] == band]
         pto_file = Path(
             ref_pto_file.parent, ref_pto_file.name.replace(ref_band, band)
@@ -259,15 +308,8 @@ def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
         )
         pto_files[band] = Path(pto_file.parent, pto_file.stem + "_var.pto")
     ASDFLOG.info("generated per-band projection instructions")
-    try:
-        create_intermediate_mosaics(pto_files, tif_files)
-    except sh.ErrorReturnCode:
-        aprint(
-            f"[bold red] reference projection for {eye_name}-eye mosaic "
-            f"failed to generate a usable mosaic."
-        )
-        return None, None, None
-    return tif_files, ref_text
+    create_intermediate_mosaics(pto_files, tif_files)
+    return ref_text, tif_files
 
 
 def insert_band_filenames(pto_file, band_slice, ref_text, ref_tiffs):
@@ -292,10 +334,18 @@ def create_intermediate_mosaics(pto_files, tif_files):
 
 def ref_projection(tiff_files, fov, projection=1):
     _, ref_pto_file = zcam_pto_gen(tiff_files, fov)
-    assistant_cmd = hugin_assistant(ref_pto_file)
+    hugin_assistant(ref_pto_file)
+
+    # sh.cpfind(ref_pto_file, output=ref_pto_file, multirow=True)
+    # sh.linefind(ref_pto_file, output=ref_pto_file)
+    # sh.cpclean(
+    #     ref_pto_file, output=ref_pto_file, check_line_cp=True, max_distance=2
+    # )
+    # sh.celeste_standalone("-i", ref_pto_file, "-o", ref_pto_file, "-d", "/opt/mambaforge/envs/asdf/share/hugin/data/celeste.model")
+    # sh.autooptimiser("-a", "-l", "-s", ref_pto_file, output=ref_pto_file)
     pano_modify(ref_pto_file, canvas="AUTO", projection=projection)
     remove_hugin_crop_instruction(ref_pto_file)
-    return ref_pto_file, assistant_cmd
+    return ref_pto_file
 
 
 def preprocess_mosaic_metadata(bandsets):
@@ -305,7 +355,7 @@ def preprocess_mosaic_metadata(bandsets):
 
 
 def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
-    tif_files, ref_text = process_info[eye]
+    ref_text, tif_files = process_info[eye]
     arrays = {
         band: mark_borders(crop_outer(read_first_channel(file)))
         for band, file in tif_files.items()
