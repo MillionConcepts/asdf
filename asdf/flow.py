@@ -74,7 +74,8 @@ def _process_mosaic(
     skip_rapidlooks,
     reuse_mosaic,
     keep_intermediate,
-    debug
+    debug,
+    seriously_no_images
 ):
     if roi_path is not None:
         raise ValueError("Sorry, ROI counting on mosaic is not supported.")
@@ -174,7 +175,12 @@ def _process_mosaic(
     )
     mosaic.format_metadata()
     thumbnail_staging = {}
-    if skip_rapidlooks and not upload:
+    if seriously_no_images:
+        aprint(
+            "[dark_orange]seriously-no-images flag active; skipping "
+            "rapidlook generation"
+        )
+    elif skip_rapidlooks and not upload:
         aprint(
             "[dark_orange]skip-rapidlooks flag active; skipping "
             "rapidlook generation"
@@ -281,7 +287,8 @@ def asdf_body(
             skip_rapidlooks,
             reuse_mosaic,
             keep_intermediate,
-            debug
+            debug,
+            seriously_no_images
         )
     # ok? great. initialize BandSet object from these paths
     aprint(Rule(" gathering metadata "))

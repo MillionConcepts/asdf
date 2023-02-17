@@ -1,6 +1,7 @@
 import datetime as dt
 import re
 import time
+from ast import literal_eval
 from functools import partial, reduce
 from itertools import product
 from operator import eq
@@ -395,6 +396,7 @@ class ZMosaicBandSet(BandSet):
             threads=threads
         )
         self.extended = pd.concat(extended).reset_index(drop=True)
+        self.extended['RMC'] = self.extended['RMC'].map(literal_eval)
         for id_key in ('SOL', 'NAME', 'SEQ_ID', 'SITE', 'DRIVE'):
             self.metadata[id_key] = self.extended[id_key].iloc[0]
         self.name = (
