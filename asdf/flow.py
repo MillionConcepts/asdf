@@ -149,6 +149,8 @@ def _process_mosaic(
                 "[bold red] Unable to create mosaics for either eye. "
                 "Bailing out."
             )
+            if keep_intermediate is False:
+                shutil.rmtree(temp_path)
             return
         aprint(Rule("generating multi-band mosaic files"))
         with console.status("", spinner="star"):
