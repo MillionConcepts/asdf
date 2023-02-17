@@ -23,7 +23,7 @@ DEFAULT_PRODUCT_SUBDIRECTORY = "iof"
 GOOGLE_CLIENT_SECRETS_FILE = glom(
     ASDF_MODULE_PATH, "secrets", "google_client_secrets.json"
 )
-GOOGLE_SHEET_ID = "19Qwm1rKctb807YrWt1l3t81vMpPpuoEjQxpuuiu1e1o"
+GOOGLE_SHEET_ID = "1jpqxmu0kc0W4aMq1uswrOSljeotFCxf_Zl8SxdE4xKQ"
 METADATA_BACKUP_FOLDER_ID = "1-nbgqasqLbfmnn68FE0o1W8gFm-zKPT9"
 GOOGLE_DRIVE_ROOT = "1WuvGtj3DAxH2yDALAmqm-HqkQmI-M-17"
 
