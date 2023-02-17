@@ -55,7 +55,9 @@ LONG_METADATA_DTYPES = {
 }
 
 
-def bounce_mosaic_input_files(mosaic, scratch_path=".temp/mosaic"):
+def bounce_mosaic_input_files(
+    mosaic, scratch_path=".temp/mosaic", reuse_intermediate=False
+):
     Path(scratch_path).mkdir(exist_ok=True)
     bandlist = [set(b.metadata["BAND"].unique()) for b in mosaic]
     if len(set(map(frozenset, bandlist))) != 1:
@@ -67,17 +69,7 @@ def bounce_mosaic_input_files(mosaic, scratch_path=".temp/mosaic"):
     bands = sorted(bandlist[0])
     tiff_info = []
     for bandset, band in product(mosaic, bands):
-        bandset.load([band])
-        bandset.bulk_debayer([band])
-        cropped = crop(bandset.get_band(band), CROP_SETTINGS["crop"])
         tiff_path = Path(scratch_path, f"{band}_{bandset.name}.tiff")
-        # note: hugin crashes if the input extension is "tif", but insists
-        # on writing it as "tiff".
-        # it also exhibits different behavior based on tiff file data type.
-        # also note that cv2 will write but not read 32-bit tiff files, and
-        # pillow won't do either. scikit-image can read them.
-        cv2.imwrite(str(tiff_path), cropped)
-        aprint(f"wrote {tiff_path}")
         # for -f argument to pto_gen
         azimuth_fov = bandset.precached[
             bandset.metadata.loc[
@@ -94,7 +86,24 @@ def bounce_mosaic_input_files(mosaic, scratch_path=".temp/mosaic"):
             "eye": band[0],
         }
         tiff_info.append(tiff_rec)
-        bandset.purge()
+        if reuse_intermediate is False:
+            bandset.load([band])
+            bandset.bulk_debayer([band])
+            cropped = crop(bandset.get_band(band), CROP_SETTINGS["crop"])
+            # note: hugin crashes if the input extension is "tif", but insists
+            # on writing it as "tiff".
+            # it also exhibits different behavior based on tiff file data type.
+            # also note that cv2 will write but not read 32-bit tiff files, and
+            # pillow won't do either. scikit-image can read them.
+            cv2.imwrite(str(tiff_path), cropped)
+            aprint(f"wrote {tiff_path}")
+            bandset.purge()
+        elif not tiff_path.exists():
+            aprint(
+                f"[dark red]reuse_intermediate=True, but {tiff_path} not "
+                f"available. bailing out."
+            )
+            return
     return pd.DataFrame(tiff_info)
 
 
@@ -130,6 +139,10 @@ def remove_hugin_crop_instruction(pto_file):
     return width, height
 
 
+class UnconnectedImageError(ValueError):
+    pass
+
+
 def hugin_assistant(pto_file, timeout=15):
     cmd = sh.hugin_executor("--assistant", pto_file, _bg=True, _bg_exc=False)
     start = time.time()
@@ -139,7 +152,7 @@ def hugin_assistant(pto_file, timeout=15):
         if runtime > timeout:
             raise TimeoutError
     if cmd.exit_code != 0:
-        raise ValueError
+        raise ValueError(cmd.stdout.decode('utf-8'))
     return cmd
 
 
@@ -201,7 +214,9 @@ def concat_mosaic_fn(sol, seq_id, eye):
     return f"sol{str(sol).zfill(4)}_{seq_id.lower()}_{eye.lower()}_mosaic.fits"
 
 
-def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
+def make_single_band_mosaics(
+    eye, tiff_info, bandsets, reuse=False, **pto_kwargs
+):
     eye_name = {"L": "left", "R": "right"}[eye]
     available_bands = tiff_info["band"].tolist()
     eye_bands = [b for b in available_bands if b.startswith(eye)]
@@ -216,26 +231,39 @@ def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
     ref_slice = tiff_info.loc[tiff_info['band'] == ref_band]
     ref_tiffs = []
     for bandset in bandsets:
-        bandset.load([ref_band])
-        bandset.bulk_debayer([ref_band])
-        reference_image = normalize_range(
-            crop(bandset.get_band(ref_band), CROP_SETTINGS["crop"]), (0, 1), 5
-        )
         tiff_path = Path(
             Path(ref_slice['path'].iloc[0]).parent,
             f"{ref_band}_reference_{bandset.name}.tiff"
         )
-        cv2.imwrite(str(tiff_path), reference_image)
         rsm = bandset.metadata['RSM'].iloc[0]
         ref_tiffs.append({'path': tiff_path, 'rsm': rsm})
-        aprint(f"wrote {eye_name}-eye reference image for RSM {rsm}")
+        if reuse is False:
+            bandset.load([ref_band])
+            bandset.bulk_debayer([ref_band])
+            reference_image = normalize_range(
+                crop(bandset.get_band(ref_band), CROP_SETTINGS["crop"]),
+                (0, 1),
+                5
+            )
+            cv2.imwrite(str(tiff_path), reference_image)
+            aprint(f"wrote {eye_name}-eye reference image for RSM {rsm}")
+        elif not tiff_path.exists():
+            aprint(
+                f"[dark red]reuse_intermediate=True, but reference image "
+                f"for {eye} not available. bailing out."
+            )
+            return None, None, None
     try:
         ref_pto_file, _ = ref_projection(
             [rt['path'] for rt in ref_tiffs],
             np.mean(ref_slice['fov']),
             **pto_kwargs
         )
-    except (TimeoutError, ValueError, sh.ErrorReturnCode):
+    except (TimeoutError, ValueError, sh.ErrorReturnCode) as ve:
+        if isinstance(ve, sh.ErrorReturnCode):
+            text = ve.stdout.decode('utf-8')
+        else:
+            text = ve
         aprint(
             f"[bold red] Unable to find usable reference projection for "
             f"{eye_name}-eye mosaic."

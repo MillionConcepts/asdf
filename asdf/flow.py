@@ -74,7 +74,9 @@ def _process_mosaic(
     skip_rapidlooks,
     reuse_mosaic,
     keep_intermediate,
-    debug
+    debug,
+    rsm_range=None,
+    reuse=False
 ):
     if roi_path is not None:
         raise ValueError("Sorry, ROI counting on mosaic is not supported.")
@@ -90,6 +92,11 @@ def _process_mosaic(
     #  reuse_mosaics is True.
     aprint(Rule(" gathering metadata "))
     aprint("... scraping image file headers ...")
+    if rsm_range is not None:
+        observation = [
+            p for p in observation
+            if rsm_range[0] <= p['RSM'].iloc[0] <= rsm_range[1]
+        ]
     bandsets = [ZcamBandSet(pointing[1]) for pointing in observation]
     # TODO: messy, probably only need to do it for one
     if USE_PUBLIC_WAYPOINTS:
@@ -126,9 +133,9 @@ def _process_mosaic(
         aprint(Rule(" generating intermediate mosaic files "))
         with console.status("", spinner="star"):
             aprint("... converting inputs to TIFF ...")
-            tiff_info = bounce_mosaic_input_files(bandsets, temp_path)
+            tiff_info = bounce_mosaic_input_files(bandsets, temp_path, reuse)
             if tiff_info is None:
-                # mismatched band availability.
+                # mismatched band availability or missing intermediates.
                 # useful feedback provided in bounce_mosaic_input_files.
                 return
         aprint("... stitching single-band mosaics ...")
@@ -140,7 +147,7 @@ def _process_mosaic(
             )
             for eye in ("L", "R"):
                 process_info[eye] = make_single_band_mosaics(
-                    eye, tiff_info, bandsets
+                    eye, tiff_info, bandsets, reuse
                 )
             prog.remove_task(ASDF_RPH.task_id)
         if all(v == (None, None, None) for v in process_info.values()):
@@ -262,7 +269,9 @@ def asdf_body(
     seriously_no_images=False,
     reuse_mosaic=False,
     recreate_from=None,
-    keep_intermediate=False
+    keep_intermediate=False,
+    reuse_intermediate=False,
+    rsm_range=None
 ):
     """
     body component of the asdf command line function -- can be called multiple
@@ -281,7 +290,9 @@ def asdf_body(
             skip_rapidlooks,
             reuse_mosaic,
             keep_intermediate,
-            debug
+            debug,
+            rsm_range,
+            reuse_intermediate
         )
     # ok? great. initialize BandSet object from these paths
     aprint(Rule(" gathering metadata "))

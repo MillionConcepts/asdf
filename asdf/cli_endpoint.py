@@ -34,7 +34,9 @@ def asdf_initiate(
     skip_errmaps: "se" = True,
     seriously_no_images: "sn" = False,
     reuse_mosaic: "rm" = False,
-    keep_intermediate: "ki" = False
+    keep_intermediate: "ki" = False,
+    reuse_intermediate: "ri" = False,
+    rsm_range: "rr" = None
 ):
     """
     processes and archives everything
@@ -130,7 +132,9 @@ def asdf_initiate(
         skip_errmaps,
         seriously_no_images,
         reuse_mosaic,
-        keep_intermediate
+        keep_intermediate,
+        reuse_intermediate,
+        rsm_range
     )
     from asdf.flow import asdf_body
 
