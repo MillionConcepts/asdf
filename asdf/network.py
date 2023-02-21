@@ -4,9 +4,9 @@ TODO, maybe: consolidate utility-type functions into their own module
  and move top-level handlers to chatter?
 """
 import datetime as dt
+import getpass
 import io
 import json
-import os
 import shutil
 import socket
 import time
@@ -195,7 +195,7 @@ def backup_data_to_s3(bandset, debug_prefix=""):
     s3_prefix = (
         f"marslab/{debug_prefix}"
         f"{str(bandset.compact['SOL'].iloc[0]).zfill(4)}"
-        f"/{epoch}_{os.getlogin()}_"
+        f"/{epoch}_{getpass.getuser()}_"
     )
     marslab_key = f"{s3_prefix}marslab_{bandset.name + bandset.suffix}.csv"
     extended_key = (
