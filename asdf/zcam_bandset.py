@@ -139,6 +139,8 @@ class ZcamBandSet(BandSet):
         ).reset_index(drop=True)
         self.name = make_pointing_name(self.metadata)
         # TODO: this is horrible, refactor this garbage attribute
+        if self.rois is None and suffix == "":
+            self.suffix = "empty"
         self.suffix = "-" + suffix if suffix != "" else suffix
         self.metadata["ANALYSIS_NAME"] = suffix
         self.check_onboard_debayer(fix_metadata=True)
