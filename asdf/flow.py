@@ -309,7 +309,7 @@ def asdf_body(
     if recreate_from and ("CREATOR" in prototype.columns):
         bandset.metadata["CREATOR"] = str(prototype["CREATOR"].iloc[0])
     else:
-        bandset.metadata["CREATOR"] = os.getlogin()
+        bandset.metadata["CREATOR"] = getpass.getuser()
     # add (meta)data from rc files
     aprint("... scraping photometric responsivity constant files ...")
     bandset.scrape_rc_files()
