@@ -64,6 +64,11 @@ def pick_thumbs(rapids):
     return cache
 
 
+def generate_locator_images(bandsets, temp_path):
+    locator_tiffs = []
+
+
+
 def _process_mosaic(
     observation,
     roi_path,
@@ -77,6 +82,8 @@ def _process_mosaic(
     debug,
     seriously_no_images
 ):
+    # TODO: take this out
+    save_plain_images = True
     if roi_path is not None:
         raise ValueError("Sorry, ROI counting on mosaic is not supported.")
     from asdf.mosaic import (
@@ -127,7 +134,9 @@ def _process_mosaic(
         aprint(Rule(" generating intermediate mosaic files "))
         with console.status("", spinner="star"):
             aprint("... converting inputs to TIFF ...")
-            tiff_info = bounce_mosaic_input_files(bandsets, temp_path)
+            tiff_info, locator_info = bounce_mosaic_input_files(
+                bandsets, temp_path
+            )
             if tiff_info is None:
                 # mismatched band availability.
                 # useful feedback provided in bounce_mosaic_input_files.
@@ -141,7 +150,7 @@ def _process_mosaic(
             )
             for eye in ("L", "R"):
                 process_info[eye] = make_single_band_mosaics(
-                    eye, tiff_info, bandsets
+                    eye, tiff_info, locator_info, bandsets
                 )
             prog.remove_task(ASDF_RPH.task_id)
         if all(v == (None, None, None) for v in process_info.values()):

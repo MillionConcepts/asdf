@@ -118,7 +118,7 @@ def render_figure_labels(ax, title, annot):
         transform=ax.transAxes,
     )
     image_shape = ax.get_images()[0].get_size()
-    # TODO, maybe: more resopnsive typesetting
+    # TODO, maybe: more responsive typesetting
     if image_shape[0] / image_shape[1] > 0.6:
         t_x, t_y, a_x, a_y = 0.5, -0.028, 0.5, -0.088
     else:

@@ -93,10 +93,45 @@ def bounce_mosaic_input_files(mosaic, scratch_path=".temp/mosaic"):
             "path": tiff_path,
             "fov": azimuth_fov,
             "eye": band[0],
+            "shape": cropped.shape
         }
         tiff_info.append(tiff_rec)
         bandset.purge()
-    return pd.DataFrame(tiff_info)
+    tiff_info = pd.DataFrame(tiff_info)
+    locator_info, rsms = [], [bs.metadata["RSM"].iloc[0] for bs in mosaic]
+    for bandset in mosaic:
+        rsm = bandset.metadata["RSM"].iloc[0]
+        frameslice = tiff_info.loc[tiff_info['rsm'] == rsm]
+        # it is probably unnecessary to write all of these files, but it's not
+        # very expensive and i'm being defensive about some kind of weird
+        # subframe edge case
+        for eye in frameslice['eye'].unique():
+            ref = frameslice.loc[frameslice['eye'] == eye].iloc[0]
+            here = np.full(ref['shape'], 255, np.uint8)
+            loc_path = Path(scratch_path, f"{eye}_loc_{bandset.name}.tiff")
+            cv2.imwrite(str(loc_path), here)
+            aprint(f"wrote {loc_path}")
+            loc_rec = {
+                "rsm": rsm,
+                "seq_id": bandset.metadata["SEQ_ID"].iloc[0],
+                "bandset_name": bandset.name,
+                "path": loc_path,
+                "fov": ref['fov'],
+                "eye": eye,
+                "shape": ref['shape'],
+                'type': f'present_{rsm}'
+            }
+            locator_info.append(loc_rec)
+            not_here = np.full(ref['shape'], 0, np.uint8)
+            loc0_path = Path(scratch_path, f"{eye}_loc0_{bandset.name}.tiff")
+            cv2.imwrite(str(loc0_path), not_here)
+            aprint(f"wrote {loc0_path}")
+            for other_rsm in filter(lambda r: r != rsm, rsms):
+                loc0_rec = loc_rec | {
+                    'path': loc0_path, 'type': f'absent_{other_rsm}'
+                }
+                locator_info.append(loc0_rec)
+    return tiff_info, pd.DataFrame(locator_info)
 
 
 def zcam_pto_gen(paths, azimuth_fov, output_file=None):
@@ -202,7 +237,9 @@ def concat_mosaic_fn(sol, seq_id, eye):
     return f"sol{str(sol).zfill(4)}_{seq_id.lower()}_{eye.lower()}_mosaic.fits"
 
 
-def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
+def make_single_band_mosaics(
+    eye, tiff_info, locator_info, bandsets, **pto_kwargs
+):
     eye_name = {"L": "left", "R": "right"}[eye]
     available_bands = tiff_info["band"].tolist()
     eye_bands = [b for b in available_bands if b.startswith(eye)]
@@ -236,7 +273,7 @@ def make_single_band_mosaics(eye, tiff_info, bandsets, **pto_kwargs):
             np.mean(ref_slice['fov']),
             **pto_kwargs
         )
-    except (TimeoutError, ValueError, sh.ErrorReturnCode):
+    except (TimeoutError, ValueError, sh.ErrorReturnCode) as err:
         aprint(
             f"[bold red] Unable to find usable reference projection for "
             f"{eye_name}-eye mosaic."
