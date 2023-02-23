@@ -354,12 +354,10 @@ def upload_bandset_to_gdrive(
             f"{', '.join(Path(file).name for file in dupes)}\n"
         )
     if (no_dupe_names is True) and (len(name_dupes) > 0):
-        choice, rechecks = ask_about_dupe_names(
-            bandset, noninteractive, name_dupes, drivebot, folders
+        choice, ok_files = ask_about_dupe_names(
+            bandset, noninteractive, name_dupes, ok_files, drivebot, folders
         )
-        if choice.startswith("retry") or choice.startswith("add a suffix"):
-            ok_files = rechecks
-        elif choice.startswith("quit"):
+        if choice.startswith("quit"):
             raise InterruptedError
     else:
         ok_files += name_dupes
@@ -417,7 +415,13 @@ def check_duplicates(local_files, drivebot, folders):
 
 
 def ask_about_dupe_names(
-    bandset, noninteractive, name_dupes, drivebot, folders, rerun=False
+    bandset,
+    noninteractive,
+    name_dupes,
+    ok_files,
+    drivebot,
+    folders,
+    rerun=False
 ):
     prefix = {
         True: "some name matches still exist",
@@ -449,7 +453,7 @@ def ask_about_dupe_names(
         choices=choices, skippable=False, console=ASDF_CONSOLE
     )()
     if choice.startswith("skip") or choice.startswith("quit"):
-        return choice, []  # noninteractive-mode default is skip
+        return choice, ok_files  # noninteractive-mode default is skip
     if choice.startswith("add a suffix"):
         suffix = metadata_open_prompt("what suffix would you like to add?")
         bandset.metadata["ANALYSIS_NAME"] = suffix
@@ -477,7 +481,13 @@ def ask_about_dupe_names(
     )
     if len(name_dupes) > 0:
         return ask_about_dupe_names(
-            bandset, noninteractive, name_dupes, drivebot, folders, rerun=True
+            bandset,
+            noninteractive,
+            name_dupes,
+            ok_files,
+            drivebot,
+            folders,
+            rerun=True
         )
     return choice, ok_files
 
