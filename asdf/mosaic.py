@@ -2,12 +2,12 @@ import datetime as dt
 import re
 import time
 from ast import literal_eval
-from functools import partial, reduce
+from functools import partial
 from itertools import product
-from operator import eq
 from pathlib import Path
 
 import cv2
+import matplotlib as mpl
 import numpy as np
 import pandas as pd
 import sh
@@ -16,7 +16,8 @@ from astropy.io import fits
 from astropy.table import Table
 from dustgoggles.func import gmap
 from pdr.np_utils import enforce_order_and_object
-from scipy.ndimage import label
+from scipy.ndimage import center_of_mass, label
+from marslab.imgops.render import flatten_into_figure, simple_figure
 
 import asdf
 from asdf.asdf_utils import cast_to_reference
@@ -24,10 +25,10 @@ from asdf.console import aprint, ASDFLOG
 from asdf.parse import parse_pointing
 from asdf.zcam_bandset import polish_metadata
 from asdf_settings.process import THREADS
-from asdf_settings.rapidlooks import CROP_SETTINGS
+from asdf_settings.rapidlooks import CROP_SETTINGS, TITLE_FONT
 from marslab.bandset import BandSet
 from marslab.compat.xcam import DERIVED_CAM_DICT
-from marslab.imgops.imgutils import crop, normalize_range
+from marslab.imgops.imgutils import crop, normalize_range, eightbit
 
 PREFERRED_REF_BANDS = (1, 2, 3, 4, 5, 6, "0R", "0G", "0B")
 
@@ -56,7 +57,7 @@ LONG_METADATA_DTYPES = {
 }
 
 
-def bounce_mosaic_input_files(mosaic, scratch_path=".temp/mosaic"):
+def bounce_to_tiff(mosaic, scratch_path=".temp/mosaic"):
     Path(scratch_path).mkdir(exist_ok=True)
     bandlist = [set(b.metadata["BAND"].unique()) for b in mosaic]
     if len(set(map(frozenset, bandlist))) != 1:
@@ -206,9 +207,12 @@ def pano_modify(
     )
 
 
-def crop_outer(array):
+def crop_outer(array, return_bounds=False):
     nzy, nzx = np.nonzero(array)
-    return crop(array, (nzx.min(), nzx.max(), nzy.min(), nzy.max()))
+    bounds = nzx.min(), nzx.max(), nzy.min(), nzy.max()
+    if return_bounds is False:
+        return crop(array, bounds)
+    return crop(array, bounds), bounds
 
 
 def mark_borders(
@@ -237,11 +241,9 @@ def concat_mosaic_fn(sol, seq_id, eye):
     return f"sol{str(sol).zfill(4)}_{seq_id.lower()}_{eye.lower()}_mosaic.fits"
 
 
-def make_single_band_mosaics(
-    eye, tiff_info, locator_info, bandsets, **pto_kwargs
-):
+def make_single_band_mosaics(eye, band_info, loc_info, bandsets, **pto_kwargs):
     eye_name = {"L": "left", "R": "right"}[eye]
-    available_bands = tiff_info["band"].tolist()
+    available_bands = band_info["band"].tolist()
     eye_bands = [b for b in available_bands if b.startswith(eye)]
     if len(eye_bands) == 0:
         return {}, None
@@ -251,7 +253,7 @@ def make_single_band_mosaics(
             if f"{eye}{n}" in eye_bands
         )
     )
-    ref_slice = tiff_info.loc[tiff_info['band'] == ref_band]
+    ref_slice = band_info.loc[band_info['band'] == ref_band]
     ref_tiffs = []
     for bandset in bandsets:
         bandset.load([ref_band])
@@ -282,9 +284,9 @@ def make_single_band_mosaics(
     ASDFLOG.info(f"generated projection for {eye_name}-eye mosaic")
     with open(ref_pto_file) as stream:
         ref_text = stream.read()
-    pto_files, tif_files = {ref_band: ref_pto_file}, {}
+    pto_files, band_tifs = {ref_band: ref_pto_file}, {}
     for band in eye_bands:
-        band_slice = tiff_info.loc[tiff_info["band"] == band]
+        band_slice = band_info.loc[band_info["band"] == band]
         pto_file = Path(
             ref_pto_file.parent, ref_pto_file.name.replace(ref_band, band)
         )
@@ -297,31 +299,66 @@ def make_single_band_mosaics(
         pto_files[band] = Path(pto_file.parent, pto_file.stem + "_var.pto")
     ASDFLOG.info("generated per-band projection instructions")
     try:
-        create_intermediate_mosaics(pto_files, tif_files)
+        create_intermediate_mosaics(pto_files, band_tifs)
     except sh.ErrorReturnCode:
         aprint(
             f"[bold red] reference projection for {eye_name}-eye mosaic "
             f"failed to generate a usable mosaic."
         )
         return None, None, None
-    return tif_files, ref_text
+    eye_locators = loc_info.loc[loc_info['eye'] == eye]
+    loc_pto_files, loc_tifs = {}, {}
+    for rsm in loc_info['rsm'].unique():
+        pto_file = Path(
+            ref_pto_file.parent,
+            ref_pto_file.name.replace(ref_band, f"{rsm}_{eye}")
+        )
+        insert_locator_filenames(
+            pto_file, eye_locators, ref_text, ref_tiffs, rsm
+        )
+        sh.pto_var(
+            pto_file,
+            set="Vb=0,Vc=0,Vd=0",
+            output=Path(pto_file.parent, pto_file.stem + "_var.pto")
+        )
+        loc_pto_files[f"{rsm}_{eye}"] = Path(
+            pto_file.parent, pto_file.stem + "_var.pto"
+        )
+    create_intermediate_mosaics(loc_pto_files, loc_tifs)
+    return band_tifs, loc_tifs, ref_text
 
 
 def insert_band_filenames(pto_file, band_slice, ref_text, ref_tiffs):
     band_text = ref_text
     for rec in ref_tiffs:
         band_path = band_slice.loc[
-            (band_slice['rsm'] == rec['rsm'])
-        ]['path'].iloc[0]
+            (band_slice['rsm'] == rec['rsm']), 'path'
+        ].iloc[0]
         band_text = band_text.replace(rec['path'].name, band_path.name)
     with pto_file.open("w") as stream:
         stream.write(band_text)
 
 
+def insert_locator_filenames(pto_file, eye_locators, ref_text, ref_tiffs, rsm):
+    loc_text = ref_text
+    for rec in ref_tiffs:
+        prefix = "present" if rec['rsm'] == rsm else "absent"
+        loc_path = eye_locators.loc[
+            eye_locators['type'] == f"{prefix}_{rec['rsm']}", 'path'
+        ].iloc[0]
+        loc_text = loc_text.replace(rec['path'].name, loc_path.name)
+    with pto_file.open("w") as stream:
+        stream.write(loc_text)
+
+
 def create_intermediate_mosaics(pto_files, tif_files):
     parent = Path(list(pto_files.values())[0]).parent
     for band, pto_file in pto_files.items():
-        stdout = execute_hugin_stitch(pto_file, threads=THREADS['mosaic_gen'])
+        stdout = execute_hugin_stitch(
+            pto_file,
+            threads=THREADS['mosaic_gen'],
+            prefix=Path(pto_file.parent, band)
+        )
         intermediate_tif_file = re.search(r'saving (.*?.tif)', stdout).group(1)
         tif_files[band] = Path(parent, f"{intermediate_tif_file[:-8]}.tif")
         ASDFLOG.info(f"wrote {band} intermediate mosaic file")
@@ -342,13 +379,20 @@ def preprocess_mosaic_metadata(bandsets):
 
 
 def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
-    tif_files, ref_text = process_info[eye]
-    arrays = {
-        band: mark_borders(crop_outer(read_first_channel(file)))
-        for band, file in tif_files.items()
-    }
+    band_tifs, loc_tifs, ref_text = process_info[eye]
+    arrays = {}
+    for band, file in band_tifs.items():
+        cropped, bounds = crop_outer(
+            read_first_channel(file), return_bounds=True
+        )
+        arrays[band] = mark_borders(cropped)
     if not len({arr.shape for arr in arrays.values()}) == 1:
         raise ValueError("apparent misalignment.")
+    # noinspection PyUnboundLocalVariable
+    arrays |= {
+        f"{rsm}_loc": crop(read_first_channel(file), bounds)
+        for rsm, file in loc_tifs.items()
+    }
     image_hdus = [
         fits.ImageHDU(arrays[band], name=band)
         for band in sorted(arrays.keys())
@@ -366,7 +410,7 @@ def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
     proj_hdu = fits.TableHDU.from_columns([text_column], name='projection')
     hdul = fits.HDUList([fits.PrimaryHDU(), *image_hdus, proj_hdu, meta_hdu])
     if outpath is None:
-        outpath = tuple(tif_files.values())[0].parent
+        outpath = tuple(band_tifs.values())[0].parent
     mosaic_fn = concat_mosaic_fn(
         meta_hdu.data['SOL'][0], meta_hdu.data['SEQ_ID'][0], eye
     )
@@ -424,7 +468,7 @@ class ZMosaicBandSet(BandSet):
             extended.append(eye_ext)
         metadata = pd.concat(metadata).reset_index(drop=True)
         metadata["WAVELENGTH"] = [
-            DERIVED_CAM_DICT["ZCAM"]["filters"][band]
+            DERIVED_CAM_DICT["ZCAM"]["filters"].get(band)
             for band in metadata["BAND"]
         ]
         super().__init__(
@@ -454,3 +498,41 @@ class ZMosaicBandSet(BandSet):
         self.extended["ASDF_VERSION"] = asdf.__version__
         self.summary = summary
         self.extended = polish_metadata(self.extended, creation_time)
+
+
+def make_mosaic_map(eye, mosaic):
+    cmap_name = "Set1"
+    cmap = mpl.colormaps.get_cmap(cmap_name)
+    locs = mosaic.metadata[
+        mosaic.metadata['BAND'].str.match(rf"\d+_{eye}_LOC")
+    ]
+    loc_images, centers = [], []
+    mosaic.load(locs['BAND'].tolist())
+    for color_ix, name in enumerate(locs['BAND']):
+        alpha = mosaic.get_band(name) / 255
+        centers.append(center_of_mass(alpha))
+        color = cmap(color_ix)[:3]
+        rsm_loc = np.dstack(
+            [
+                np.full(alpha.shape, color[0]),
+                np.full(alpha.shape, color[1]),
+                np.full(alpha.shape, color[2]),
+                alpha
+            ]
+        )
+        loc_images.append(rsm_loc)
+    fig, ax = flatten_into_figure(loc_images)
+    for name, center in zip(locs['BAND'], centers):
+        rsm = name.split("_")[0]
+        ax.text(
+            *reversed(center),
+            f"{rsm}{eye}",
+            fontproperties=TITLE_FONT
+        )
+    return fig
+
+
+def just_render(array, clip=0.1):
+    if array.dtype != np.uint8:
+        array = eightbit(array, clip)
+    return simple_figure(array, cmap='Greys_r')

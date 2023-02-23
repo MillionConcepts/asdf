@@ -87,7 +87,10 @@ def save_plainly(look, filename, outpath):
             else:
                 axis.axis("off")
         look.savefig(
-            Path(outpath, filename), dpi=275, bbox_inches="tight", pad_inches=0
+            Path(outpath, filename),
+            dpi=dpi_from_image(look),
+            bbox_inches="tight",
+            pad_inches=0
         )
     else:
         look.save(Path(outpath, filename))
