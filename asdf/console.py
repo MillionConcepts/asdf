@@ -56,7 +56,7 @@ ASDFTH = Theme(
         "ASDF.id": "dark_turquoise",
         "ASDF.selection": "bold",
         "ASDF.missing": "purple4",
-        "ASDF.marslab": "italic orchid1",
+        "FDSA.marslab": "italic orchid1",
         "FDSA": "hot_pink on black",
         "FDSA.warning": "slate_blue1 on black",
     }
