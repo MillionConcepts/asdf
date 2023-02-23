@@ -432,7 +432,7 @@ def ask_about_dupe_names(
         False: ". How would you like to handle them?"
     }[noninteractive]
     aprint(
-        f"[bold red]{prefix}:\n"
+        f"[light_coral{prefix}:\n"
         f"{', '.join(Path(d).name for d in name_dupes)}{suffix}\n"
     )
     if noninteractive is True:
