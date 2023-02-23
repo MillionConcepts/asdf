@@ -239,6 +239,8 @@ def _process_mosaic(
             # TODO, maybe: this is _extremely_ special-casey, and maybe should
             #  remain as a special case -- but maybe it shouldn't
                 for eye in ("L", "R"):
+                    if ~(mosaic.metadata['BAND'].str.slice(0, 1) == eye).any():
+                        continue
                     mosaic.looks[
                         f"mosaic_map_{eye.lower()}"
                     ] = make_mosaic_map(eye, mosaic)

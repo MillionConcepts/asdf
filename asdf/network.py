@@ -157,14 +157,10 @@ def upload_s3(
     if isinstance(upload_object, str) and pass_string:
         upload_object = io.BytesIO(upload_object.encode("utf-8"))
     # Upload the file
-    try:
-        if isinstance(upload_object, (Path, str)):
-            client.upload_file(str(upload_object), bucket, object_name)
-        else:
-            client.upload_fileobj(upload_object, bucket, object_name)
-    except ClientError as error:
-        return error
-    return True
+    if isinstance(upload_object, (Path, str)):
+        client.upload_file(str(upload_object), bucket, object_name)
+    else:
+        client.upload_fileobj(upload_object, bucket, object_name)
 
 
 def make_asdf_s3_client():
@@ -178,7 +174,7 @@ def make_asdf_s3_client():
     )
 
 
-def bind_asdf_bucket() -> Callable[[Any, str], Union[ClientError, bool]]:
+def bind_asdf_bucket() -> Callable[[Any], str]:
     client = make_asdf_s3_client()
     bucket = BACKUP_BUCKET
 
@@ -232,15 +228,15 @@ def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
     bucket_url = f"https://{BACKUP_BUCKET}.s3.amazonaws.com/"
     links = {}
     for name, image_buffer in thumbnails.items():
+        if OBFUSCATE_THUMBNAIL_NAMES is True:
+            key = "thumb/" + debug_prefix + obfuscated_name()
+        else:
+            key = "thumb/" + name + "_thumb_" + pointing_name
+        image_buffer.seek(0)
         try:
-            if OBFUSCATE_THUMBNAIL_NAMES is True:
-                key = "thumb/" + debug_prefix + obfuscated_name()
-            else:
-                key = "thumb/" + name + "_thumb_" + pointing_name
-            image_buffer.seek(0)
             upload(image_buffer, key)
             links[name] = bucket_url + key
-        except ClientError as error:
+        except (ClientError, S3UploadFailedError) as error:
             aprint(
                 "sorry, couldn't upload thumb " + name + " " + str(error),
                 style="bold red",
