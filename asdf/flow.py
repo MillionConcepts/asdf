@@ -13,6 +13,7 @@ import warnings
 from dustgoggles.func import catch_interaction
 import matplotlib.figure
 
+from asdf.mosaic import make_mosaic_map, just_render
 from asdf_settings.process import THREADS
 from marslab.compat.mertools import merspect_to_marslab
 from marslab.imgops.imgutils import mapfilter
@@ -30,7 +31,7 @@ from asdf.chatter import (
     fdsa_insert,
     complain_about_pixmap_counts, check_mosaic_paths,
 )
-from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint
+from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint, ASDFLOG
 from asdf.format import (
     make_rapidlook_thumbnails,
     make_asdf_outpath,
@@ -64,12 +65,16 @@ def pick_thumbs(rapids):
     return cache
 
 
+
+
+
 def _process_mosaic(
     observation,
     roi_path,
     noninteractive,
     upload,
     console,
+    # TODO: assess whether this is ever an option
     save_plain_images,
     skip_rapidlooks,
     reuse_mosaic,
@@ -77,13 +82,15 @@ def _process_mosaic(
     debug,
     seriously_no_images
 ):
+    # TODO: take this out if it's never an option
+    save_plain_images = True
     if roi_path is not None:
         raise ValueError("Sorry, ROI counting on mosaic is not supported.")
     from asdf.mosaic import (
         make_single_band_mosaics,
         preprocess_mosaic_metadata,
         concatenate_mosaic,
-        bounce_mosaic_input_files,
+        bounce_to_tiff,
         ZMosaicBandSet,
     )
     from asdf.format import folder_names
@@ -127,21 +134,25 @@ def _process_mosaic(
         aprint(Rule(" generating intermediate mosaic files "))
         with console.status("", spinner="star"):
             aprint("... converting inputs to TIFF ...")
-            tiff_info = bounce_mosaic_input_files(bandsets, temp_path)
-            if tiff_info is None:
+            band_info, loc_info = bounce_to_tiff(bandsets, temp_path)
+            if band_info is None:
                 # mismatched band availability.
-                # useful feedback provided in bounce_mosaic_input_files.
+                # useful feedback provided in bounce_to_tiff.
                 return
         aprint("... stitching single-band mosaics ...")
         process_info = {}
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task(
                 "",
-                total=len(bandsets[0].metadata["BAND"].unique()) * 2 + 2,
+                total=(
+                    # TODO: this count is off...
+                    len(bandsets[0].metadata["BAND"].unique()) * 2
+                    + len(bandsets) * 2
+                ),
             )
             for eye in ("L", "R"):
                 process_info[eye] = make_single_band_mosaics(
-                    eye, tiff_info, bandsets
+                    eye, band_info, loc_info, bandsets
                 )
             prog.remove_task(ASDF_RPH.task_id)
         if all(v == (None, None, None) for v in process_info.values()):
@@ -218,11 +229,27 @@ def _process_mosaic(
                     }
 
         with ASDF_PROGRESS as prog:
-            ASDF_RPH.task_id = prog.add_task("", total=len(instructions) + 2)
+            ASDF_RPH.task_id = prog.add_task(
+                "", total=len(instructions) + 2 + len(mosaic.metadata)
+            )
             with warnings.catch_warnings():
+                mosaic.load('all')
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 mosaic.make_look_set(instructions)
-                prog.remove_task(ASDF_RPH.task_id)
+            # TODO, maybe: this is _extremely_ special-casey, and maybe should
+            #  remain as a special case -- but maybe it shouldn't
+                for eye in ("L", "R"):
+                    mosaic.looks[
+                        f"mosaic_map_{eye.lower()}"
+                    ] = make_mosaic_map(eye, mosaic)
+                    ASDFLOG.info(f"generated {eye}-eye mosaic map")
+                for band in mosaic.metadata['BAND']:
+                    mosaic.looks[f"{band}_base"] = just_render(
+                        mosaic.get_band(band)
+                    )
+            mosaic.purge('raw')
+            prog.remove_task(ASDF_RPH.task_id)
+
         aprint(Rule(" saving rapidlooks "))
         save_images = partial(
             save_looks,

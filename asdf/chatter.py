@@ -580,7 +580,10 @@ def save_looks(bandset, outpath, basename=None, threads=None, plain=False):
 
 
 def write_plain_image(look, look_name, outpath, pool, basename, results):
-    filename = f"{look_name.replace(' ', '_')}_{basename}-plain.png"
+    filename = construct_filename(look_name, basename)
+    # TODO: make this special case less gross
+    if "mosaic" not in filename:
+        filename = filename.split(".")[0] + "-plain.png"
     if pool is None:
         save_plainly(look, filename, outpath)
         ASDFLOG.info("wrote " + filename)
