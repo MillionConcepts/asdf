@@ -100,6 +100,9 @@ def bounce_to_tiff(mosaic, scratch_path=".temp/mosaic"):
         bandset.purge()
     tiff_info = pd.DataFrame(tiff_info)
     locator_info, rsms = [], [bs.metadata["RSM"].iloc[0] for bs in mosaic]
+    cmap_names = ("Set1", "tab10")
+    colors = []
+    # TODO: ...these don't actually need to be different colors, do they
     for bandset in mosaic:
         rsm = bandset.metadata["RSM"].iloc[0]
         frameslice = tiff_info.loc[tiff_info['rsm'] == rsm]
@@ -108,7 +111,13 @@ def bounce_to_tiff(mosaic, scratch_path=".temp/mosaic"):
         # subframe edge case
         for eye in frameslice['eye'].unique():
             ref = frameslice.loc[frameslice['eye'] == eye].iloc[0]
-            here = np.full(ref['shape'], 255, np.uint8)
+            # feeding hugin b/w ref maps results in pathological behavior
+            # when blending the location maps in some cases
+            here = np.dstack(
+                # note that cv2.imwrite turns this 'red' into 'blue' because
+                # of cv2's default BGR colorspace
+                [np.full(ref['shape'], c, np.uint8) for c in (255, 0, 0)]
+            )
             loc_path = Path(scratch_path, f"{eye}_loc_{bandset.name}.tiff")
             cv2.imwrite(str(loc_path), here)
             aprint(f"wrote {loc_path}")
@@ -123,13 +132,17 @@ def bounce_to_tiff(mosaic, scratch_path=".temp/mosaic"):
                 'type': f'present_{rsm}'
             }
             locator_info.append(loc_rec)
-            not_here = np.full(ref['shape'], 0, np.uint8)
+            not_here = np.dstack(
+                [np.full(ref['shape'], 100, np.uint8) for _ in range(3)]
+            )
             loc0_path = Path(scratch_path, f"{eye}_loc0_{bandset.name}.tiff")
             cv2.imwrite(str(loc0_path), not_here)
             aprint(f"wrote {loc0_path}")
             for other_rsm in filter(lambda r: r != rsm, rsms):
                 loc0_rec = loc_rec | {
-                    'path': loc0_path, 'type': f'absent_{other_rsm}'
+                    'path': loc0_path,
+                    'rsm': other_rsm,
+                    'type': f'absent_{rsm}'
                 }
                 locator_info.append(loc0_rec)
     return tiff_info, pd.DataFrame(locator_info)
@@ -388,11 +401,23 @@ def concatenate_mosaic(process_info, eye, all_metadata, outpath=None):
         arrays[band] = mark_borders(cropped)
     if not len({arr.shape for arr in arrays.values()}) == 1:
         raise ValueError("apparent misalignment.")
-    # noinspection PyUnboundLocalVariable
-    arrays |= {
-        f"{rsm}_loc": crop(read_first_channel(file), bounds)
-        for rsm, file in loc_tifs.items()
-    }
+    reference_blue = (0, 0, 255)
+    for rsm, file in loc_tifs.items():
+        # noinspection PyUnboundLocalVariable
+        color_loc = crop(skimage.io.imread(file), bounds)
+        outside = np.nonzero(np.mean(color_loc, axis=-1) == 0)
+        color_loc = color_loc.astype(np.int16)
+        channels = []
+        for i in range(3):
+            channels.append(
+                255 - np.abs(color_loc[:, :, i] - reference_blue[i])
+            )
+        restacked = np.dstack(channels)
+        flattened = np.mean(restacked, axis=2)
+        flattened[flattened < 137] = 137
+        normed = normalize_range(flattened, (0, 255), 1).astype(np.uint8)
+        normed[outside] = 0
+        arrays[f'{rsm}_loc'] = normed
     image_hdus = [
         fits.ImageHDU(arrays[band], name=band)
         for band in sorted(arrays.keys())
@@ -501,17 +526,23 @@ class ZMosaicBandSet(BandSet):
 
 
 def make_mosaic_map(eye, mosaic):
-    cmap_name = "Set1"
-    cmap = mpl.colormaps.get_cmap(cmap_name)
     locs = mosaic.metadata[
         mosaic.metadata['BAND'].str.match(rf"\d+_{eye}_LOC")
     ]
+    cmap_names = ("Set1", "tab10")
+    colors = []
+    for i in range(len(locs['BAND'])):
+        if i <= 7:
+            cmap = mpl.colormaps.get_cmap(cmap_names[0])
+            colors.append(cmap(i)[:3])
+        else:
+            cmap = mpl.colormaps.get_cmap(cmap_names[1])
+            colors.append(cmap(i - 8)[:3])
     loc_images, centers = [], []
     mosaic.load(locs['BAND'].tolist())
-    for color_ix, name in enumerate(locs['BAND']):
+    for color, name in zip(colors, locs['BAND']):
         alpha = mosaic.get_band(name) / 255
         centers.append(center_of_mass(alpha))
-        color = cmap(color_ix)[:3]
         rsm_loc = np.dstack(
             [
                 np.full(alpha.shape, color[0]),
