@@ -31,6 +31,7 @@ import asdf
 from asdf_settings.rapidlooks import FONT_PATH
 from asdf.scan import scan_zcam_files, cluster_observations
 from asdf.zcam_bandset import ZcamBandSet
+from asdf.console import aprint
 
 mpl.rcParams['image.cmap'] = 'Greys_r'
 warnings.simplefilter('ignore', category=RuntimeWarning)  # i love dividing by zero
@@ -640,4 +641,63 @@ def draw_incidence_map(incidence):
     despine(ax)
     remove_ticks(ax)
     return fig
+
+
+def find_closest_ncam(zcam_sol_dir: Path):
+    sol_paths = []
+    for path in zcam_sol_dir.parents[0].iterdir():
+        if path.is_dir():
+            sol_paths = sol_paths + [path]
+    sol_paths.sort()
+    isol = sol_paths.index(zcam_sol_dir)
+    sol_range = sol_paths[isol-10:isol]
+    sd_by_sol = list(map(lambda x: site_drive_match(zcam_sol_dir, x), sol_range))
+    for sd in sd_by_sol:
+        if sd:
+            ncam_sol_dir = sol_range[sd_by_sol.index(sd)]
+            clusters, xyrs = cluster_matches(zcam_sol_dir, ncam_sol_dir, sd)
+            return clusters, xyrs, ncam_sol_dir
+
+
+def site_drive_match(zcam_sol_dir: Path, ncam_sol_dir: Path):
+    iofdir = (zcam_sol_dir / 'iof')
+    xyrdir = (ncam_sol_dir / 'nxyr')
+    zsite = groupby(sitedrive, iofdir.iterdir())
+    try:
+        nsite = groupby(sitedrive, xyrdir.iterdir())
+    except FileNotFoundError:  # no xyr directory
+        return
+    sd_ops = tuple(set(zsite.keys()).intersection(nsite.keys()))
+    try:
+        sd = sd_ops[0]
+        return sd
+    except IndexError:  # no intersection
+        return
+
+
+def cluster_matches(zcam_sol_dir: Path, ncam_sol_dir: Path, sd):
+    iofdir = (zcam_sol_dir / 'iof')
+    xyrdir = (ncam_sol_dir / 'nxyr')
+    nsite = groupby(sitedrive, xyrdir.iterdir())
+    iofs = scan_zcam_files(iofdir)
+    iofs = iofs.loc[iofs['SITE']] == sd[0] & (iofs['DRIVE'] == sd[1])
+    clusters = cluster_observations(iofs)[0]
+    xyrs = nsite[sd]
+    return clusters, xyrs
+
+
+def no_ncam_match():
+    aprint(
+            f"[bold dark orange]No matching ncam xyr file(s) found, cancelling spatial"
+            f"product generation."
+        )
+
+
+def spatial_product_executor(zcam_sol_dir: Path):
+    clusters, xyrs, ncam_sol_dir = find_closest_ncam(zcam_sol_dir)
+    if not clusters:
+        no_ncam_match()
+        return
+    ref_band = 'R3'  # always?
+
 
