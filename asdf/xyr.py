@@ -1,7 +1,5 @@
 from functools import partial
-import math
 from pathlib import Path
-from typing import Tuple
 import warnings
 
 from astropy.io import fits
@@ -10,10 +8,6 @@ from dustgoggles.func import gmap
 from marslab.geom import transform_angle, sph2cart
 from marslab.imgops.imgutils import normalize_range, enhance_color
 from marslab.imgops.pltutils import despine, remove_ticks, strip_axes
-from marslab.imgops.render import flatten_into_figure
-from marslab.compat.mertools import add_merspect_colors_to_edgemaps
-from marslab.imgops.regions import make_roi_edgemaps, draw_edgemaps_on_image
-import marslab.parse as mp
 import matplotlib.font_manager as mplf
 from matplotlib.lines import Line2D
 from more_itertools import chunked, divide
@@ -23,17 +17,12 @@ import numpy as np
 import pandas as pd
 import pdr
 from scipy.interpolate import griddata
-from scipy.spatial.transform import Rotation
-from scipy.optimize import newton
 from marslab.imgops.render import colormapped_plot
 
-import asdf
 from asdf_settings.rapidlooks import FONT_PATH
-from asdf.scan import scan_zcam_files, cluster_observations
-from asdf.zcam_bandset import ZcamBandSet
 from asdf.console import aprint
 
-mpl.rcParams['image.cmap'] = 'Greys_r'
+mpl.rcParams['image.cmap'] = 'Greys_r'  # necessary?
 warnings.simplefilter('ignore', category=RuntimeWarning)  # i love dividing by zero
 
 

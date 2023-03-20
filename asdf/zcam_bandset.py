@@ -644,7 +644,7 @@ class ZcamBandSet(BandSet):
         return ""
 
     def match_navcam(self):
-        #TODO: might be able to shorten this using folder_names from asdf.format
+        # TODO: might be able to shorten this using folder_names from asdf.format
         nsite = groupby(sitedrive, self.metadata['PATH'][0].parents[2].rglob(
             'nxyr/**/*.IMG'))
         try:
