@@ -405,22 +405,6 @@ def read_space_fits(path):
     return arrays
 
 
-def lil_roi_match(bandset, root):
-    sol_path = Path(
-        root, str(bandset.metadata['SOL'].iloc[0]).zfill(4)
-    )
-    seq, rsm = (
-        bandset.metadata['SEQ_ID'].iloc[0].lower(),
-        f'RSM {bandset.metadata["RSM"].iloc[0]}'
-    )
-    obs_path = next(
-        filter(lambda f: seq in f.name and rsm in f.name, sol_path.iterdir())
-    )
-    return next(
-        filter(lambda f: f.name.startswith('roi'), Path(obs_path, "data").iterdir())
-    )
-
-
 def make_area_array(maps):
     xyz = np.ma.dstack([maps[ax] for ax in ('x', 'y', 'z')])
     pos_vec_arrays = {
