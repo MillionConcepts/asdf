@@ -447,6 +447,7 @@ def make_area_array(maps):
 
 
 def draw_area_map(image, area, bounds=(0, 90)):
+    """function is not used in main code, but left in for testing purposes"""
     fig, ax = plt.subplots()
     scaled = np.clip(area, *np.percentile(area[np.isfinite(area)], bounds))
     image_rgb = np.dstack([image / 2] * 3 + [np.full_like(image, 0.5)])
@@ -664,11 +665,7 @@ def spatial_product_handler(bandset, ref_bands, outpath):
                                              Path(outpath, "data"))
             maps = read_space_fits(fits_path)
         eye = {'L': 'LEFT', 'R': 'RIGHT'}[ref_band[0]]
-        image = iof_data.get_scaled('IMAGE')
         maps['area'] = make_area_array(maps)
-        #TODO: we aren't doing anything with the area map, also unsure what it
-        # _should_ look like, but currently not looking great
-        areaplot = draw_area_map(image, maps['area'])
         eye_rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
         axes, image, xyzm, sb_props = prep_scalebar_inputs(maps, iof_data, uvwdir)
         roi_dims = pd.DataFrame(compute_roi_dims(eye_rois, xyzm, maps['area']))
@@ -680,12 +677,17 @@ def spatial_product_handler(bandset, ref_bands, outpath):
         rangefig = draw_rangemap(maps, iof_data)
         center_contour = draw_range_contours(maps, cahvore)
         boresight_contour = draw_range_contours(maps, cahvore, 'boresight')
-        # TODO: will this complain if there is no uvw available?
-        ifig = draw_incidence_map(maps['incidence'])
         eyepre = eye.lower()[0]
-        for fig in (scalefig, rangefig, center_contour, boresight_contour, ifig):
-            fig.tight_layout()
         dpi = 340
+        try:
+            ifig = draw_incidence_map(maps['incidence'])
+            ifig.tight_layout()
+            ifig.savefig(f"browse/incidence_{eyepre}_{bandset.name}.png", dpi=dpi)
+        except KeyError:
+            pass  # a warning about no normals was already raised in make_spatial_maps
+            # AND map_spatial_input_products (maybe should pass one of those warnings too)
+        for fig in (scalefig, rangefig, center_contour, boresight_contour):
+            fig.tight_layout()
         scalefig.savefig(Path(outpath, f"browse/scalebar_{eyepre}_{bandset.name}.png"),
                          dpi=dpi)
         rangefig.savefig(Path(outpath, f"browse/scalebar_{eyepre}_{bandset.name}.png"),
@@ -694,7 +696,6 @@ def spatial_product_handler(bandset, ref_bands, outpath):
                                              f"_{bandset.name}.png"), dpi=dpi)
         boresight_contour.savefig(Path(outpath, f"browse/boresight_contour_{eyepre}"
                                                 f"_{bandset.name}.png"), dpi=dpi)
-        ifig.savefig(f"browse/incidence_{eyepre}_{bandset.name}.png", dpi=dpi)
         plt.close('all')  # unnecessary?
     dims = pd.merge(*tuple(dims.values()), on='COLOR')
     return dims
