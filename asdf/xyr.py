@@ -56,7 +56,6 @@ def derive_cahvore_properties(cahvore):
     return cahvore
 
 
-# maybe?
 def rough_valid_area(xyzmap, cahvor, slop = 0.8):
     relative_position_vecs = (xyzmap - cahvor['C'])
     rel_pos_mag = np.linalg.norm(relative_position_vecs, axis=2)
@@ -197,8 +196,7 @@ def map_input_spatial_products(xyrs, iof_data, uvwdir, min_matched_pixels=1100):
     return rec, zc
 
 
-def prep_scalebar_inputs(maps, iof_data, cahvore):
-    xyzm = np.ma.dstack([maps['x'], maps['y'], maps['z']])
+def prep_scalebar_inputs(iof_data, xyzm, cahvore):
     axes = {'j': {}, 'i': {}}
     axes['j']['valid'], axes['i']['valid'] = np.nonzero(~xyzm[:, :, 0].mask)
     for ax, rec in axes.items():
@@ -224,7 +222,7 @@ def prep_scalebar_inputs(maps, iof_data, cahvore):
         "hor_text_standoff": 13,
         "vert_text_standoff": 18
         }
-    return axes, image, xyzm, sb_props
+    return axes, sb_props
 
 
 def draw_scalebars(axes, image, xyzm, sb_props):
@@ -355,7 +353,7 @@ def make_spatial_maps(coords, iof_data, cahvore):
     return maps
 
 
-def make_spatial_product(maps, navrec, iof_data, bandset, outpath: Path):
+def write_space_fits_file(maps, navrec, iof_data, bandset, outpath: Path):
     primary = fits.PrimaryHDU()
     bandset.format_metadata()
     primary.header['IN_XYR'] = Path(navrec['fn']).name
@@ -365,7 +363,7 @@ def make_spatial_product(maps, navrec, iof_data, bandset, outpath: Path):
         primary.header['IN_UVW'] = None
     primary.header['REF_IOF'] = Path(iof_data.filename).name
     for field in (
-            'SOL', 'SITE', 'DRIVE', 'SEQ_ID', 'CTIME', 'ZOOM', 'LTST', 'RSM'
+        'SOL', 'SITE', 'DRIVE', 'SEQ_ID', 'CTIME', 'ZOOM', 'LTST', 'RSM'
     ):
         primary.header[field] = bandset.summary[field]
     hdus = [primary]
@@ -611,69 +609,111 @@ def draw_incidence_map(incidence):
     return fig
 
 
+def no_spatial_data():
+    aprint(
+        f"[bold dark orange]No reduced spatial products available, skipping "
+        f"spatial processing."
+    )
+
+
 def no_ncam_match():
     aprint(
-            f"[bold dark orange]No matching ncam xyr file(s) found, cancelling spatial"
-            f"product generation."
-        )
+        f"[bold dark orange]No NCAM XYRs loaded, skipping "
+        f"reduced spatial product generation."
+    )
 
 
-def spatial_product_handler(bandset, ref_bands, outpath):
+# TODO: feedback about product generation
+# TODO: turn these into Looks to dynamically control product generation
+def make_spatial_products(
+    bandset,
+    outpath=".",
+    ref_bands=("L1", "R1"),
+    write_images=True,
+    calc_rois=True,
+    dpi=340
+):
+    if write_images is True:
+        bandset.load(ref_bands)
+        bandset.bulk_debayer(ref_bands)
     dims = {}
-    try:
-        uvwdir = bandset.xyrs[0].parents[1] / 'nuvw'
-    except AttributeError:
-        no_ncam_match()
-        return
     for ref_band in ref_bands:
-        iof_data = bandset.precached[bandset.metadata.loc[bandset.metadata['BAND'] ==
-                                                          ref_band, 'PATH'].iloc[0]]
         try:
-            maps = read_space_fits(Path(outpath, f"data/space_{ref_band[0]}"
-                                                 f"_{bandset.name}.fits"))
-            cahvore = derive_cahvore_properties(get_cahvore(iof_data))
+            maps = read_space_fits(
+                Path(outpath, f"data/space_{ref_band[0]}_{bandset.name}.fits")
+            )
         except FileNotFoundError:
-            navrec, cahvore = map_input_spatial_products(bandset.xyrs, iof_data, uvwdir)
-            maps = make_spatial_maps(navrec['coords'], iof_data, cahvore)
-            fits_path = make_spatial_product(maps, navrec, iof_data, bandset,
-                                             Path(outpath, "data"))
-            maps = read_space_fits(fits_path)
+            # TODO, maybe: check the other eye anyway? This would be important
+            #  in a case with only right-eye data, but we should ideally handle
+            #  that by modifying the ref_bands argument.
+            return no_spatial_data()
         eye = {'L': 'LEFT', 'R': 'RIGHT'}[ref_band[0]]
-        maps['area'] = make_area_array(maps)
-        axes, image, xyzm, sb_props = prep_scalebar_inputs(maps, iof_data, cahvore)
-        if bandset.rois:
-            eye_rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
-            roi_dims = pd.DataFrame(compute_roi_dims(eye_rois, xyzm, maps['area']))
+        xyzm = np.ma.dstack([maps['x'], maps['y'], maps['z']])
+        if calc_rois and bandset.rois:
+            maps['area'] = make_area_array(maps)
+            rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
+            roi_dims = pd.DataFrame(compute_roi_dims(rois, xyzm, maps['area']))
             roi_dims.columns = [
                 c if c == 'COLOR' else f"{eye}_{c}" for c in roi_dims.columns
             ]
             dims[eye] = roi_dims
+        if write_images is False:
+            continue
+        iof_data = bandset.fetch_precached(ref_band)
+        cahvore = derive_cahvore_properties(get_cahvore(iof_data))
+        image = normalize_range(bandset.get_band(ref_band), (0, 1), 0.1)
+        axes, sb_props = prep_scalebar_inputs(iof_data, xyzm, cahvore)
         scalefig, scaleax = draw_scalebars(axes, image, xyzm, sb_props)
         rangefig = draw_rangemap(maps, iof_data)
         center_contour = draw_range_contours(maps, cahvore)
         boresight_contour = draw_range_contours(maps, cahvore, 'boresight')
         eyepre = eye.lower()[0]
-        dpi = 340
-        Path(outpath, "browse").mkdir(exist_ok=True, parents=True)
-        try:
+        browsepath = Path(outpath, "browse")
+        browsepath.mkdir(exist_ok=True, parents=True)
+        if "incidence" not in maps.keys():
+            aprint(
+                f"[bold dark orange]Missing data; skipping photometry maps."
+            )
+        else:
             ifig = draw_incidence_map(maps['incidence'])
             ifig.tight_layout()
-            ifig.savefig(Path(outpath, f"browse/incidence_{eyepre}_{bandset.name}.png"),
-                         dpi=dpi)
-        except (KeyError, FileNotFoundError):
-            pass  # a warning about no normals was already raised in make_spatial_maps
-            # AND map_spatial_input_products (maybe should pass one of those warnings too)
+            ifig.savefig(
+                browsepath / f"incidence_{eyepre}_{bandset.name}.png", dpi=dpi
+            )
         for fig in (scalefig, rangefig, center_contour, boresight_contour):
             fig.tight_layout()
-        scalefig.savefig(Path(outpath, f"browse/scalebar_{eyepre}_{bandset.name}.png"),
-                         dpi=dpi)
-        rangefig.savefig(Path(outpath, f"browse/rangemap_{eyepre}_{bandset.name}.png"),
-                         dpi=dpi)
-        center_contour.savefig(Path(outpath, f"browse/camera_contour_{eyepre}"
-                                             f"_{bandset.name}.png"), dpi=dpi)
-        boresight_contour.savefig(Path(outpath, f"browse/boresight_contour_{eyepre}"
-                                                f"_{bandset.name}.png"), dpi=dpi)
-        plt.close('all')  # unnecessary?
+        scalefig.savefig(
+            browsepath / f"scalebar_{eyepre}_{bandset.name}.png", dpi=dpi
+        )
+        rangefig.savefig(
+            browsepath / f"rangemap_{eyepre}_{bandset.name}.png", dpi=dpi
+        )
+        center_contour.savefig(
+            browsepath / f"camera_contour_{eyepre}_{bandset.name}.png", dpi=dpi
+        )
+        boresight_contour.savefig(
+            browsepath / f"boresight_contour_{eyepre}_{bandset.name}.png",
+            dpi=dpi
+        )
+        plt.close('all')
     if dims != {}:
         dims = pd.merge(*tuple(dims.values()), on='COLOR')
     return dims
+
+
+def make_space_fits(bandset, ref_bands, outpath):
+    if bandset.xyrs is None:
+        return no_ncam_match()
+    uvwdir = bandset.xyrs[0].parents[1] / 'nuvw'
+    outfiles = []
+    for ref_band in ref_bands:
+        iof_data = bandset.fetch_precached(ref_band)
+        navrec, cahvore = map_input_spatial_products(
+            bandset.xyrs, iof_data, uvwdir
+        )
+        maps = make_spatial_maps(navrec['coords'], iof_data, cahvore)
+        outfile = write_space_fits_file(
+            maps, navrec, iof_data, bandset, Path(outpath, "data")
+        )
+        outfiles.append(outfile)
+    return outfiles

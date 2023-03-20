@@ -6,6 +6,7 @@ import warnings
 from collections.abc import MutableMapping
 from functools import partial
 from pathlib import Path
+from typing import Sequence, Optional
 
 import numpy as np
 import pandas as pd
@@ -36,7 +37,9 @@ from asdf.parse import parse_pointing, make_pointing_name, parse_zcam_fn
 from asdf.physics import add_derived_illumination_geometry
 from asdf.labels import bulk_scrape_asdf_metadata
 from asdf.rc_parser import find_rc_file, read_rc_file
-from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE, COMPACT_ZCAM_MARSLAB_FIELDS
+from asdf_settings.metadata import (
+    PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE, COMPACT_ZCAM_MARSLAB_FIELDS
+)
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
 from marslab.compat.xcam import (
@@ -57,7 +60,7 @@ from marslab.imgops.regions import (
     draw_edgemaps_on_axis,
 )
 from marslab.parse import site, drive
-from asdf.xyr import spatial_product_handler
+from asdf.xyr import make_space_fits, make_spatial_products
 
 
 def sitedrive(path):
@@ -161,7 +164,7 @@ class ZcamBandSet(BandSet):
         self.rc_compact = None
         # a slightly goofy holding location for things like google drive ids
         self.remote_resource_id = None
-        self.xyrs = self.match_navcam()
+        self.xyrs = None
 
     def scrape_rc_files(self):
         rc_table_map = {}
@@ -643,28 +646,47 @@ class ZcamBandSet(BandSet):
             return target_name
         return ""
 
-    def match_navcam(self):
-        # TODO: might be able to shorten this using folder_names from asdf.format
-        nsite = groupby(sitedrive, Path(self.metadata['PATH'][0]).parents[2].rglob(
-            'nxyr/**/*.IMG'))
+    def match_navcam(self, roots: Optional[Sequence[Path]] = None):
+        roots = [] if roots is None else roots
+        roots.append(Path(self.metadata['PATH'][0]).parents[2])
+        nsite = {}
+        for root in roots:
+            nsite |= groupby(sitedrive, root.rglob('nxyr/**/*.IMG'))
         try:
-            navcam_match = nsite[(self.metadata['SITE'][0], self.metadata['DRIVE'][0])]
+            self.xyrs = nsite[
+                (self.metadata['SITE'][0], self.metadata['DRIVE'][0])
+            ]
         except KeyError:
             return
-        return navcam_match
 
-    def spatial_product_executor(self, outpath="."):
-        self.load('all')
-        self.bulk_debayer('all')
-        self.count_rois()
-        # TODO: Optimize to only call the above lines when necessary
-        ref_bands = ('L1', 'R1')
-        dims = spatial_product_handler(self, ref_bands, outpath)
-        if dims is not None:
+    def fetch_precached(self, band):
+        return self.precached[
+            self.metadata.loc[self.metadata['BAND'] == band, 'PATH'].iloc[0]
+        ]
+
+    # TODO: choose different reference bands if L1/R1 are not available
+    # TODO: feedback about product creation / matching / blah blah blah
+    def make_space_fits(self, ref_bands=("L1", "R1"), outpath=".", roots=None):
+        if self.xyrs is None:
+            self.match_navcam(roots)
+        if self.xyrs is None:
+            raise FileNotFoundError("No matching XYRs found.")
+        self.local_files += make_space_fits(self, ref_bands, outpath)
+
+    def make_spatial_products(
+        self,
+        outpath=".",
+        ref_bands=('L1', 'R1'),
+        write_images=True,
+        calc_rois=True
+    ):
+        if (self.counts is None) and self.rois and calc_rois:
+            self.load("all")
+            self.bulk_debayer("all")
+            self.count_rois()
             self.format_metadata()
-            # TODO: has the above already been done elsewhere? We need
-            #  compact to be defined in order to merge the dims info.
-            self.compact['ANALYSIS_NAME'] = ''
-            # TODO: I think the above is unnecessarily overriding the suffix name here,
-            #  maybe?
+        dims = make_spatial_products(
+            self, outpath, ref_bands, write_images, calc_rois
+        )
+        if isinstance(dims, pd.DataFrame):
             self.compact = pd.merge(self.compact, dims, on='COLOR')
