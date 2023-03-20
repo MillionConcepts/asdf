@@ -642,7 +642,7 @@ def spatial_product_handler(bandset, ref_bands, outpath):
         return
     for ref_band in ref_bands:
         iof_data = bandset.precached[bandset.metadata.loc[bandset.metadata['BAND'] ==
-                                                          ref_band, 'PATH']]
+                                                          ref_band, 'PATH'].iloc[0]]
         try:
             maps = read_space_fits(Path(outpath, f"data/space_{ref_band[0]}"
                                                  f"_{bandset.name}.fits"))
@@ -655,7 +655,7 @@ def spatial_product_handler(bandset, ref_bands, outpath):
             maps = read_space_fits(fits_path)
         eye = {'L': 'LEFT', 'R': 'RIGHT'}[ref_band[0]]
         maps['area'] = make_area_array(maps)
-        axes, image, xyzm, sb_props = prep_scalebar_inputs(maps, iof_data, uvwdir)
+        axes, image, xyzm, sb_props = prep_scalebar_inputs(maps, iof_data, cahvore)
         if bandset.rois:
             eye_rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
             roi_dims = pd.DataFrame(compute_roi_dims(eye_rois, xyzm, maps['area']))
@@ -669,18 +669,20 @@ def spatial_product_handler(bandset, ref_bands, outpath):
         boresight_contour = draw_range_contours(maps, cahvore, 'boresight')
         eyepre = eye.lower()[0]
         dpi = 340
+        Path(outpath, "browse").mkdir(exist_ok=True, parents=True)
         try:
             ifig = draw_incidence_map(maps['incidence'])
             ifig.tight_layout()
-            ifig.savefig(f"browse/incidence_{eyepre}_{bandset.name}.png", dpi=dpi)
-        except KeyError:
+            ifig.savefig(Path(outpath, f"browse/incidence_{eyepre}_{bandset.name}.png"),
+                         dpi=dpi)
+        except (KeyError, FileNotFoundError):
             pass  # a warning about no normals was already raised in make_spatial_maps
             # AND map_spatial_input_products (maybe should pass one of those warnings too)
         for fig in (scalefig, rangefig, center_contour, boresight_contour):
             fig.tight_layout()
         scalefig.savefig(Path(outpath, f"browse/scalebar_{eyepre}_{bandset.name}.png"),
                          dpi=dpi)
-        rangefig.savefig(Path(outpath, f"browse/scalebar_{eyepre}_{bandset.name}.png"),
+        rangefig.savefig(Path(outpath, f"browse/rangemap_{eyepre}_{bandset.name}.png"),
                          dpi=dpi)
         center_contour.savefig(Path(outpath, f"browse/camera_contour_{eyepre}"
                                              f"_{bandset.name}.png"), dpi=dpi)

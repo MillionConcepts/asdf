@@ -645,10 +645,10 @@ class ZcamBandSet(BandSet):
 
     def match_navcam(self):
         # TODO: might be able to shorten this using folder_names from asdf.format
-        nsite = groupby(sitedrive, self.metadata['PATH'][0].parents[2].rglob(
+        nsite = groupby(sitedrive, Path(self.metadata['PATH'][0]).parents[2].rglob(
             'nxyr/**/*.IMG'))
         try:
-            navcam_match = nsite[(self.metadata['SELF'][0], self.metadata['DRIVE'][0])]
+            navcam_match = nsite[(self.metadata['SITE'][0], self.metadata['DRIVE'][0])]
         except KeyError:
             return
         return navcam_match
