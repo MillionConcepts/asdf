@@ -645,7 +645,11 @@ def no_ncam_match():
 
 def spatial_product_handler(bandset, ref_bands, outpath):
     dims = {}
-    uvwdir = bandset.xyrs[0].parents[1] / 'nuvw'
+    try:
+        uvwdir = bandset.xyrs[0].parents[1] / 'nuvw'
+    except AttributeError:
+        no_ncam_match()
+        return
     for ref_band in ref_bands:
         iof_data = bandset.precached[bandset.metadata.loc[bandset.metadata['BAND'] ==
                                                           ref_band, 'PATH']]

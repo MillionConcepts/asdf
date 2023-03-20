@@ -661,10 +661,11 @@ class ZcamBandSet(BandSet):
         # things later? Especially the debayer...we don't want unnecessary debayering.
         ref_bands = ('L1', 'R1')
         dims = spatial_product_handler(self, ref_bands, outpath)
-        self.format_metadata()  # has this already been done elsewhere, we need compact
-        # to be defined in order to merge the dims info
-        self.compact['ANALYSIS_NAME'] = ''  # I think this is unnecessarily overriding
-        # the suffix name here, maybe?
-        self.compact = pd.merge(self.compact, dims, on='COLOR')
-        #TODO: Then use self.write_data_files to get the new marslab compact file,
-        # but I don't think we want that in here because it would duplicate in normal runs
+        if dims:
+            self.format_metadata()  # has this already been done elsewhere, we need
+            # compact to be defined in order to merge the dims info
+            self.compact['ANALYSIS_NAME'] = ''  # I think this is unnecessarily overriding
+            # the suffix name here, maybe?
+            self.compact = pd.merge(self.compact, dims, on='COLOR')
+            #TODO: Then use self.write_data_files to get the new marslab compact file, but
+            # I don't think we want that in here because it would duplicate in normal runs
