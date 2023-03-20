@@ -241,7 +241,6 @@ def prep_scalebar_inputs(maps, iof_data, cahvore):
 def draw_scalebars(axes, image, xyzm, sb_props):
     j_bar_pos, i_distances = compute_horizontal_scalebars(
         xyzm,
-        axes['i']['unique'],
         axes['j']['unique'],
         axes['i']['pix'],
         axes['j']['pix'],
@@ -259,7 +258,6 @@ def draw_scalebars(axes, image, xyzm, sb_props):
             axes['i']['unique'],
             axes['j']['unique'],
             axes['i']['pix'],
-            axes['j']['pix'],
             sb_props,
             side,
         )
@@ -486,15 +484,10 @@ def compute_roi_dims(rois, xyz, area):
             'A': area[np.nonzero(roi.data)].sum()
         }
         recs.append(rec)
-    return recs
-
-
-def sitedrive(path):
-    return mp.site(path.name), mp.drive(path.name)
 
 
 def compute_horizontal_scalebars(
-        xyzm, valid_i, valid_j, ipix, jpix, sb_props, windowed_distances=True
+        xyzm, valid_j, ipix, jpix, sb_props, windowed_distances=True
 ):
     # TODO: valid_i is not used, was it supposed to be? If not, it should be removed and
     #  signatures updated
@@ -532,7 +525,7 @@ def compute_horizontal_scalebars(
 
 
 def compute_vertical_scalebars(
-        xyzm, valid_i, valid_j, ipix, jpix, sb_props, side='left'
+        xyzm, valid_i, valid_j, ipix, sb_props, side='left'
 ):
     # TODO: jpix is not used, was it supposed to be? If not, it should be removed and
     #  signatures updated
@@ -643,61 +636,8 @@ def draw_incidence_map(incidence):
     return fig
 
 
-def find_closest_ncam(zcam_sol_dir: Path):
-    sol_paths = []
-    for path in zcam_sol_dir.parents[0].iterdir():
-        if path.is_dir():
-            sol_paths = sol_paths + [path]
-    sol_paths.sort()
-    isol = sol_paths.index(zcam_sol_dir)
-    sol_range = sol_paths[isol-10:isol]
-    sd_by_sol = list(map(lambda x: site_drive_match(zcam_sol_dir, x), sol_range))
-    for sd in sd_by_sol:
-        if sd:
-            ncam_sol_dir = sol_range[sd_by_sol.index(sd)]
-            clusters, xyrs = cluster_matches(zcam_sol_dir, ncam_sol_dir, sd)
-            return clusters, xyrs, ncam_sol_dir
-
-
-def site_drive_match(zcam_sol_dir: Path, ncam_sol_dir: Path):
-    iofdir = (zcam_sol_dir / 'iof')
-    xyrdir = (ncam_sol_dir / 'nxyr')
-    zsite = groupby(sitedrive, iofdir.iterdir())
-    try:
-        nsite = groupby(sitedrive, xyrdir.iterdir())
-    except FileNotFoundError:  # no xyr directory
-        return
-    sd_ops = tuple(set(zsite.keys()).intersection(nsite.keys()))
-    try:
-        sd = sd_ops[0]
-        return sd
-    except IndexError:  # no intersection
-        return
-
-
-def cluster_matches(zcam_sol_dir: Path, ncam_sol_dir: Path, sd):
-    iofdir = (zcam_sol_dir / 'iof')
-    xyrdir = (ncam_sol_dir / 'nxyr')
-    nsite = groupby(sitedrive, xyrdir.iterdir())
-    iofs = scan_zcam_files(iofdir)
-    iofs = iofs.loc[iofs['SITE']] == sd[0] & (iofs['DRIVE'] == sd[1])
-    clusters = cluster_observations(iofs)[0]
-    xyrs = nsite[sd]
-    return clusters, xyrs
-
-
 def no_ncam_match():
     aprint(
             f"[bold dark orange]No matching ncam xyr file(s) found, cancelling spatial"
             f"product generation."
         )
-
-
-def spatial_product_executor(zcam_sol_dir: Path):
-    clusters, xyrs, ncam_sol_dir = find_closest_ncam(zcam_sol_dir)
-    if not clusters:
-        no_ncam_match()
-        return
-    ref_band = 'R3'  # always?
-
-

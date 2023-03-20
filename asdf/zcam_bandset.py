@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pdr
 from asdf_settings import rapidlooks
-from cytoolz import keyfilter
+from cytoolz import keyfilter, groupby
 from matplotlib import pyplot as plt
 
 import asdf
@@ -56,6 +56,11 @@ from marslab.imgops.regions import (
     draw_edgemaps_on_image,
     draw_edgemaps_on_axis,
 )
+from marslab.parse import site, drive
+
+
+def sitedrive(path):
+    return site(path.name), drive(path.name)
 
 
 def polish_metadata(metadata, creation_time):
@@ -155,6 +160,7 @@ class ZcamBandSet(BandSet):
         self.rc_compact = None
         # a slightly goofy holding location for things like google drive ids
         self.remote_resource_id = None
+        self.xyrs = self.match_navcam()
 
     def scrape_rc_files(self):
         rc_table_map = {}
@@ -635,3 +641,18 @@ class ZcamBandSet(BandSet):
         if target_name:
             return target_name
         return ""
+
+    def match_navcam(self):
+        nsite = groupby(sitedrive, self.metadata['PATH'][0].parents[2].rglob(
+            'xyr/**/*.IMG'))
+        try:
+            navcam_match = nsite[(self.metadata['SELF'][0], self.metadata['DRIVE'][0])]
+        except KeyError:
+            return
+        return navcam_match
+
+    def spatial_product_executor(self):
+        for ref_band in ('L1', 'R1'):
+            iof_data = self.precached[self.metadata.loc[self.metadata['BAND'] ==
+                                                        ref_band, 'PATH']]
+
