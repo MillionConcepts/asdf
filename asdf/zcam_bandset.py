@@ -661,7 +661,7 @@ class ZcamBandSet(BandSet):
         # things later? Especially the debayer...we don't want unnecessary debayering.
         ref_bands = ('L1', 'R1')
         dims = spatial_product_handler(self, ref_bands, outpath)
-        if dims:
+        if dims is not None:
             self.format_metadata()  # has this already been done elsewhere, we need
             # compact to be defined in order to merge the dims info
             self.compact['ANALYSIS_NAME'] = ''  # I think this is unnecessarily overriding

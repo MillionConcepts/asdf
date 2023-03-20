@@ -458,6 +458,7 @@ def compute_roi_dims(rois, xyz, area):
             'A': area[np.nonzero(roi.data)].sum()
         }
         recs.append(rec)
+    return recs
 
 
 def compute_horizontal_scalebars(
@@ -673,6 +674,6 @@ def spatial_product_handler(bandset, ref_bands, outpath):
         boresight_contour.savefig(Path(outpath, f"browse/boresight_contour_{eyepre}"
                                                 f"_{bandset.name}.png"), dpi=dpi)
         plt.close('all')  # unnecessary?
-    if dims:
+    if dims != {}:
         dims = pd.merge(*tuple(dims.values()), on='COLOR')
     return dims
