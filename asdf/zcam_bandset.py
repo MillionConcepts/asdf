@@ -661,8 +661,10 @@ class ZcamBandSet(BandSet):
         ref_bands = ('L1', 'R1')
         dims = spatial_product_handler(self, ref_bands, outpath)
         if dims is not None:
-            self.format_metadata()  # has this already been done elsewhere, we need
-            # compact to be defined in order to merge the dims info
-            self.compact['ANALYSIS_NAME'] = ''  # I think this is unnecessarily overriding
-            # the suffix name here, maybe?
+            self.format_metadata()
+            # TODO: has the above already been done elsewhere? We need
+            #  compact to be defined in order to merge the dims info.
+            self.compact['ANALYSIS_NAME'] = ''
+            # TODO: I think the above is unnecessarily overriding the suffix name here,
+            #  maybe?
             self.compact = pd.merge(self.compact, dims, on='COLOR')
