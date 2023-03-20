@@ -657,8 +657,7 @@ class ZcamBandSet(BandSet):
         self.load('all')
         self.bulk_debayer('all')
         self.count_rois()
-        #TODO: Do we need any of the three calls above or are they more likely to break
-        # things later? Especially the debayer...we don't want unnecessary debayering.
+        # TODO: Optimize to only call the above lines when necessary
         ref_bands = ('L1', 'R1')
         dims = spatial_product_handler(self, ref_bands, outpath)
         if dims is not None:
@@ -667,5 +666,3 @@ class ZcamBandSet(BandSet):
             self.compact['ANALYSIS_NAME'] = ''  # I think this is unnecessarily overriding
             # the suffix name here, maybe?
             self.compact = pd.merge(self.compact, dims, on='COLOR')
-            #TODO: Then use self.write_data_files to get the new marslab compact file, but
-            # I don't think we want that in here because it would duplicate in normal runs
