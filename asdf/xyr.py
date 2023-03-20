@@ -366,7 +366,7 @@ def make_spatial_maps(coords, iof_data, cahvore):
     return maps
 
 
-def make_spatial_product(maps, navrec, iof_data, bandset, outpath):
+def make_spatial_product(maps, navrec, iof_data, bandset, outpath: Path):
     primary = fits.PrimaryHDU()
     bandset.format_metadata()
     primary.header['IN_XYR'] = Path(navrec['fn']).name
@@ -391,7 +391,7 @@ def make_spatial_product(maps, navrec, iof_data, bandset, outpath):
             savearray[~np.isfinite(savearray)] = 0
         hdus.append(constructor(savearray, name=ax))
     hdul = fits.HDUList(hdus)
-    Path(outpath).mkdir(exist_ok=True, parents=True)
+    outpath.mkdir(exist_ok=True, parents=True)
     eye = Path(iof_data.filename).name[1]
     outfile = Path(outpath, f"space_{eye}_{bandset.name}.fits")
     hdul.writeto(outfile, overwrite=True)
@@ -641,3 +641,56 @@ def no_ncam_match():
             f"[bold dark orange]No matching ncam xyr file(s) found, cancelling spatial"
             f"product generation."
         )
+
+
+def spatial_product_handler(bandset, ref_bands, outpath):
+    dims = {}
+    uvwdir = bandset.xyrs[0].parents[1] / 'nuvw'
+    for ref_band in ref_bands:
+        iof_data = bandset.precached[bandset.metadata.loc[bandset.metadata['BAND'] ==
+                                                          ref_band, 'PATH']]
+        try:
+            maps = read_space_fits(Path(outpath, f"data/space_{ref_band[0]}"
+                                                 f"_{bandset.name}.fits"))
+            cahvore = derive_cahvore_properties(get_cahvore(iof_data))
+        except FileNotFoundError:
+            navrec, cahvore = map_input_spatial_products(bandset.xyrs, iof_data, uvwdir)
+            maps = make_spatial_maps(navrec['coords'], iof_data, cahvore)
+            fits_path = make_spatial_product(maps, navrec, iof_data, bandset,
+                                             Path(outpath, "data"))
+            maps = read_space_fits(fits_path)
+        eye = {'L': 'LEFT', 'R': 'RIGHT'}[ref_band[0]]
+        image = iof_data.get_scaled('IMAGE')
+        maps['area'] = make_area_array(maps)
+        #TODO: we aren't doing anything with the area map, also unsure what it
+        # _should_ look like, but currently not looking great
+        areaplot = draw_area_map(image, maps['area'])
+        eye_rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
+        axes, image, xyzm, sb_props = prep_scalebar_inputs(maps, iof_data, uvwdir)
+        roi_dims = pd.DataFrame(compute_roi_dims(eye_rois, xyzm, maps['area']))
+        roi_dims.columns = [
+            c if c == 'COLOR' else f"{eye}_{c}" for c in roi_dims.columns
+        ]
+        dims[eye] = roi_dims
+        scalefig, scaleax = draw_scalebars(axes, image, xyzm, sb_props)
+        rangefig = draw_rangemap(maps, iof_data)
+        center_contour = draw_range_contours(maps, cahvore)
+        boresight_contour = draw_range_contours(maps, cahvore, 'boresight')
+        # TODO: will this complain if there is no uvw available?
+        ifig = draw_incidence_map(maps['incidence'])
+        eyepre = eye.lower()[0]
+        for fig in (scalefig, rangefig, center_contour, boresight_contour, ifig):
+            fig.tight_layout()
+        dpi = 340
+        scalefig.savefig(Path(outpath, f"browse/scalebar_{eyepre}_{bandset.name}.png"),
+                         dpi=dpi)
+        rangefig.savefig(Path(outpath, f"browse/scalebar_{eyepre}_{bandset.name}.png"),
+                         dpi=dpi)
+        center_contour.savefig(Path(outpath, f"browse/camera_contour_{eyepre}"
+                                             f"_{bandset.name}.png"), dpi=dpi)
+        boresight_contour.savefig(Path(outpath, f"browse/boresight_contour_{eyepre}"
+                                                f"_{bandset.name}.png"), dpi=dpi)
+        ifig.savefig(f"browse/incidence_{eyepre}_{bandset.name}.png", dpi=dpi)
+        plt.close('all')  # unnecessary?
+    dims = pd.merge(*tuple(dims.values()), on='COLOR')
+    return dims

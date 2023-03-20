@@ -57,6 +57,7 @@ from marslab.imgops.regions import (
     draw_edgemaps_on_axis,
 )
 from marslab.parse import site, drive
+from asdf.xyr import spatial_product_handler
 
 
 def sitedrive(path):
@@ -643,16 +644,27 @@ class ZcamBandSet(BandSet):
         return ""
 
     def match_navcam(self):
+        #TODO: might be able to shorten this using folder_names from asdf.format
         nsite = groupby(sitedrive, self.metadata['PATH'][0].parents[2].rglob(
-            'xyr/**/*.IMG'))
+            'nxyr/**/*.IMG'))
         try:
             navcam_match = nsite[(self.metadata['SELF'][0], self.metadata['DRIVE'][0])]
         except KeyError:
             return
         return navcam_match
 
-    def spatial_product_executor(self):
-        for ref_band in ('L1', 'R1'):
-            iof_data = self.precached[self.metadata.loc[self.metadata['BAND'] ==
-                                                        ref_band, 'PATH']]
-
+    def spatial_product_executor(self, outpath="."):
+        self.load('all')
+        self.bulk_debayer('all')
+        self.count_rois()
+        #TODO: Do we need any of the three calls above or are they more likely to break
+        # things later? Especially the debayer...we don't want unnecessary debayering.
+        ref_bands = ('L1', 'R1')
+        dims = spatial_product_handler(self, ref_bands, outpath)
+        self.format_metadata()  # has this already been done elsewhere, we need compact
+        # to be defined in order to merge the dims info
+        self.compact['ANALYSIS_NAME'] = ''  # I think this is unnecessarily overriding
+        # the suffix name here, maybe?
+        self.compact = pd.merge(self.compact, dims, on='COLOR')
+        #TODO: Then use self.write_data_files to get the new marslab compact file,
+        # but I don't think we want that in here because it would duplicate in normal runs
