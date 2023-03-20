@@ -655,13 +655,14 @@ def spatial_product_handler(bandset, ref_bands, outpath):
             maps = read_space_fits(fits_path)
         eye = {'L': 'LEFT', 'R': 'RIGHT'}[ref_band[0]]
         maps['area'] = make_area_array(maps)
-        eye_rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
         axes, image, xyzm, sb_props = prep_scalebar_inputs(maps, iof_data, uvwdir)
-        roi_dims = pd.DataFrame(compute_roi_dims(eye_rois, xyzm, maps['area']))
-        roi_dims.columns = [
-            c if c == 'COLOR' else f"{eye}_{c}" for c in roi_dims.columns
-        ]
-        dims[eye] = roi_dims
+        if bandset.rois:
+            eye_rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
+            roi_dims = pd.DataFrame(compute_roi_dims(eye_rois, xyzm, maps['area']))
+            roi_dims.columns = [
+                c if c == 'COLOR' else f"{eye}_{c}" for c in roi_dims.columns
+            ]
+            dims[eye] = roi_dims
         scalefig, scaleax = draw_scalebars(axes, image, xyzm, sb_props)
         rangefig = draw_rangemap(maps, iof_data)
         center_contour = draw_range_contours(maps, cahvore)
@@ -686,5 +687,6 @@ def spatial_product_handler(bandset, ref_bands, outpath):
         boresight_contour.savefig(Path(outpath, f"browse/boresight_contour_{eyepre}"
                                                 f"_{bandset.name}.png"), dpi=dpi)
         plt.close('all')  # unnecessary?
-    dims = pd.merge(*tuple(dims.values()), on='COLOR')
+    if dims:
+        dims = pd.merge(*tuple(dims.values()), on='COLOR')
     return dims
