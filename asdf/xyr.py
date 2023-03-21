@@ -21,7 +21,7 @@ from asdf.console import aprint
 from asdf_settings.rapidlooks import FONT_PATH
 from marslab.geom import transform_angle, sph2cart
 from marslab.imgops.imgutils import normalize_range
-from marslab.imgops.pltutils import despine, remove_ticks
+from marslab.imgops.pltutils import despine, remove_ticks, dpi_from_image
 from marslab.imgops.render import colormapped_plot
 
 mpl.rcParams['image.cmap'] = 'Greys_r'  # necessary?
@@ -162,24 +162,28 @@ def pick_biggest_navrec(nav_recs):
     return nav_recs[np.argmax(sizes)]
 
 
-def map_input_spatial_products(
-    xyrs, iof_datas, uvwdir, min_matched_pixels=1100
-):
+# TODO: better feedback (progress bars, etc.)
+def map_input_spatial_products(xyrs, iof_datas, uvwdir, min_pixel_match=1100):
     nav_recs = []
+    aprint(f"loading {len(xyrs)} candidate XYR files")
     for xyr_file in xyrs:
         xyr = open_attached(xyr_file)
         nxyz = np.moveaxis(xyr.get_scaled('IMAGE'), 0, 2)
+        aprint(f"loaded {xyr_file.name}")
         if not nxyz.any():
+            del xyr.IMAGE
             continue
         nav_recs.append({'xyz': nxyz, 'fn': xyr.filename})
     coords = defaultdict(list)
     zcs = {}
+    aprint(f"{len(nav_recs)} / {len(xyrs)} contain data")
     for rec, band in product(nav_recs, iof_datas.keys()):
         zc = derive_cahvore_properties(get_cahvore(iof_datas[band]))
         coords[band].append(
             rec | {'coords': select_and_map_coordinates(rec['xyz'], zc)}
         )
         zcs[band] = zc
+        aprint(f"mapped {Path(rec['fn']).name} to {band}")
     outrecs = {}
     for band in iof_datas.keys():
         recs = tuple(filter(filter_navrec, coords[band]))
@@ -190,9 +194,11 @@ def map_input_spatial_products(
         # sketchy data in the far corner of a navcam image -- probably like if
         # it's under 1100 pixels, don't use it
         rec = pick_biggest_navrec(recs)
+        aprint(f"selected {Path(rec['fn']).name} for {band}")
         del recs
-        if len(rec['coords']['i']) < min_matched_pixels:
-            raise ValueError("Best matching XYR has < min_matched_pixels.")
+        if len(rec['coords']['i']) < min_pixel_match:
+            raise ValueError("Best matching XYR has < min_pixel_match.")
+        # TODO: make this simultaneous-across-eyes as well (when possible)
         try:
             uvw_file = [
                 f for f in uvwdir.iterdir()
@@ -271,7 +277,7 @@ def draw_scalebars(axes, image, xyzm, sb_props):
             )
         despine(ax)
         remove_ticks(ax)
-    return fig, ax
+    return fig
 
 
 def draw_rangemap(maps, iof_data):
@@ -639,15 +645,14 @@ def no_ncam_match():
     )
 
 
-# TODO: feedback about product generation
-# TODO: turn these into Looks to dynamically control product generation
+# TODO: more feedback about product generation
+# TODO: turn figure funcs into Looks to dynamically control product generation
 def make_spatial_products(
     bandset,
     outpath=".",
     ref_bands=("L1", "R1"),
     write_images=True,
     calc_rois=True,
-    dpi=340
 ):
     if write_images is True:
         bandset.load(ref_bands)
@@ -659,13 +664,14 @@ def make_spatial_products(
                 Path(outpath, f"data/space_{ref_band[0]}_{bandset.name}.fits")
             )
         except FileNotFoundError:
-            # TODO, maybe: check the other eye anyway? This would be important
-            #  in a case with only right-eye data, but we should ideally handle
-            #  that by modifying the ref_bands argument.
+            # TODO, maybe: check the other eye anyway? This would be
+            #  especially important in a case with only right-eye data,
+            #  (but we should really handle that with the ref_bands argument).
             return no_spatial_data()
         eye = {'L': 'LEFT', 'R': 'RIGHT'}[ref_band[0]]
         xyzm = np.ma.dstack([maps['x'], maps['y'], maps['z']])
         if calc_rois and bandset.rois:
+            # TODO, maybe: generate this along with space fits files instead?
             maps['area'] = make_area_array(maps)
             rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
             roi_dims = pd.DataFrame(compute_roi_dims(rois, xyzm, maps['area']))
@@ -675,46 +681,48 @@ def make_spatial_products(
             dims[eye] = roi_dims
         if write_images is False:
             continue
-        iof_data = bandset.fetch_precached(ref_band)
-        cahvore = derive_cahvore_properties(get_cahvore(iof_data))
-        image = normalize_range(bandset.get_band(ref_band), (0, 1), 0.1)
-        axes, sb_props = prep_scalebar_inputs(iof_data, xyzm, cahvore)
-        scalefig, scaleax = draw_scalebars(axes, image, xyzm, sb_props)
-        rangefig = draw_rangemap(maps, iof_data)
-        center_contour = draw_range_contours(maps, cahvore)
-        boresight_contour = draw_range_contours(maps, cahvore, 'boresight')
-        eyepre = eye.lower()[0]
-        browsepath = Path(outpath, "browse")
-        browsepath.mkdir(exist_ok=True, parents=True)
-        if "incidence" not in maps.keys():
-            aprint(
-                f"[bold dark orange]Missing data; skipping photometry maps."
-            )
-        else:
-            ifig = draw_incidence_map(maps['incidence'])
-            ifig.tight_layout()
-            ifig.savefig(
-                browsepath / f"incidence_{eyepre}_{bandset.name}.png", dpi=dpi
-            )
-        for fig in (scalefig, rangefig, center_contour, boresight_contour):
-            fig.tight_layout()
-        scalefig.savefig(
-            browsepath / f"scalebar_{eyepre}_{bandset.name}.png", dpi=dpi
-        )
-        rangefig.savefig(
-            browsepath / f"rangemap_{eyepre}_{bandset.name}.png", dpi=dpi
-        )
-        center_contour.savefig(
-            browsepath / f"camera_contour_{eyepre}_{bandset.name}.png", dpi=dpi
-        )
-        boresight_contour.savefig(
-            browsepath / f"boresight_contour_{eyepre}_{bandset.name}.png",
-            dpi=dpi
-        )
-        plt.close('all')
+        try:
+            write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm)
+        except KeyboardInterrupt:
+            raise
+        except Exception as ex:
+            aprint(f"couldn't write images for {eye}: {type(ex)},{ex}")
+        finally:
+            plt.close('all')  # in case rendering crashed somewhere unexpected
     if dims != {}:
         dims = pd.merge(*tuple(dims.values()), on='COLOR')
     return dims
+
+
+def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
+    iof_data = bandset.fetch_precached(ref_band)
+    cahvore = derive_cahvore_properties(get_cahvore(iof_data))
+    image = normalize_range(bandset.get_band(ref_band), (0, 1), 0.1)
+    axes, sb_props = prep_scalebar_inputs(iof_data, xyzm, cahvore)
+    # TODO: make these Looks
+    mpl.use('agg')
+    scalefig = draw_scalebars(axes, image, xyzm, sb_props)
+    rangefig = draw_rangemap(maps, iof_data)
+    center_contour = draw_range_contours(maps, cahvore)
+    boresight_contour = draw_range_contours(maps, cahvore, 'boresight')
+    eyepre = eye.lower()[0]
+    browsepath = Path(outpath, "browse")
+    browsepath.mkdir(exist_ok=True, parents=True)
+    figs = [scalefig, rangefig, center_contour, boresight_contour]
+    names = ["scalebar", "rangemap", "camera_contour", "boresight_contour"]
+    # TODO: emission and phase maps
+    if "incidence" not in maps.keys():
+        aprint(f"[bold dark_orange]No normals; skipping photometry maps.")
+    else:
+        figs.append(draw_incidence_map(maps['incidence']))
+        names.append("incidence")
+    dpi = dpi_from_image(scalefig)
+    for fig, name in zip(figs, names):
+        fig.tight_layout()
+        fig.savefig(
+            browsepath / f"{name}_{eyepre}_{bandset.name}.png", dpi=dpi
+        )
+        plt.close(fig)
 
 
 def make_space_fits(bandset, ref_bands, outpath):
