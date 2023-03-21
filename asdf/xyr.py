@@ -190,7 +190,7 @@ def map_input_spatial_products(xyrs, iof_data, uvwdir, min_matched_pixels=1100):
         for ix, comp in enumerate(('u', 'v', 'w')):
             rec['coords'][comp] = nuvw[rec['coords']['sj'], rec['coords']['si'], ix]
         rec['uvw'], rec['uvw_path'] = nuvw, uvw_file
-    except FileNotFoundError:
+    except (FileNotFoundError, IndexError):
         warnings.warn("no surface normals file available.")
         rec['uvw'], rec['uvw_path'] = None, None
     return rec, zc
