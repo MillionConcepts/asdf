@@ -1,26 +1,28 @@
-from functools import partial
-from pathlib import Path
 import warnings
+from collections import defaultdict
+from functools import partial
+from itertools import product
+from pathlib import Path
 
-from astropy.io import fits
-from cytoolz import groupby, valfilter, valmap
-from dustgoggles.func import gmap
-from marslab.geom import transform_angle, sph2cart
-from marslab.imgops.imgutils import normalize_range, enhance_color
-from marslab.imgops.pltutils import despine, remove_ticks, strip_axes
-import matplotlib.font_manager as mplf
-from matplotlib.lines import Line2D
-from more_itertools import chunked, divide
-import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.font_manager as mplf
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pdr
+from astropy.io import fits
+from cytoolz import valmap
+from dustgoggles.func import gmap
+from matplotlib.lines import Line2D
+from more_itertools import chunked
 from scipy.interpolate import griddata
-from marslab.imgops.render import colormapped_plot
 
-from asdf_settings.rapidlooks import FONT_PATH
 from asdf.console import aprint
+from asdf_settings.rapidlooks import FONT_PATH
+from marslab.geom import transform_angle, sph2cart
+from marslab.imgops.imgutils import normalize_range
+from marslab.imgops.pltutils import despine, remove_ticks
+from marslab.imgops.render import colormapped_plot
 
 mpl.rcParams['image.cmap'] = 'Greys_r'  # necessary?
 warnings.simplefilter('ignore', category=RuntimeWarning)  # i love dividing by zero
@@ -160,8 +162,9 @@ def pick_biggest_navrec(nav_recs):
     return nav_recs[np.argmax(sizes)]
 
 
-def map_input_spatial_products(xyrs, iof_data, uvwdir, min_matched_pixels=1100):
-    zc = derive_cahvore_properties(get_cahvore(iof_data))
+def map_input_spatial_products(
+    xyrs, iof_datas, uvwdir, min_matched_pixels=1100
+):
     nav_recs = []
     for xyr_file in xyrs:
         xyr = open_attached(xyr_file)
@@ -169,31 +172,44 @@ def map_input_spatial_products(xyrs, iof_data, uvwdir, min_matched_pixels=1100):
         if not nxyz.any():
             continue
         nav_recs.append({'xyz': nxyz, 'fn': xyr.filename})
-    for rec in nav_recs:
-        rec['coords'] = select_and_map_coordinates(rec['xyz'], zc)
-    nav_recs = tuple(filter(filter_navrec, nav_recs))
-    if len(nav_recs) == 0:
-        raise ValueError("no match between IOF and available XYRs.")
-    # want a cutoff for pathological cases that are just going to map sketchy
-    # data in the far corner of a navcam image -- probably like if it's under 1100 pixels,
-    # don't use it
-    rec = pick_biggest_navrec(nav_recs)
-    if len(rec['coords']['i']) < min_matched_pixels:
-        raise ValueError("Best matching XYR has < min_matched_pixels.")
-    try:
-        uvw_file = [
-            f for f in uvwdir.iterdir()
-            if f.name == Path(rec['fn']).name.replace('XYR', 'UVW')
-        ][0]
-        uvw_data = pdr.read(uvw_file)
-        nuvw = np.moveaxis(uvw_data.get_scaled('IMAGE'), 0, 2)
-        for ix, comp in enumerate(('u', 'v', 'w')):
-            rec['coords'][comp] = nuvw[rec['coords']['sj'], rec['coords']['si'], ix]
-        rec['uvw'], rec['uvw_path'] = nuvw, uvw_file
-    except (FileNotFoundError, IndexError):
-        warnings.warn("no surface normals file available.")
-        rec['uvw'], rec['uvw_path'] = None, None
-    return rec, zc
+    coords = defaultdict(list)
+    zcs = {}
+    for rec, band in product(nav_recs, iof_datas.keys()):
+        zc = derive_cahvore_properties(get_cahvore(iof_datas[band]))
+        coords[band].append(
+            rec | {'coords': select_and_map_coordinates(rec['xyz'], zc)}
+        )
+        zcs[band] = zc
+    outrecs = {}
+    for band in iof_datas.keys():
+        recs = tuple(filter(filter_navrec, coords[band]))
+        del coords[band]
+        if len(recs) == 0:
+            raise ValueError("no match between IOF and available XYRs.")
+        # want a cutoff for pathological cases that are just going to map
+        # sketchy data in the far corner of a navcam image -- probably like if
+        # it's under 1100 pixels, don't use it
+        rec = pick_biggest_navrec(recs)
+        del recs
+        if len(rec['coords']['i']) < min_matched_pixels:
+            raise ValueError("Best matching XYR has < min_matched_pixels.")
+        try:
+            uvw_file = [
+                f for f in uvwdir.iterdir()
+                if f.name == Path(rec['fn']).name.replace('XYR', 'UVW')
+            ][0]
+            uvw_data = pdr.read(uvw_file)
+            nuvw = np.moveaxis(uvw_data.get_scaled('IMAGE'), 0, 2)
+            for ix, comp in enumerate(('u', 'v', 'w')):
+                rec['coords'][comp] = nuvw[
+                    rec['coords']['sj'], rec['coords']['si'], ix
+                ]
+                rec['uvw'], rec['uvw_path'] = nuvw, uvw_file
+        except (FileNotFoundError, IndexError):
+            warnings.warn("no surface normals file available.")
+            rec['uvw'], rec['uvw_path'] = None, None
+        outrecs[band] = rec
+    return outrecs, zcs
 
 
 def prep_scalebar_inputs(iof_data, xyzm, cahvore):
@@ -706,14 +722,18 @@ def make_space_fits(bandset, ref_bands, outpath):
         return no_ncam_match()
     uvwdir = bandset.xyrs[0].parents[1] / 'nuvw'
     outfiles = []
-    for ref_band in ref_bands:
-        iof_data = bandset.fetch_precached(ref_band)
-        navrec, cahvore = map_input_spatial_products(
-            bandset.xyrs, iof_data, uvwdir
-        )
-        maps = make_spatial_maps(navrec['coords'], iof_data, cahvore)
+    iof_datas = {
+        ref_band: bandset.fetch_precached(ref_band)
+        for ref_band in ref_bands
+    }
+    navrecs, cahvores = map_input_spatial_products(
+        bandset.xyrs, iof_datas, uvwdir
+    )
+    for ref_band, iof_data in iof_datas.items():
+        coords, zc = navrecs[ref_band]['coords'], cahvores[ref_band]
+        maps = make_spatial_maps(coords, iof_data, zc)
         outfile = write_space_fits_file(
-            maps, navrec, iof_data, bandset, Path(outpath, "data")
+            maps, navrecs[ref_band], iof_data, bandset, Path(outpath, "data")
         )
         outfiles.append(outfile)
     return outfiles
