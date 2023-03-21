@@ -70,8 +70,7 @@ def load_roi_file(roi_path, title="", verbose=True):
         if str(roi_path).endswith('.gz'):
             # astropy technically reads this transparently but is slow
             zipfile = gzip.open(roi_path, 'rb')
-            fitsbytes = io.BytesIO(zipfile.read())
-            roi_fits = fits.open(fitsbytes)
+            roi_fits = fits.HDUList.fromstring(zipfile.read())
             zipfile.close()
         else:
             roi_fits = fits.open(roi_path)
