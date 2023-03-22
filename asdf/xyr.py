@@ -631,12 +631,15 @@ def draw_vertical_scalebar(
 
 
 def draw_incidence_map(incidence):
-    fig, ax = plt.subplots()
-    imap = ax.imshow(incidence, cmap='Greys_r')
-    plt.colorbar(imap)
-    despine(ax)
-    remove_ticks(ax)
-    return fig
+    return colormapped_plot(
+        incidence,
+        render_colorbar=True,
+        n_ticks=5,
+        cmap='Greys_r',
+        no_ticks=True,
+        drop_mask=False,
+        mask_fill_color=(0, 0.4, 0.4, 1)
+    )
 
 
 def no_spatial_data():
