@@ -260,7 +260,7 @@ def prep_scalebar_inputs(xyzm, cahvore):
 
 def draw_scalebars(axes, image, xyzm, sb_props):
     fig, ax = plt.subplots()
-    ax.imshow(image / 2, vmax=1)
+    ax.imshow(image / 2, vmax=1, cmap='Greys_r')
     j_bar_pos, i_distances = compute_horizontal_scalebars(xyzm, axes, sb_props)
     for bar_pos, distance in zip(j_bar_pos, i_distances):
         draw_horizontal_scalebar(
