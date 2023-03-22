@@ -253,7 +253,8 @@ def prep_scalebar_inputs(xyzm, cahvore):
         "j_window_size": int(axes["i"]["pix"] / 20),
         "hor_text_standoff": 13,
         "vert_text_standoff": 18,
-        "maxpad": 75,
+        "maxpad_i": 75,
+        "maxpad_j": 40
     }
     return axes, sb_props
 
@@ -493,14 +494,17 @@ def compute_horizontal_scalebars(xyzm, axes, sb_props, window_distance=True):
         axes["j"]["pix"] - sb_props["hor_j_margin"],
         sb_props["n_hor_bars"],
     ).astype(np.int16)
-    real_j_bar_pos = []
+    real_j_bar_pos, output_j_bar_pos = [], []
     for pos in j_bar_pos:
         real_pos = axes["j"]["valid"][
             np.abs(axes["j"]["valid"] - pos).argmin()
         ]
-        if (pos - real_pos) > sb_props["maxpad"]:
+        if np.abs(pos - real_pos) > sb_props["maxpad_j"]:
+            continue
+        if real_pos in real_j_bar_pos:
             continue
         real_j_bar_pos.append(real_pos)
+        output_j_bar_pos.append(pos)
     i_distances = []
     for pos in real_j_bar_pos:
         row = xyzm[pos]
@@ -518,7 +522,7 @@ def compute_horizontal_scalebars(xyzm, axes, sb_props, window_distance=True):
                 )
             distance = sum(row_distances)
         i_distances.append(distance / distance_ratio)
-    return j_bar_pos, i_distances
+    return output_j_bar_pos, i_distances
 
 
 def compute_vertical_scalebars(xyzm, axes, sb_props, side="left"):
@@ -533,7 +537,7 @@ def compute_vertical_scalebars(xyzm, axes, sb_props, side="left"):
     real_i_bar_pos = axes["i"]["valid"][
         np.abs((axes["i"]["valid"] - i_bar_pos)).argmin()
     ]
-    if np.abs(real_i_bar_pos - i_bar_pos) > sb_props["maxpad"]:
+    if np.abs(real_i_bar_pos - i_bar_pos) > sb_props["maxpad_i"]:
         return None, None, None, None, None
     valid_j = np.nonzero(~xyzm[:, :, 0][:, real_i_bar_pos].mask)[0]
     bar_length = (
