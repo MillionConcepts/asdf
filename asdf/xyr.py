@@ -24,7 +24,6 @@ from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.pltutils import despine, remove_ticks, dpi_from_image
 from marslab.imgops.render import colormapped_plot
 
-mpl.rcParams["image.cmap"] = "Greys_r"  # necessary?
 warnings.simplefilter(
     "ignore", category=RuntimeWarning
 )  # i love dividing by zero
@@ -633,7 +632,7 @@ def draw_vertical_scalebar(
 
 def draw_incidence_map(incidence):
     fig, ax = plt.subplots()
-    imap = ax.imshow(incidence)
+    imap = ax.imshow(incidence, cmap='Greys_r')
     plt.colorbar(imap)
     despine(ax)
     remove_ticks(ax)
