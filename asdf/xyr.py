@@ -326,6 +326,7 @@ def draw_range_contours(maps, cahvore, origin="center"):
     despine(ax)
     remove_ticks(ax)
     plt.colorbar(contours)
+    plt.style.use('default')
     return fig
 
 
@@ -530,6 +531,8 @@ def compute_vertical_scalebars(xyzm, axes, sb_props, side="left"):
     compute image positions and world distances for vertical bars spaced along
     the j (y) axis, giving distances along the j (y) axis
     """
+    if len(axes['i']['valid']) == 0:
+        return None, None, None, None, None
     if side == "left":
         i_bar_pos = sb_props["vert_i_margin"]
     else:
