@@ -262,12 +262,13 @@ class ZcamBandSet(BandSet):
         return True
 
     def load_rois(self, title=None, outpath=".", save=False):
+        from astropy.io.fits import HDUList
         from marslab.compat.sel_to_roi import is_sel_file
 
         if self.rois is None:
             aprint("No ROI data loaded.")
             return
-        if isinstance(self.rois, MutableMapping):
+        if isinstance(self.rois, (MutableMapping, HDUList)):
             aprint("ROIs appear to already be loaded; reinitialize to reload")
             return
         # store filename in input_rois
