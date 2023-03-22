@@ -223,19 +223,24 @@ def map_input_spatial_products(xyrs, iof_datas, uvwdir, min_pixel_match=1100):
     return outrecs, zcs
 
 
-def prep_scalebar_inputs(iof_data, xyzm, cahvore):
+BAR_FONT = mplf.FontProperties(
+    fname=Path(FONT_PATH, "FiraMono-Medium.ttf"),
+    size=12,
+)
+
+
+def prep_scalebar_inputs(xyzm, cahvore):
     axes = {"j": {}, "i": {}}
-    axes["j"]["valid"], axes["i"]["valid"] = np.nonzero(~xyzm[:, :, 0].mask)
-    for ax, rec in axes.items():
-        rec["unique"] = np.unique(rec["valid"])
+    min_cover = 0.7
+    # 1, 0 axis order because we are _summing along_ that axis
+    for axname, ax in zip(("j", "i"), (1, 0)):
+        axes[axname]["valid"] = np.nonzero(
+            ((~xyzm[:, :, 0].mask).sum(axis=ax) / xyzm.shape[ax]) > min_cover
+        )[0]
     axes["j"]["pix"] = cahvore["pix_h"]
     axes["i"]["pix"] = cahvore["pix_w"]
-    image = normalize_range(iof_data.get_scaled("IMAGE"), (0, 1), 0.1)
     sb_props = {
-        "bar_font": mplf.FontProperties(
-            fname=Path(FONT_PATH, "FiraMono-Medium.ttf"),
-            size=12,
-        ),
+        "bar_font": BAR_FONT,
         "bar_color": (0.2, 0.85, 0.95),
         "hor_j_margin": int(axes["j"]["pix"] / 12),
         "vert_j_margin": int(axes["j"]["pix"] / 20),
@@ -248,39 +253,30 @@ def prep_scalebar_inputs(iof_data, xyzm, cahvore):
         "j_window_size": int(axes["i"]["pix"] / 20),
         "hor_text_standoff": 13,
         "vert_text_standoff": 18,
+        "maxpad": 75,
     }
     return axes, sb_props
 
 
 def draw_scalebars(axes, image, xyzm, sb_props):
-    j_bar_pos, i_distances = compute_horizontal_scalebars(
-        xyzm, axes["j"]["unique"], axes["i"]["pix"], axes["j"]["pix"], sb_props
-    )
     fig, ax = plt.subplots()
     ax.imshow(image / 2, vmax=1)
+    j_bar_pos, i_distances = compute_horizontal_scalebars(xyzm, axes, sb_props)
     for bar_pos, distance in zip(j_bar_pos, i_distances):
         draw_horizontal_scalebar(
             ax, bar_pos, distance, axes["i"]["pix"], sb_props
         )
-    for side in (
-        "left",
-        "right",
-    ):
-        result = compute_vertical_scalebars(
-            xyzm,
-            axes["i"]["unique"],
-            axes["j"]["unique"],
-            axes["i"]["pix"],
-            sb_props,
-            side,
-        )
+    for side in ("left", "right"):
+        result = compute_vertical_scalebars(xyzm, axes, sb_props, side)
         j_bar_pos, i_bar_pos, j_distances, bar_length, vcx = result
+        if j_bar_pos is None:
+            continue
         for pos, distance in zip(j_bar_pos, j_distances):
             draw_vertical_scalebar(
                 ax, pos, i_bar_pos, distance, bar_length, sb_props, side
             )
-        despine(ax)
-        remove_ticks(ax)
+    despine(ax)
+    remove_ticks(ax)
     return fig
 
 
@@ -299,6 +295,10 @@ def draw_rangemap(maps, iof_data):
     return rangemap
 
 
+class CoverageError(IndexError):
+    pass
+
+
 def draw_range_contours(maps, cahvore, origin="center"):
     xyzm = np.ma.dstack([maps["x"], maps["y"], maps["z"]])
     xyzm[xyzm.mask] = np.nan
@@ -306,6 +306,8 @@ def draw_range_contours(maps, cahvore, origin="center"):
         origin = cahvore["C"]
     elif origin == "boresight":
         origin = xyzm[int(cahvore["Vc"]), int(cahvore["Hc"])]
+    if np.isnan(origin).any():
+        raise CoverageError("No spatial data for requested rangemap origin.")
     rangemap = make_rangemap(xyzm, origin)
     plt.style.use("dark_background")
     rclip = np.clip(
@@ -443,7 +445,7 @@ def draw_area_map(image, area, bounds=(0, 90)):
     fig, ax = plt.subplots()
     scaled = np.clip(area, *np.percentile(area[np.isfinite(area)], bounds))
     image_rgb = np.dstack([image / 2] * 3 + [np.full_like(image, 0.5)])
-    rangemap = colormapped_plot(
+    return fig, colormapped_plot(
         scaled,
         layers=[image_rgb],
         cmap="plasma",
@@ -451,7 +453,6 @@ def draw_area_map(image, area, bounds=(0, 90)):
         drop_mask=False,
         n_ticks=5,
     )
-    return fig
 
 
 def roi_rect(roi, xyz):
@@ -480,30 +481,33 @@ def compute_roi_dims(rois, xyz, area):
     return recs
 
 
-def compute_horizontal_scalebars(
-    xyzm, valid_j, ipix, jpix, sb_props, windowed_distances=True
-):
+def compute_horizontal_scalebars(xyzm, axes, sb_props, window_distance=True):
     """
-    compute image positions and world distances for horizontal
-    bars spaced along the j (y) axis, giving distances
-    along the i (x) axis
+    compute image positions and world distances for horizontal bars spaced
+    along the j (y) axis, giving distances along the i (x) axis
     """
+    if len(axes["j"]["valid"]) == 0:
+        return [], []
     j_bar_pos = np.linspace(
         sb_props["hor_j_margin"],
-        jpix - sb_props["hor_j_margin"],
+        axes["j"]["pix"] - sb_props["hor_j_margin"],
         sb_props["n_hor_bars"],
     ).astype(np.int16)
-    j_bar_pos = [
-        valid_j[np.abs(valid_j - j_bar_pos[i]).argmin()]
-        for i, _ in enumerate(j_bar_pos)
-    ]
+    real_j_bar_pos = []
+    for pos in j_bar_pos:
+        real_pos = axes["j"]["valid"][
+            np.abs(axes["j"]["valid"] - pos).argmin()
+        ]
+        if (pos - real_pos) > sb_props["maxpad"]:
+            continue
+        real_j_bar_pos.append(real_pos)
     i_distances = []
-    for bar_pos in j_bar_pos:
-        row = xyzm[bar_pos]
+    for pos in real_j_bar_pos:
+        row = xyzm[pos]
         valid_row_ix = np.nonzero(~row.mask.all(axis=1))[0]
         start, stop = valid_row_ix[0], valid_row_ix[-1]
-        distance_ratio = (stop - start) / ipix
-        if windowed_distances is False:
+        distance_ratio = (stop - start) / axes["i"]["pix"]
+        if window_distance is False:
             distance = np.linalg.norm(row[stop] - row[start])
         else:
             windows = tuple(chunked(valid_row_ix, sb_props["i_window_size"]))
@@ -517,14 +521,21 @@ def compute_horizontal_scalebars(
     return j_bar_pos, i_distances
 
 
-def compute_vertical_scalebars(
-    xyzm, valid_i, valid_j, ipix, sb_props, side="left"
-):
+def compute_vertical_scalebars(xyzm, axes, sb_props, side="left"):
     """
-    compute image positions and world distances for vertical+
-    bars spaced along the j (y) axis, giving distances
-    along the j (y) axis
+    compute image positions and world distances for vertical bars spaced along
+    the j (y) axis, giving distances along the j (y) axis
     """
+    if side == "left":
+        i_bar_pos = sb_props["vert_i_margin"]
+    else:
+        i_bar_pos = axes["i"]["pix"] - sb_props["vert_i_margin"]
+    real_i_bar_pos = axes["i"]["valid"][
+        np.abs((axes["i"]["valid"] - i_bar_pos)).argmin()
+    ]
+    if np.abs(real_i_bar_pos - i_bar_pos) > sb_props["maxpad"]:
+        return None, None, None, None, None
+    valid_j = np.nonzero(~xyzm[:, :, 0][:, real_i_bar_pos].mask)[0]
     bar_length = (
         (valid_j.max() - valid_j.min())
         - 2 * sb_props["vert_j_margin"]
@@ -538,11 +549,6 @@ def compute_vertical_scalebars(
         + sb_props["vert_bar_padding"] / 2
         for i in range(sb_props["n_vert_bars"])
     ]
-    if side == "left":
-        i_bar_pos = sb_props["vert_i_margin"]
-    else:
-        i_bar_pos = ipix - sb_props["vert_i_margin"]
-    real_i_bar_pos = [valid_i[np.abs(valid_i - i_bar_pos).argmin()]]
     col = xyzm[:, real_i_bar_pos]
     valid_col_ix = np.unique(np.nonzero(~col.mask.all(axis=1))[0])
     j_distances = []
@@ -677,14 +683,14 @@ def make_spatial_products(
             dims[eye] = roi_dims
         if write_images is False:
             continue
-        try:
-            write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm)
-        except KeyboardInterrupt:
-            raise
-        except Exception as ex:
-            aprint(f"couldn't write images for {eye}: {type(ex)},{ex}")
-        finally:
-            plt.close("all")  # in case rendering crashed somewhere unexpected
+        # try:
+        write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm)
+        # except KeyboardInterrupt:
+        #     raise
+        # except Exception as ex:
+        #     aprint(f"couldn't write images for {eye}: {type(ex)},{ex}")
+        # finally:
+        #     plt.close("all")  # in case rendering crashed somewhere unexpected
     if dims != {}:
         dims = pd.merge(*tuple(dims.values()), on="COLOR")
     return dims
@@ -694,29 +700,34 @@ def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
     iof_data = bandset.fetch_precached(ref_band)
     cahvore = derive_cahvore_properties(get_cahvore(iof_data))
     image = normalize_range(bandset.get_band(ref_band), (0, 1), 0.1)
-    axes, sb_props = prep_scalebar_inputs(iof_data, xyzm, cahvore)
-    # TODO: make these Looks
+    axes, sb_props = prep_scalebar_inputs(xyzm, cahvore)
+    # TODO: make these into Looks
     mpl.use("agg")
     scalefig = draw_scalebars(axes, image, xyzm, sb_props)
     rangefig = draw_rangemap(maps, iof_data)
-    center_contour = draw_range_contours(maps, cahvore)
-    boresight_contour = draw_range_contours(maps, cahvore, "boresight")
-    eyepre = eye.lower()[0]
-    browsepath = Path(outpath, "browse")
-    browsepath.mkdir(exist_ok=True, parents=True)
-    figs = [scalefig, rangefig, center_contour, boresight_contour]
-    names = ["scalebar", "rangemap", "camera_contour", "boresight_contour"]
+    figs = [scalefig, rangefig]
+    names = ["scalebar", "rangemap"]
+    for origin, name in zip(("center", "boresight"), ("camera", "boresight")):
+        try:
+            figs.append(draw_range_contours(maps, cahvore, origin))
+            names.append(name)
+        except CoverageError:
+            aprint(f"[bold dark_orange]no data for {origin}, skipping contour")
     # TODO: emission and phase maps
     if "incidence" not in maps.keys():
         aprint(f"[bold dark_orange]No normals; skipping photometry maps.")
     else:
         figs.append(draw_incidence_map(maps["incidence"]))
         names.append("incidence")
+    eyepre = eye.lower()[0]
+    browsepath = Path(outpath, "browse")
+    browsepath.mkdir(exist_ok=True, parents=True)
     dpi = dpi_from_image(scalefig)
+    savekwargs = {"dpi": dpi, "bbox_inches": "tight", "pad_inches": 0}
     for fig, name in zip(figs, names):
         fig.tight_layout()
         fig.savefig(
-            browsepath / f"{name}_{eyepre}_{bandset.name}.png", dpi=dpi
+            browsepath / f"{name}_{eyepre}_{bandset.name}.png", **savekwargs
         )
         plt.close(fig)
 
