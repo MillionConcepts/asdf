@@ -3,17 +3,20 @@ from collections import defaultdict
 from functools import partial
 from itertools import product
 from pathlib import Path
+from types import MappingProxyType
+from typing import Mapping, Union, Literal, Sequence
 
+from astropy.io import fits
+import cv2 as cv
+from cytoolz import valmap
+from dustgoggles.func import gmap
 import matplotlib as mpl
 import matplotlib.font_manager as mplf
+from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pdr
-from astropy.io import fits
-from cytoolz import valmap
-from dustgoggles.func import gmap
-from matplotlib.lines import Line2D
 from more_itertools import chunked
 from scipy.interpolate import griddata
 
@@ -24,25 +27,12 @@ from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.pltutils import despine, remove_ticks, dpi_from_image
 from marslab.imgops.render import colormapped_plot
 
-warnings.simplefilter(
-    "ignore", category=RuntimeWarning
-)  # i love dividing by zero
+# i love dividing by zero
+warnings.simplefilter("ignore", category=RuntimeWarning)
 
 
 def open_attached(path):
     return pdr.open(path, label_fn=path, skip_existence_check=True)
-
-
-def get_cahvore(data: pdr.Data, group="GEOMETRIC_CAMERA_MODEL"):
-    block = data.metablock(group)
-    components = {"reference_frame": block.get("REFERENCE_COORD_SYSTEM_NAME")}
-    for comp_ix, id_ in enumerate(block["MODEL_COMPONENT_ID"]):
-        components[id_] = np.array(block[f"MODEL_COMPONENT_{comp_ix + 1}"])
-    components["az_fov"] = data.metaget("AZIMUTH_FOV")["value"]
-    components["el_fov"] = data.metaget("ELEVATION_FOV")["value"]
-    components["pix_w"] = data.metaget_("LINE_SAMPLES")
-    components["pix_h"] = data.metaget_("LINES")
-    return components
 
 
 def derive_cahvore_properties(cahvore):
@@ -57,6 +47,20 @@ def derive_cahvore_properties(cahvore):
     for ax in ("H", "V", "A"):
         cahvore[f"{ax}u"] = cahvore[ax] / np.linalg.norm(cahvore[ax])
     return cahvore
+
+
+def get_cahvore(data: pdr.Data, group="GEOMETRIC_CAMERA_MODEL", derived=True):
+    block = data.metablock(group)
+    components = {"reference_frame": block.get("REFERENCE_COORD_SYSTEM_NAME")}
+    for comp_ix, id_ in enumerate(block["MODEL_COMPONENT_ID"]):
+        components[id_] = np.array(block[f"MODEL_COMPONENT_{comp_ix + 1}"])
+    components["az_fov"] = data.metaget("AZIMUTH_FOV")["value"]
+    components["el_fov"] = data.metaget("ELEVATION_FOV")["value"]
+    components["pix_w"] = data.metaget_("LINE_SAMPLES")
+    components["pix_h"] = data.metaget_("LINES")
+    if derived is True:
+        return derive_cahvore_properties(components)
+    return components
 
 
 def rough_valid_area(xyzmap, cahvor, slop=0.8):
@@ -120,7 +124,7 @@ def select_valid_pixels(ij, cahvore):
     return np.nonzero(validmask)
 
 
-def select_and_map_coordinates(xyzmap, target_cahvore):
+def map_xyz_coordinates(xyzmap, target_cahvore):
     # optimization step
     xyz_candidates, indices = prune_xyzmap(xyzmap, target_cahvore)
     if xyz_candidates.size == 0:
@@ -147,27 +151,95 @@ def make_incidence_map(uvw, img_data):
         np.einsum("ijk,ij->ijk", uvw, 1 / np.linalg.norm(uvw, axis=2)),
         sun_vector * -1,
     )
-    return np.degrees(np.arccos(deflection))
+    # restrict to 0-90 range
+    # (direction is not important + we assume the sun is above the horizon)
+    return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
 
 
 def make_rangemap(xyz, origin=(0, 0, 0)):
     return np.linalg.norm(xyz - origin, axis=-1)
 
 
-def filter_navrec(navrec):
-    if len(navrec["coords"].get("i", [])) == 0:
-        return False
-    return True
+# aprint(f"{Path(navrec['fn']).name} has no match.")
+def check_coords(coords, npix, cutoffs):
+    ji, checks = [coords.get(ax, []) for ax in ("j", "i")], {'status': 'ok'}
+    n_match = len(ji[0])
+    if n_match == 0:
+        checks['status'] = 'no_match'
+    if "n_match" in cutoffs:
+        checks['n_match'] = n_match
+        if checks['status'] == 'ok':
+            if n_match < cutoffs['n_match']:
+                checks['status'] = 'n_match'
+    if 'hull_ratio' in cutoffs:
+        if checks['status'] == 'no_match':
+            checks['hull_ratio'] = 0
+        else:
+            hsize, hull = hullsize(ji)
+            checks['hull_ratio'] = hsize / npix
+            hull = np.squeeze(hull)
+            corners = [
+                '_'.join(map(str, hull[i])) for i in range(hull.shape[0])
+            ]
+            checks |= {f'c{i}': c for i, c in enumerate(corners)}
+        if checks['status'] == 'ok':
+            if checks['hull_ratio'] < cutoffs['hull_ratio']:
+                checks['status'] = 'hull_ratio'
+    return checks
 
 
 def pick_biggest_navrec(nav_recs):
-    sizes = [len(rec["coords"].get("i", [])) for rec in nav_recs]
+    if 'hull_ratio' in nav_recs[0]['eval']:
+        sizes = [rec["eval"]['hull_ratio'] for rec in nav_recs]
+    else:
+        sizes = [len(rec["coords"].get("i", [])) for rec in nav_recs]
     return nav_recs[np.argmax(sizes)]
 
 
+def npi2cv(rowmajor: Sequence[Sequence[int]]) -> np.ndarray:
+    """
+    convert sequence of row-major indices (e.g., produced by np.nonzero)
+    into column-major 3D ndarray compatible w/OpenCV::umat API
+    """
+    colvec = np.flip(np.array(np.vstack(rowmajor).T), 1)
+    return colvec.reshape((colvec.shape[0], 1, colvec.shape[1]))
+
+
+def hullsize(coords: Sequence[Sequence[int]]) -> tuple[float, np.ndarray]:
+    """
+    compute hull + hullsize of point cloud defined by sequence of row-major
+    indices (e.g., produced by np.nonzero)
+    """
+    hull = cv.convexHull(npi2cv(coords))
+    return cv.contourArea(hull), hull
+
+
+def naveval_base(xyr: pdr.Data, iof: pdr.Data, cutoffs):
+    xyr_cahvore = {f'xyr_{k}': v for k, v in get_cahvore(xyr).items()}
+    iof_cahvore = {f'iof_{k}': v for k, v in get_cahvore(iof).items()}
+    return {
+        'xyr_fn': xyr.filename,
+        'iof_fn': iof.filename,
+        'status': None
+    } | xyr_cahvore | iof_cahvore | cutoffs
+
+
+DEFAULT_XYR_CUTOFFS = MappingProxyType({'n_match': 1250, 'hull_ratio': 0.33})
+
+
 # TODO: better feedback (progress bars, etc.)
-def map_input_spatial_products(xyrs, iof_datas, uvwdir, min_pixel_match=1100):
-    nav_recs = []
+def pdr_imsize(data: pdr.Data):
+    """dumb utility function: get 2D size of first array referenced in label"""
+    return data.metaget_('LINES') * data.metaget_('LINE_SAMPLES')
+
+
+def map_spatial_products(
+    xyrs: Sequence[Path],
+    iof_datas: Mapping[str, pdr.Data],
+    uvwdir: Path,
+    cutoffs: Mapping[str, Union[int, float]] = DEFAULT_XYR_CUTOFFS
+):
+    nav_recs, nav_evals = [], []
     aprint(f"loading {len(xyrs)} candidate XYR files")
     for xyr_file in xyrs:
         xyr = open_attached(xyr_file)
@@ -175,32 +247,36 @@ def map_input_spatial_products(xyrs, iof_datas, uvwdir, min_pixel_match=1100):
         aprint(f"loaded {xyr_file.name}")
         if not nxyz.any():
             del xyr.IMAGE
-            continue
-        nav_recs.append({"xyz": nxyz, "fn": xyr.filename})
-    coords = defaultdict(list)
-    zcs = {}
-    aprint(f"{len(nav_recs)} / {len(xyrs)} contain data")
+            nav_evals.append({'xyr_fn': xyr_file.name, 'status': 'empty'})
+            aprint(f"{xyr_file.name} contains no data")
+        else:
+            nav_recs.append({"xyz": nxyz, "fn": xyr.filename, 'data': xyr})
+    mapped = defaultdict(list)
     for rec, band in product(nav_recs, iof_datas.keys()):
-        zc = derive_cahvore_properties(get_cahvore(iof_datas[band]))
-        coords[band].append(
-            rec | {"coords": select_and_map_coordinates(rec["xyz"], zc)}
-        )
-        zcs[band] = zc
-        aprint(f"mapped {Path(rec['fn']).name} to {band}")
+        nav_eval = naveval_base(rec['data'], iof_datas[band], cutoffs)
+        coords = map_xyz_coordinates(rec["xyz"], get_cahvore(iof_datas[band]))
+        nav_eval |= check_coords(coords, pdr_imsize(iof_datas[band]), cutoffs)
+        if nav_eval['status'] != 'ok':
+            aprint(
+                f"{Path(rec['fn']).name} rejected on {band}: "
+                f"{nav_eval['status']}"
+            )
+            del coords
+        else:
+            aprint(
+                f"{Path(rec['fn']).name} results on {band}: "
+                f"{[k + ' ' + str(round(nav_eval[k], 2)) for k in cutoffs]}"
+            )
+            mapped[band].append(rec | {'coords': coords, 'eval': nav_eval})
+        nav_evals.append(nav_eval)
     outrecs = {}
     for band in iof_datas.keys():
-        recs = tuple(filter(filter_navrec, coords[band]))
-        del coords[band]
-        if len(recs) == 0:
-            raise ValueError("no match between IOF and available XYRs.")
-        # want a cutoff for pathological cases that are just going to map
-        # sketchy data in the far corner of a navcam image -- probably like if
-        # it's under 1100 pixels, don't use it
-        rec = pick_biggest_navrec(recs)
+        if len(mapped[band]) == 0:
+            continue
+        rec = pick_biggest_navrec(mapped[band])
+        rec['eval']['status'] += f';selected_{band}'
+        del mapped[band]
         aprint(f"selected {Path(rec['fn']).name} for {band}")
-        del recs
-        if len(rec["coords"]["i"]) < min_pixel_match:
-            raise ValueError("Best matching XYR has < min_pixel_match.")
         # TODO: make this simultaneous-across-eyes as well (when possible)
         try:
             uvw_file = [
@@ -219,7 +295,7 @@ def map_input_spatial_products(xyrs, iof_datas, uvwdir, min_pixel_match=1100):
             aprint(f"[bold dark_orange]no UVW file for {Path(rec['fn']).name}")
             rec["uvw"], rec["uvw_path"] = None, None
         outrecs[band] = rec
-    return outrecs, zcs
+    return outrecs, nav_evals
 
 
 BAR_FONT = mplf.FontProperties(
@@ -253,14 +329,14 @@ def prep_scalebar_inputs(xyzm, cahvore):
         "hor_text_standoff": 13,
         "vert_text_standoff": 18,
         "maxpad_i": 75,
-        "maxpad_j": 40
+        "maxpad_j": 40,
     }
     return axes, sb_props
 
 
 def draw_scalebars(axes, image, xyzm, sb_props):
     fig, ax = plt.subplots()
-    ax.imshow(image / 2, vmax=1, cmap='Greys_r')
+    ax.imshow(image / 2, vmax=1, cmap="Greys_r")
     j_bar_pos, i_distances = compute_horizontal_scalebars(xyzm, axes, sb_props)
     for bar_pos, distance in zip(j_bar_pos, i_distances):
         draw_horizontal_scalebar(
@@ -325,7 +401,7 @@ def draw_range_contours(maps, cahvore, origin="center"):
     despine(ax)
     remove_ticks(ax)
     plt.colorbar(contours)
-    plt.style.use('default')
+    plt.style.use("default")
     return fig
 
 
@@ -337,29 +413,44 @@ def make_spatial_maps(coords, iof_data, cahvore):
     ji = coords["j"], coords["i"]
     iof_shape = gmap(iof_data.metaget_, ("LINES", "LINE_SAMPLES"))
     for ax in axes:
-        mesharray = np.zeros(iof_shape, np.float32)
+        if ax in ("si", "sj"):
+            mesharray = np.full(iof_shape, 0, np.int32)
+        else:
+            mesharray = np.zeros(iof_shape, np.float32)
         mesharray[ji] = coords[ax]
         maps[ax] = mesharray
-    for original in ("si", "sj"):
-        mesharray = np.full(iof_shape, 0, np.int32)
-        mesharray[ji] = coords[original]
-        maps[original] = mesharray
     # make mask of grid positions and arrays of missing positions.
     # we use this to select points to interpolate, and we can also
     # later use this mask to get the original meshes (because the interpolated
     # products retain the original values at those points.)
     maps["meshmask"] = np.full(iof_shape, False)
+    # just interpolate everything, griddata will pass input points
+    targets = np.nonzero(~maps['meshmask'])
     maps["meshmask"][ji] = True
-    missing_ji = np.nonzero(~maps["meshmask"])
+    # UVW products generally have fewer points than XYR products
+    if "u" in axes:
+        uvw = np.dstack([maps["u"], maps["v"], maps["w"]])
+        coords["uvwj"], coords["uvwi"] = np.nonzero(uvw.sum(axis=2))
+        maps["uvwmask"] = np.full(iof_shape, False)
+        maps["uvwmask"][coords["uvwj"], coords["uvwi"]] = True
+        # make illumination geometry maps before interpolating u, v, w
+        maps["incidence"] = make_incidence_map(uvw, iof_data)
+        del uvw
     # interpolate coordinate mesh per axis
     for ax in axes:
-        values = maps[ax][ji]
+        if ax in ("si", "sj"):
+            continue
+        if ax in ("u", "v", "w", "incidence", "phase", "emission"):
+            sources = coords["uvwj"], coords["uvwi"]
+        else:
+            sources = ji
+        values = maps[ax][sources]
         if not values[np.isfinite(values)].any():
             continue
-        interpolated = griddata(ji, values, missing_ji, method="linear")
+        interp = griddata(sources, values, targets, method="linear")
         gridarray = np.empty(iof_shape, np.float32)
-        gridarray[ji] = values
-        gridarray[missing_ji] = interpolated
+        gridarray[sources] = values
+        gridarray[targets] = interp
         # just overwrite the 'mesh' values
         maps[ax] = gridarray
     maps["imask"] = ~np.isfinite(maps["x"])
@@ -367,14 +458,6 @@ def make_spatial_maps(coords, iof_data, cahvore):
     maps["range"] = make_rangemap(
         np.dstack([maps["x"], maps["y"], maps["z"]]), cahvore["C"]
     ).astype("f4")
-    try:
-        # make zcam incidence angle map from interpolated uvwmap
-        maps["incidence"] = make_incidence_map(
-            np.dstack([maps["u"], maps["v"], maps["w"]]), iof_data
-        ).astype("f4")
-    except KeyError:
-        # or not
-        aprint(f"[bold dark_orange] no normals available for this region.")
     return maps
 
 
@@ -393,19 +476,21 @@ def write_space_fits_file(maps, navrec, iof_data, bandset, outpath: Path):
     hdus = [primary]
     constructor = partial(fits.CompImageHDU, quantize_method=2)
     #     constructor = fits.ImageHDU
-    for ax, im in maps.items():
-        if ax in ("meshmask", "imask"):
-            # FITS doesn't have a bool dtype
+    for ax, im in tuple(maps.items()):
+        if im.dtype.char == '?':
+            # mask arrays. FITS doesn't have a bool dtype; just use 0/1 uint8.
             savearray = im.astype(np.uint8)
         else:
             savearray = im.copy()
             savearray[~np.isfinite(savearray)] = 0
+        del maps[ax]
         hdus.append(constructor(savearray, name=ax))
     hdul = fits.HDUList(hdus)
     outpath.mkdir(exist_ok=True, parents=True)
     eye = Path(iof_data.filename).name[1]
     outfile = Path(outpath, f"space_{eye}_{bandset.name}.fits")
     hdul.writeto(outfile, overwrite=True)
+    aprint(f"wrote {outfile}")
     return outfile
 
 
@@ -419,7 +504,7 @@ def read_space_fits(path):
         if (name := hdu_info[1].lower()) == "imask":
             continue
         array = hdul[hdu_info[0]].data
-        if name == "meshmask":
+        if "mask" in name:
             arrays[name] = array.astype(bool)
         else:
             arrays[name] = np.ma.masked_array(array, arrays["imask"])
@@ -456,8 +541,12 @@ def draw_area_map(image, area, bounds=(0, 90)):
     )
 
 
-def roi_rect(roi, xyz):
-    j, i = np.nonzero(roi.data)
+def pix_bbox_dims(coords: tuple[np.ndarray, np.ndarray], xyz: np.ndarray):
+    """
+    find spatial dimensions of bounding rectangle for collection of (2D)
+    image-plane coordinates
+    """
+    j, i = coords
     jmin, jmax = np.min(j), np.max(j)
     imin, imax = np.min(i), np.max(i)
     center_i, center_j = int((imin + imax) / 2), int((jmin + jmax) / 2)
@@ -466,17 +555,27 @@ def roi_rect(roi, xyz):
     return np.linalg.norm(jvec), np.linalg.norm(ivec)
 
 
-def compute_roi_dims(rois, xyz, area):
+# noinspection PyPropertyAccess
+def compute_roi_dims(
+    rois: Mapping[str, fits.hdu.ImageHDU],
+    xyz: np.ndarray,
+    maps: Mapping[str, np.ndarray],
+) -> list[dict[str, Union[str, float]]]:
+    """
+    compute magnitudes of various spatial properties for all passed ROIs wrt
+    xyz array and reduced area/range data
+    """
     recs = []
     for name, roi in rois.items():
-        color = name.split(" ")[0].lower()
-        h, w = roi_rect(roi, xyz)
+        roi_coords = np.nonzero(roi.data)
+        h, w = pix_bbox_dims(roi_coords, xyz)
         rec = {
-            "COLOR": color,
+            "COLOR": name.split(" ")[0].lower(),
             "H": h,
             "W": w,
             "HW": h * w,
-            "A": area[np.nonzero(roi.data)].sum(),
+            "A": maps["area"][roi_coords].sum(),
+            "D": maps["range"][roi_coords].mean(),
         }
         recs.append(rec)
     return recs
@@ -525,12 +624,17 @@ def compute_horizontal_scalebars(xyzm, axes, sb_props, window_distance=True):
     return output_j_bar_pos, i_distances
 
 
-def compute_vertical_scalebars(xyzm, axes, sb_props, side="left"):
+def compute_vertical_scalebars(
+    xyzm: np.ndarray,
+    axes: Mapping[str, Mapping[str, Union[np.ndarray, float]]],
+    sb_props: Mapping,
+    side: Literal["left", "right"] = "left",
+):
     """
     compute image positions and world distances for vertical bars spaced along
     the j (y) axis, giving distances along the j (y) axis
     """
-    if len(axes['i']['valid']) == 0:
+    if len(axes["i"]["valid"]) == 0:
         return None, None, None, None, None
     if side == "left":
         i_bar_pos = sb_props["vert_i_margin"]
@@ -635,10 +739,10 @@ def draw_incidence_map(incidence):
         incidence,
         render_colorbar=True,
         n_ticks=5,
-        cmap='Greys_r',
+        cmap="Greys_r",
         no_ticks=True,
         drop_mask=False,
-        mask_fill_color=(0, 0.4, 0.4, 1)
+        mask_fill_color=(0, 0.4, 0.4, 1),
     )
 
 
@@ -685,21 +789,21 @@ def make_spatial_products(
             # TODO, maybe: generate this along with space fits files instead?
             maps["area"] = make_area_array(maps)
             rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
-            roi_dims = pd.DataFrame(compute_roi_dims(rois, xyzm, maps["area"]))
+            roi_dims = pd.DataFrame(compute_roi_dims(rois, xyzm, maps))
             roi_dims.columns = [
                 c if c == "COLOR" else f"{eye}_{c}" for c in roi_dims.columns
             ]
             dims[eye] = roi_dims
         if write_images is False:
             continue
-        # try:
-        write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm)
-        # except KeyboardInterrupt:
-        #     raise
-        # except Exception as ex:
-        #     aprint(f"couldn't write images for {eye}: {type(ex)},{ex}")
-        # finally:
-        #     plt.close("all")  # in case rendering crashed somewhere unexpected
+        try:
+            write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm)
+        except KeyboardInterrupt:
+            raise
+        except Exception as ex:
+            aprint(f"couldn't write images for {eye}: {type(ex)},{ex}")
+        finally:
+            plt.close("all")  # in case rendering crashed somewhere unexpected
     if dims != {}:
         dims = pd.merge(*tuple(dims.values()), on="COLOR")
     return dims
@@ -707,7 +811,7 @@ def make_spatial_products(
 
 def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
     iof_data = bandset.fetch_precached(ref_band)
-    cahvore = derive_cahvore_properties(get_cahvore(iof_data))
+    cahvore = get_cahvore(iof_data)
     image = normalize_range(bandset.get_band(ref_band), (0, 1), 0.1)
     axes, sb_props = prep_scalebar_inputs(xyzm, cahvore)
     # TODO: make these into Looks
@@ -741,6 +845,13 @@ def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
         plt.close(fig)
 
 
+def write_nav_evals(nav_evals, bs, outpath):
+    outpath.mkdir(parents=True, exist_ok=True)
+    fn = outpath / f"{bs.name}_naveval.csv"
+    pd.DataFrame(nav_evals).to_csv(fn, index=False)
+    return fn
+
+
 def make_space_fits(bandset, ref_bands, outpath):
     if bandset.xyrs is None:
         return no_ncam_match()
@@ -749,11 +860,16 @@ def make_space_fits(bandset, ref_bands, outpath):
     iof_datas = {
         ref_band: bandset.fetch_precached(ref_band) for ref_band in ref_bands
     }
-    navrecs, cahvores = map_input_spatial_products(
-        bandset.xyrs, iof_datas, uvwdir
-    )
+    navrecs, nav_evals = map_spatial_products(bandset.xyrs, iof_datas, uvwdir)
+    outfiles.append(write_nav_evals(nav_evals, bandset, Path(outpath, "data")))
     for ref_band, iof_data in iof_datas.items():
-        coords, zc = navrecs[ref_band]["coords"], cahvores[ref_band]
+        if ref_band not in navrecs:
+            aprint(
+                f"[bold dark_orange]no XYR match for {ref_band}, "
+                f"skipping space FITS generation."
+            )
+            continue
+        coords, zc = navrecs[ref_band]["coords"], get_cahvore(iof_data)
         maps = make_spatial_maps(coords, iof_data, zc)
         outfile = write_space_fits_file(
             maps, navrecs[ref_band], iof_data, bandset, Path(outpath, "data")
