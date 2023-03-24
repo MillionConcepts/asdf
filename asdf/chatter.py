@@ -89,6 +89,8 @@ def get_scan_results(
             results, problems, hidden, _ = cluster_observations(
                 products, target_file, keep_broadband, keep_caltarget
             )
+        except Exception:
+            raise
         except (ValueError, FileNotFoundError, PermissionError) as err:
             # TODO: silly hack, fix signatures
             return list(reject_scan(f"{err} :confused_face:\n")) + [None]

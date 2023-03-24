@@ -172,6 +172,8 @@ def scan_zcam_files(
     return products
 
 
+# TODO, maybe: cal checks make running asdf on RADs fail...which is
+#  not a major issue, but should probably be addressed.
 def cluster_observations(
     products,
     target_file=None,
@@ -248,23 +250,10 @@ def cluster_observations(
                     siblings = ok
             ok_indices += siblings.index.tolist()
         group = group.loc[ok_indices].sort_values(by="CTIME")
-        # rc validation check
-        # TODO: this currently makes running asdf on RADs fail...which is
-        #  not a major issue, but should probably be addressed.
-        parsed_rc_fns = group["RC_FILE"].map(parse_zcam_fn)
-        cal_bailout = False
-        for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
-            if not all_equal([fn[key] for fn in parsed_rc_fns]):
-                parser_warnings.append(
-                    f"warning: cannot process {seq_id}. it appears to have "
-                    f"mismatched calibrations. this probably indicates an "
-                    f"issue in the photometric pipeline or accidental data "
-                    f"deletion."
-                )
-                cal_bailout = True
-                rejects["mismatched_cal"] += group["PATH"].tolist()
-                break
-        if cal_bailout is True:
+        cal_ok, cal_warn = validate_caltarget_sol_consistency(group, seq_id)
+        if cal_ok is False:
+            rejects["mismatched_cal_sol"] += group["PATH"].tolist()
+            parser_warnings.append(cal_warn)
             continue
         if "CALTARGET_LTST" not in group.columns:
             parser_warnings.append("old-format files!! things may be wrong.")
@@ -276,6 +265,12 @@ def cluster_observations(
         ):
             rsm_groups = group.groupby("RSM")
             for RSM, rsm_group in rsm_groups:
+                # rc validation check
+                rc_ok, rc_warn = validate_rc_consistency(rsm_group, seq_id)
+                if rc_ok is False:
+                    rejects["mismatched_rc"] += rsm_group["PATH"].tolist()
+                    parser_warnings.append(rc_warn)
+                    continue
                 dupes = rsm_group.loc[
                     rsm_group["FILTER"].duplicated(keep=False)
                 ]
@@ -292,25 +287,9 @@ def cluster_observations(
                     )
                     rsm_group = rsm_group.drop_duplicates(subset="FILTER")
                     observations[name + "_RSM" + str(RSM)] = rsm_group
-        # elif (group["FRAME_TYPE"] == "MONO").all():
         else:
-            # try to filter ranging shots here
-            # if not (group["FRAME_TYPE"] == "MONO").all():
-                # stereo = group.loc[group["FRAME_TYPE"] == "STEREO"]
-                # if (set(stereo["FILTER"]) == {"L0", "R0"}) and (
-                #     set(group["FILTER"] != {"L0", "R0"})
-                # ):
-                #     rejects['ranging'] += group.loc[
-                #         group['FRAME_TYPE'] != 'MONO']['PATH'
-                #     ].to_list()
-                #     group = group.loc[group["FRAME_TYPE"] == "MONO"]
-                # else:
-                #     parser_warnings.append(
-                #         f"warning: MONO and STEREO mixed in {seq_id}; could "
-                #         f"not be clustered."
-                #     )
-                #     rejects["mono_stereo"] += group["PATH"].tolist()
-                #     continue
+            # TODO: see footnote for dead mono filtering code. generally too
+            #  strict but available as a reference.
             # handle repointed-stereo-observation case: split by pairs of RSM
             # TODO: this will currently fail if all filters from a single eye
             #  are missing
@@ -323,6 +302,11 @@ def cluster_observations(
                 )
             for repoint in partition(2, group["RSM"].unique()):
                 observation = group.loc[group["RSM"].isin(repoint)]
+                rc_ok, rc_warn = validate_rc_consistency(observation, seq_id)
+                if rc_ok is False:
+                    rejects["mismatched_rc"] += observation["PATH"].tolist()
+                    parser_warnings.append(rc_warn)
+                    continue
                 if observation["FILTER"].duplicated().any():
                     parser_warnings.append(
                         f"warning: an unknown windowing issue may have "
@@ -343,7 +327,8 @@ def cluster_observations(
             "version",
             "creation_time",
             "mono_stereo",
-            "mismatched_cal",
+            "mismatched_cal_sol",
+            "mismatched_rc",
             "provenance",
             "ranging"
         ),
@@ -358,7 +343,8 @@ def cluster_observations(
             "with lower version numbers",
             "with older creation times",
             "mixed mono and stereo",
-            "with mismatched calibrations",
+            "using caltarget observations from multiple sols",
+            "with mismatched rc files",
             "sourced from old EDRs",
             "with 'ranging' intent"
         ),
@@ -367,8 +353,38 @@ def cluster_observations(
             hidden_things.append(
                 f"({len(rejects[reason])} file(s) {line} hidden)"
             )
-    return observations, parser_warnings, hidden_things, rejects
+    return observations, tuple(set(parser_warnings)), hidden_things, rejects
 
+
+def validate_caltarget_sol_consistency(group, seq_id):
+    parsed_caltarget_fns = group['CALTARGET_FILE'].map(parse_zcam_fn)
+    caltarget_ok, caltarget_warning = True, None
+    if not all_equal(fn['SOL'] for fn in parsed_caltarget_fns):
+        caltarget_warning, caltarget_ok = (
+            f"warning: could not process {seq_id}. It was calibrated using "
+            f"caltarget observations on different sols. "
+        ) + CAL_WARN_BOILERTPLATE, False
+    return caltarget_ok, caltarget_warning
+
+
+def validate_rc_consistency(group, seq_id):
+    parsed_rc_fns = group["RC_FILE"].map(parse_zcam_fn)
+    rc_ok, rc_warning = True, None
+    for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
+        if not all_equal([fn[key] for fn in parsed_rc_fns]):
+            rc_warning, rc_ok = (
+                f"warning: could not process some or all pointings of "
+                f"{seq_id} due to mismatched calibrations. "
+            ) + CAL_WARN_BOILERTPLATE, False
+            break
+    return rc_ok, rc_warning
+
+
+CAL_WARN_BOILERTPLATE = (
+    "This could indicate an issue in the photometric pipeline, accidental "
+    "data deletion, or limited data availability (for instance, the sequence "
+    "may not be completely downlinked)."
+)
 
 def find_matching_metamap(product_path: str, code="pix_map"):
     # look where we are, look in ../pix_map, look in hardcoded roots --
@@ -677,7 +693,6 @@ def compare_roi_colors(analyses: pd.DataFrame):
             bad_indices.append(ix)
     return analyses.loc[ok_indices], analyses.loc[bad_indices]
 
-
 def find_matching_observations(
     analyses: pd.DataFrame, search_dir: str, search_regex: str
 ):
@@ -814,3 +829,23 @@ def detect_ranging_shot(dupes):
         and (len(dupes) == 4)
         and (set(dupes["FILTER"].iloc[0:2]) == {"L0", "R0"})
     )
+
+"""
+footnote: dead mono ranging shot filtering code
+# if not (group["FRAME_TYPE"] == "MONO").all():
+    # stereo = group.loc[group["FRAME_TYPE"] == "STEREO"]
+    # if (set(stereo["FILTER"]) == {"L0", "R0"}) and (
+    #     set(group["FILTER"] != {"L0", "R0"})
+    # ):
+    #     rejects['ranging'] += group.loc[
+    #         group['FRAME_TYPE'] != 'MONO']['PATH'
+    #     ].to_list()
+    #     group = group.loc[group["FRAME_TYPE"] == "MONO"]
+    # else:
+    #     parser_warnings.append(
+    #         f"warning: MONO and STEREO mixed in {seq_id}; could "
+    #         f"not be clustered."
+    #     )
+    #     rejects["mono_stereo"] += group["PATH"].tolist()
+    #     continue
+"""
