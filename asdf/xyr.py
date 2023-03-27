@@ -336,7 +336,13 @@ def prep_scalebar_inputs(xyzm, cahvore):
 
 def draw_scalebars(axes, image, xyzm, sb_props):
     fig, ax = plt.subplots()
-    ax.imshow(image / 2, vmax=1, cmap="Greys_r")
+    use_im = image / 2
+    # TODO: what is the weird situation under which this is popping in
+    #  _not_ masked?
+    if isinstance(use_im, np.ma.MaskedArray):
+        use_im[use_im.mask] = 0
+        use_im = use_im.data
+    ax.imshow(use_im, vmax=1, cmap="Greys_r")
     j_bar_pos, i_distances = compute_horizontal_scalebars(xyzm, axes, sb_props)
     for bar_pos, distance in zip(j_bar_pos, i_distances):
         draw_horizontal_scalebar(
@@ -435,6 +441,7 @@ def make_spatial_maps(coords, iof_data, cahvore):
         maps["uvwmask"][coords["uvwj"], coords["uvwi"]] = True
         # make illumination geometry maps before interpolating u, v, w
         maps["incidence"] = make_incidence_map(uvw, iof_data)
+        axes.append('incidence')
         del uvw
     # interpolate coordinate mesh per axis
     for ax in axes:
