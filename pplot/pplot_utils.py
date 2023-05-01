@@ -24,6 +24,7 @@ filter_to_wavelength = pd.DataFrame(f2w)
 
 EDGES = ("left", "right", "top", "bottom")
 
+
 def plot_filter_profiles(ax, datarange, inst="ZCAM"):
     # Underplot the filter profiles
     assert inst in ["ZCAM", "MCAM", "PCAM"]
