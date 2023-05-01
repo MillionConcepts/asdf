@@ -2,7 +2,7 @@
 
 from clize import run
 
-import pplot.cli
+import pretty_plot.cli
 
 
 # tell clize to handle command line call

@@ -29,3 +29,6 @@ dependencies:
   - hugin
   - scikit-image
   - sh
+  - pip
+  - pip:
+      - pretty_plot
