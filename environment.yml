@@ -31,4 +31,4 @@ dependencies:
   - sh
   - pip
   - pip:
-      - pretty_plot
+      - git+https://github.com/MillionConcepts/pretty-plot.git

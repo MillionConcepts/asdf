@@ -2,9 +2,10 @@
 
 from clize import run
 
-import pretty_plot.cli
+import importlib
+pretty_plot = importlib.import_module("pretty-plot")
 
 
 # tell clize to handle command line call
 if __name__ == '__main__':
-    run(pplot.cli.do_pplot)
+    run(pretty_plot.pplot.cli.do_pplot)
