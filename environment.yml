@@ -29,3 +29,6 @@ dependencies:
   - hugin
   - scikit-image
   - sh
+  - pip
+  - pip:
+      - git+https://github.com/MillionConcepts/pretty-plot.git
