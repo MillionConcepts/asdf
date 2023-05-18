@@ -6,12 +6,13 @@ import warnings
 from collections.abc import MutableMapping
 from functools import partial
 from pathlib import Path
+from typing import Sequence, Optional
 
 import numpy as np
 import pandas as pd
 import pdr
 from asdf_settings import rapidlooks
-from cytoolz import keyfilter
+from cytoolz import keyfilter, groupby
 from matplotlib import pyplot as plt
 
 import asdf
@@ -36,7 +37,9 @@ from asdf.parse import parse_pointing, make_pointing_name, parse_zcam_fn
 from asdf.physics import add_derived_illumination_geometry
 from asdf.labels import bulk_scrape_asdf_metadata
 from asdf.rc_parser import find_rc_file, read_rc_file
-from asdf_settings.metadata import PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE, COMPACT_ZCAM_MARSLAB_FIELDS
+from asdf_settings.metadata import (
+    PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE, COMPACT_ZCAM_MARSLAB_FIELDS
+)
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
 from marslab.compat.xcam import (
@@ -56,6 +59,12 @@ from marslab.imgops.regions import (
     draw_edgemaps_on_image,
     draw_edgemaps_on_axis,
 )
+from marslab.parse import site, drive
+from asdf.xyr import make_space_fits, make_spatial_products
+
+
+def sitedrive(path):
+    return site(path.name), drive(path.name)
 
 
 def polish_metadata(metadata, creation_time):
@@ -155,6 +164,7 @@ class ZcamBandSet(BandSet):
         self.rc_compact = None
         # a slightly goofy holding location for things like google drive ids
         self.remote_resource_id = None
+        self.xyrs = None
 
     def scrape_rc_files(self):
         rc_table_map = {}
@@ -252,12 +262,13 @@ class ZcamBandSet(BandSet):
         return True
 
     def load_rois(self, title=None, outpath=".", save=False):
+        from astropy.io.fits import HDUList
         from marslab.compat.sel_to_roi import is_sel_file
 
         if self.rois is None:
             aprint("No ROI data loaded.")
             return
-        if isinstance(self.rois, MutableMapping):
+        if isinstance(self.rois, (MutableMapping, HDUList)):
             aprint("ROIs appear to already be loaded; reinitialize to reload")
             return
         # store filename in input_rois
@@ -635,3 +646,48 @@ class ZcamBandSet(BandSet):
         if target_name:
             return target_name
         return ""
+
+    def match_navcam(self, roots: Optional[Sequence[Path]] = None):
+        roots = [] if roots is None else roots
+        roots.append(Path(self.metadata['PATH'][0]).parents[2])
+        nsite = {}
+        for root in roots:
+            nsite |= groupby(sitedrive, root.rglob('nxyr/**/*.IMG'))
+        try:
+            self.xyrs = nsite[
+                (self.metadata['SITE'][0], self.metadata['DRIVE'][0])
+            ]
+        except KeyError:
+            return
+
+    def fetch_precached(self, band):
+        return self.precached[
+            self.metadata.loc[self.metadata['BAND'] == band, 'PATH'].iloc[0]
+        ]
+
+    # TODO: choose different reference bands if L1/R1 are not available
+    # TODO: feedback about product creation / matching / blah blah blah
+    def make_space_fits(self, ref_bands=("L1", "R1"), outpath=".", roots=None):
+        if self.xyrs is None:
+            self.match_navcam(roots)
+        if self.xyrs is None:
+            raise FileNotFoundError("No matching XYRs found.")
+        self.local_files += make_space_fits(self, ref_bands, outpath)
+
+    def make_spatial_products(
+        self,
+        outpath=".",
+        ref_bands=('L1', 'R1'),
+        write_images=True,
+        calc_rois=True
+    ):
+        if (self.counts is None) and self.rois and calc_rois:
+            self.load("all")
+            self.bulk_debayer("all")
+            self.count_rois()
+            self.format_metadata()
+        dims = make_spatial_products(
+            self, outpath, ref_bands, write_images, calc_rois
+        )
+        if isinstance(dims, pd.DataFrame):
+            self.compact = pd.merge(self.compact, dims, on='COLOR')
