@@ -67,7 +67,7 @@ from asdf_settings.metadata import (
     LEGACY_METADATA_FIELDS, FEATURE_SUBTYPES, LEGACY_SUBTYPE_FIELDS,
 )
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
-import pplot
+import pretty_plot as pplot
 
 
 # TODO: rewrite strings / rich printing in this module with better or at least
