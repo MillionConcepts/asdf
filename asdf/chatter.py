@@ -614,7 +614,7 @@ def pretty_plot_bandset(bandset, outpath):
     plot_fn = str(
         Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
     )
-    from pplot.convert import scale_eyes
+    from pretty_plot.convert import scale_eyes
 
     target_name = ""
     if bandset.compact["NAME"].iloc[0]:
