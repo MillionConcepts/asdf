@@ -144,17 +144,41 @@ def map_xyz_coordinates(xyzmap, target_cahvore):
     }
 
 
-def make_incidence_map(uvw, img_data):
+def calc_sun_vector(img_data):
     sun_vector = sph2cart(*transform_angle("SITE", "ROVER", "SOLAR", img_data))
     sun_vector = sun_vector / np.linalg.norm(sun_vector)
+    return sun_vector
+
+
+def calc_surf_norm_vectors(uvw):
+    return np.einsum("ijk,ij->ijk", uvw, 1 / np.linalg.norm(uvw, axis=2))
+
+
+def calc_rover_vectors(xyz, cahvore):
+    rover_vectors = xyz - cahvore["C"]
+    return np.einsum("ijk, ij->ijk", rover_vectors, 1 / np.linalg.norm(rover_vectors, axis=-1))
+
+def make_incidence_map(sun_vector, surf_norm_vectors):
     deflection = np.dot(
-        np.einsum("ijk,ij->ijk", uvw, 1 / np.linalg.norm(uvw, axis=2)),
+        surf_norm_vectors,
         sun_vector * -1,
     )
     # restrict to 0-90 range
     # (direction is not important + we assume the sun is above the horizon)
     return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
 
+
+def make_emission_map(surf_norm_vectors, rover_vectors):
+    deflection = np.einsum("ij,ij->i",
+        surf_norm_vectors,
+        rover_vectors)
+    return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
+
+def make_phase_map(sun_vector, rover_vectors):
+    deflection = np.dot(
+        rover_vectors, sun_vector * -1
+    )
+    return np.abs(np.degrees(np.arccos(deflection)))
 
 def make_rangemap(xyz, origin=(0, 0, 0)):
     return np.linalg.norm(xyz - origin, axis=-1)
@@ -440,8 +464,15 @@ def make_spatial_maps(coords, iof_data, cahvore):
         maps["uvwmask"] = np.full(iof_shape, False)
         maps["uvwmask"][coords["uvwj"], coords["uvwi"]] = True
         # make illumination geometry maps before interpolating u, v, w
-        maps["incidence"] = make_incidence_map(uvw, iof_data)
+        sun_vector = calc_sun_vector(img_data)
+        rover_vectors = calc_rover_vectors(xyz, cahvore)
+        surf_norm_vectors = calc_surf_norm_vectors(uvw)
+        maps["incidence"] = make_incidence_map(sun_vector, surf_norm_vectors)
         axes.append('incidence')
+        maps["emission"] = make_emission_map(surf_norm_vectors, rover_vectors)
+        axes.append('emission')
+        maps["phase"] = make_phase_map(sun_vector, rover_vectors)
+        axes.append('phase')
         del uvw
     # interpolate coordinate mesh per axis
     for ax in axes:
@@ -741,9 +772,9 @@ def draw_vertical_scalebar(
     return ax
 
 
-def draw_incidence_map(incidence):
+def draw_photometry_map(photometry):
     return colormapped_plot(
-        incidence,
+        photometry,
         render_colorbar=True,
         n_ticks=5,
         cmap="Greys_r",
@@ -833,12 +864,15 @@ def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
             names.append(name)
         except CoverageError:
             aprint(f"[bold dark_orange]no data for {origin}, skipping contour")
-    # TODO: emission and phase maps
     if "incidence" not in maps.keys():
         aprint(f"[bold dark_orange]No normals; skipping photometry maps.")
     else:
-        figs.append(draw_incidence_map(maps["incidence"]))
+        figs.append(draw_photometry_map(maps["incidence"]))
         names.append("incidence")
+        figs.append(draw_photometry_map(maps["emission"]))
+        names.append("emission")
+        figs.append(draw_photometry_map(maps["phase"]))
+        names.append("phase")
     eyepre = eye.lower()[0]
     browsepath = Path(outpath, "browse")
     browsepath.mkdir(exist_ok=True, parents=True)
