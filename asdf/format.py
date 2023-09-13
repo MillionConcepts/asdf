@@ -282,9 +282,12 @@ def md5sum(path_or_file, hash_function=md5):
 def cached_md5sum(file):
     return md5sum(file)
 
+
 def add_image_hashes(bandset):
     paths = bandset.metadata["PATH"].unique()
     md5s = tuple(map(md5sum, paths))
+    if "SOURCE_MD5SUM" not in bandset.metadata.columns:
+        bandset.metadata['SOURCE_MD5SUM'] = pd.Series(dtype='object')
     for path, md5_string in zip(paths, md5s):
         bandset.metadata.loc[
             bandset.metadata["PATH"] == path, "SOURCE_MD5SUM"
