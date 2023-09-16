@@ -288,9 +288,12 @@ class ZcamBandSet(BandSet):
         self.local_files.append(roi_fits_fn)
 
     def associate_metamaps(self, metamaps, code='pix_map'):
+        pcol = f"{code.replace('_', '').upper()}_PATH"
+        if pcol not in self.metadata.columns:
+            self.metadata[pcol] = pd.Series(dtype=object)
         for path in self.metadata["PATH"].unique():
             self.metadata.loc[
-                self.metadata["PATH"] == path, f"{code.replace('_','').upper()}_PATH"
+                self.metadata["PATH"] == path, pcol
             ] = str(metamaps[path])
 
     def load_metamaps(self, verbose=False, code="pix_map"):
