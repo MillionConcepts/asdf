@@ -158,6 +158,7 @@ def calc_rover_vectors(xyz, cahvore):
     rover_vectors = xyz - cahvore["C"]
     return np.einsum("ijk, ij->ijk", rover_vectors, 1 / np.linalg.norm(rover_vectors, axis=-1))
 
+
 def make_incidence_map(sun_vector, surf_norm_vectors):
     deflection = np.dot(
         surf_norm_vectors,
@@ -169,16 +170,16 @@ def make_incidence_map(sun_vector, surf_norm_vectors):
 
 
 def make_emission_map(surf_norm_vectors, rover_vectors):
-    deflection = np.einsum("ij,ij->i",
-        surf_norm_vectors,
-        rover_vectors)
+    deflection = (surf_norm_vectors * rover_vectors).sum(axis=2)
     return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
+
 
 def make_phase_map(sun_vector, rover_vectors):
     deflection = np.dot(
         rover_vectors, sun_vector * -1
     )
     return np.abs(np.degrees(np.arccos(deflection)))
+
 
 def make_rangemap(xyz, origin=(0, 0, 0)):
     return np.linalg.norm(xyz - origin, axis=-1)
@@ -464,8 +465,9 @@ def make_spatial_maps(coords, iof_data, cahvore):
         maps["uvwmask"] = np.full(iof_shape, False)
         maps["uvwmask"][coords["uvwj"], coords["uvwi"]] = True
         # make illumination geometry maps before interpolating u, v, w
-        sun_vector = calc_sun_vector(img_data)
-        rover_vectors = calc_rover_vectors(xyz, cahvore)
+        sun_vector = calc_sun_vector(iof_data)
+        rover_vectors = calc_rover_vectors(np.dstack([maps["x"], maps["y"], maps["z"]]),
+                                           cahvore)
         surf_norm_vectors = calc_surf_norm_vectors(uvw)
         maps["incidence"] = make_incidence_map(sun_vector, surf_norm_vectors)
         axes.append('incidence')
