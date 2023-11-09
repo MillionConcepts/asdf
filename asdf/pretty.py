@@ -7,6 +7,7 @@ import os.path
 from types import MappingProxyType
 from typing import Optional, Sequence
 
+import numpy as np
 import pandas as pd
 from rich.highlighter import Highlighter
 from rich.prompt import PromptBase, Prompt, Confirm
@@ -21,6 +22,7 @@ from asdf_settings.metadata import (
     ROI_METADATA_FIELD_CHOICES,
 )
 from marslab.compat.mertools import MERSPECT_M20_COLOR_MAPPINGS
+from asdf.parse import parse_zcam_fn
 
 
 def style_prog(rich_progress, style):
@@ -232,17 +234,32 @@ def format_observation(observation: pd.DataFrame):
     else:
         starting_ltst = filterframe["LTST"].iloc[0]
     tailtext.append(", starting LTST " + str(starting_ltst))
-    return headline, tailtext, printframe
+    if type(observation.get("CALTARGET_LTST")) == pd.Series:
+        caltext = Text()
+        caltarget_sol = parse_zcam_fn(observation['CALTARGET_FILE'].iloc[0])['SOL']
+        caltext.append(f"caltarget SOL {caltarget_sol}")
+        dec_cal_ltst = min(observation['CALTARGET_LTST'])
+        caltarget_ltst = str(int(dec_cal_ltst))+':'+str(round(dec_cal_ltst % 1*60))
+        caltext.append(f", starting LTST {caltarget_ltst}")
+        dec_ltst = int(starting_ltst.split(':')[0])+int(starting_ltst.split(':')[1])/60
+        goodness = round(np.log(1/(abs(constant_dict.get("SOL")-caltarget_sol)+abs(
+            dec_ltst-dec_cal_ltst))+1), 2)
+        caltext.append(f", goodness {goodness}")
+    else:
+        caltext = None
+    return headline, tailtext, caltext, printframe
 
 
 def print_observation(observation, ix=0, is_multiple=False):
-    headline, tailtext, printframe = format_observation(observation)
+    headline, tailtext, caltext, printframe = format_observation(observation)
     table = Table(padding=(0, 3, 0, 1), show_edge=False)
     if is_multiple:
         table.add_column(str(ix + 1) + ":", style="bold turquoise2")
     else:
         table.add_column("")
     headline.append_text(Text("\n")).append_text(tailtext)
+    if caltext:
+        headline.append_text(Text("\n")).append_text(caltext)
     table.add_column(headline)
     camhighlight = M20CameraHighlighter()
     for _, row in printframe.iterrows():

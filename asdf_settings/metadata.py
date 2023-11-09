@@ -107,7 +107,7 @@ FEATURE_SUBTYPES = {
 ROI_METADATA_FIELD_CHOICES = {
     "FEATURE": ["rock", "soil", "pebble", "hardware"],
     "FLOAT": ["float", "in-place", "unclear"],
-    "FORMATION": ["Maaz", "Seitah", "delta"],
+    "FORMATION": ["Maaz", "Seitah", "delta", "margin unit"],
     "MEMBER": {
         "Maaz": ["Chal", "Nataani", "Rochette", "Artuby", "Roubion"],
         "Seitah": ["Content", "Bastide", "Issole"],

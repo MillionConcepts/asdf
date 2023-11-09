@@ -67,7 +67,7 @@ from asdf_settings.metadata import (
     LEGACY_METADATA_FIELDS, FEATURE_SUBTYPES, LEGACY_SUBTYPE_FIELDS,
 )
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
-import pplot
+import pretty_plot as pplot
 
 
 # TODO: rewrite strings / rich printing in this module with better or at least
@@ -298,6 +298,8 @@ def input_roi_metadata(marslab_data, ci):
         )
         user_provided_metadata = ask_user_about_roi(region, ci, constants)
         for field, value in user_provided_metadata.items():
+            if field not in marslab_data.columns:
+                marslab_data[field] = pd.Series(dtype=object)
             marslab_data.loc[marslab_data["COLOR"] == region, field] = value
     return marslab_data
 
@@ -614,11 +616,12 @@ def pretty_plot_bandset(bandset, outpath):
     plot_fn = str(
         Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
     )
-    from pplot.convert import scale_eyes
+    from pretty_plot.convert import scale_eyes
 
-    target_name = ""
-    if bandset.compact["NAME"].iloc[0]:
-        target_name = bandset.compact["NAME"].iloc[0]
+    # TODO: cruft?
+    # target_name = ""
+    # if bandset.compact["NAME"].iloc[0]:
+    #     target_name = bandset.compact["NAME"].iloc[0]
     plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
     for band in DERIVED_CAM_DICT["ZCAM"]["filters"].keys():
         if plot_data[band].isna().any():
