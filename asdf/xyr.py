@@ -174,9 +174,9 @@ def make_emission_map(surf_norm_vectors, rover_vectors):
     return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
 
 
-def make_phase_map(sun_vector, rover_vectors, surf_norm_vectors):
-    deflection = ((surf_norm_vectors - rover_vectors) * (surf_norm_vectors - (sun_vector * -1))).sum(axis=2)
-    return 180 - np.degrees(np.arccos(deflection))
+def make_phase_map(sun_vector, rover_vectors):
+    cos_phase = np.dot(rover_vectors, sun_vector)
+    return np.degrees(np.arccos(cos_phase))
 
 
 def make_rangemap(xyz, origin=(0, 0, 0)):
