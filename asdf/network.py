@@ -272,14 +272,14 @@ def move_existing_files(name_dupes, drivebot, checksums):
         if len(dupes) == 0:
             continue
         backup_folder_id = drivebot.cd(folder_id, "old")
-        for f in dupes.values():
+        for k, f in dupes.items():
             request = drivebot.mv(
                 file_id=f['id'], folder_id=backup_folder_id, defer=True
             )
             drivebot.add_request(request)
             n_moved += 1
+            ASDFLOG.info(f"moved {k}")
     drivebot.execute_batches()
-    ASDF_CONSOLE.print(f"moved {n_moved} existing files")
 
 
 def upload_bandset_to_gdrive(
