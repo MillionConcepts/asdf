@@ -685,6 +685,8 @@ def fdsa_insert(marslab_data, prototype):
                     continue
             else:
                 target = field
+            if target not in marslab_data.columns:
+                marslab_data[target] = pd.Series(dtype=object)
             marslab_data.loc[
                 marslab_data["COLOR"] == color, target
             ] = proto_value
