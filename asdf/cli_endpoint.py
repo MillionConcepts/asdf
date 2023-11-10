@@ -270,20 +270,29 @@ def fdsa_initiate(
             f"{len(reprocess_pairs)}"
         )
         console.style = "none"
-        asdf_body(
-            obs,
-            roi_fn,
-            upload,
-            output,
-            skip_rapidlooks,
-            debug=debug,
-            console=console,
-            recreate_from=marslab_fn,
-            noninteractive=True,
-            skip_pixmaps=skip_pixmaps,
-            seriously_no_images=seriously_no_images,
-            move_existing=move_existing,
-            spatial=spatial
-        )
-        console.style = "FDSA"
-        ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")
+        try:
+            asdf_body(
+                obs,
+                roi_fn,
+                upload,
+                output,
+                skip_rapidlooks,
+                debug=debug,
+                console=console,
+                recreate_from=marslab_fn,
+                noninteractive=True,
+                skip_pixmaps=skip_pixmaps,
+                seriously_no_images=seriously_no_images,
+                move_existing=move_existing,
+                spatial=spatial
+            )
+            console.style = "FDSA"
+            ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")
+        except KeyboardInterrupt:
+            console.style = "FDSA"
+            ASDFLOG.info(f"stopping on keyboard interrupt")
+        except Exception as ex:
+            from dustgoggles.dynamic import exc_report
+
+            ASDFLOG.error(f"failed to process {marslab_fn} with {roi_fn}")
+            ASDFLOG.error(exc_report(ex))

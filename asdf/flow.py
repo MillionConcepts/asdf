@@ -529,7 +529,7 @@ def asdf_body(
             # and matplotlib about opening a bunch of figures
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                bandset.make_look_set(look_instructions)
+                bandset.make_look_set(look_instructions, timeout=120)
             prog.remove_task(ASDF_RPH.task_id)
             bandset.purge("precached_images")
 
