@@ -186,7 +186,7 @@ def check_successes(marslab_fn, roi_fn, logfile='logs/asdf.log'):
     with open(logfile) as stream:
         log = stream.readlines()
     successes = [line for line in log if 'successfully processed' in line]
-    roi_fn = None if roi_fn is None else Path(roi_fn.name)
+    roi_fn = None if roi_fn is None else Path(roi_fn).name
     marslab_fn = Path(marslab_fn.name)
     for success in successes:
         marslab = re.search('marslab.*csv', success).group()
