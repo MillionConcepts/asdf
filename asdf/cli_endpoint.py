@@ -217,7 +217,8 @@ def fdsa_initiate(
     skip_successes: "ss" = "False",
     seriously_no_images: "sn" = False,
     move_existing=False,
-    spatial=False,
+    spatial: "xyz" = False,
+    power_through_errors: "pt" = False
 ):
     """reprocesses and archives everything"""
     if (argument := do_empties.title()) in ("True", "False"):
@@ -300,3 +301,6 @@ def fdsa_initiate(
 
             ASDFLOG.error(f"failed to process {marslab_fn} with {roi_fn}")
             ASDFLOG.error(Pretty(exc_report(ex)))
+            if power_through_errors is False:
+                raise
+
