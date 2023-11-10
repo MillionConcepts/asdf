@@ -106,20 +106,17 @@ class DriveBot:
         except NoResultsError:
             return pd.DataFrame(columns=scanner.fields)
 
-    def ls(self, folder_name=None, folder_id=None, return_collisions=False):
+    def ls(self, folder_name=None, folder_id=None):
         folder_name, folder_id = self._pick_name_id(folder_name, folder_id)
         if folder_id is not None:
-            files, collisions, root_id = DriveScanner(
-                self, f"'{folder_id}' in parents and trashed=false"
-            ).extract_filesystem()
-        else:
-            files = ls_fs_dict(folder_name, self.filesystem)
-            collisions = None
-            if return_collisions is True:
-                collisions = ls_fs_dict(folder_name, self.collisions)
-        if return_collisions is True:
-            return files, collisions
-        return files
+            scanner = DriveScanner(
+                self,
+                f"'{folder_id}' in parents and trashed=false",
+                fields=("name", "id")
+            )
+            scanner.get()
+            return {f['name']: f['id'] for f in scanner.results}
+        return ls_fs_dict(folder_name, self.filesystem)
 
     def find(self, folder_name=None, folder_id=None, regex=None):
         raise NotImplementedError
