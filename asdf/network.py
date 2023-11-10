@@ -308,7 +308,7 @@ def upload_bandset_to_gdrive(
         folders['pixmap'] = drivebot.cd(folders["data"], 'pixmaps')
     aprint(f"uploading all files to {sol_folder_name}/{obs_folder_name}")
     dupes, name_dupes, ok_files, checksums = check_duplicates(
-        bandset.local_files, drivebot, folders
+        list(map(str, bandset.local_files)), drivebot, folders
     )
     if len(dupes) > 0:
         aprint(
