@@ -1,5 +1,8 @@
-import re
+import os
+
+import datetime as dt
 from pathlib import Path
+import re
 
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
@@ -212,7 +215,8 @@ def fdsa_initiate(
     skip_successes: "ss" = "False",
     seriously_no_images: "sn" = False,
     move_existing=False,
-    spatial=False
+    spatial=False,
+    execution_log=None
 ):
     """reprocesses and archives everything"""
     if (argument := do_empties.title()) in ("True", "False"):
@@ -284,3 +288,14 @@ def fdsa_initiate(
         )
         console.style = "FDSA"
         ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")
+        if execution_log is not None:
+            if not Path(execution_log).exists():
+                with open(execution_log, "w") as stream:
+                    stream.write("time,marslab,roi,pid\n")
+            logline = (
+                f"{dt.datetime.utcnow().isoformat()[:19]},"
+                f"{marslab_fn},{roi_fn},{os.getpid()}\n"
+            )
+            with open(execution_log, "w") as stream:
+                stream.write(logline)
+
