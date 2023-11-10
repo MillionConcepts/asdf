@@ -469,9 +469,11 @@ def asdf_body(
 
     if spatial is True:
         aprint(Rule(" making spatial products "))
-        bandset.make_space_fits(outpath=outpath)
-        bandset.make_spatial_products(outpath)
-
+        try:
+            bandset.make_space_fits(outpath=outpath)
+            bandset.make_spatial_products(outpath)
+        except FileNotFoundError:
+            aprint("[dark orange]missing relevant spatial products.")
     aprint(Rule(" writing data files "))
     if we_do_not_have_rois:
         aprint("[dark_orange]No ROI file passed; using null values for data.")
