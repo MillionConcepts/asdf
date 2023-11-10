@@ -293,6 +293,7 @@ def fdsa_initiate(
         except KeyboardInterrupt:
             console.style = "FDSA"
             ASDFLOG.info(f"stopping on keyboard interrupt")
+            raise
         except Exception as ex:
             from dustgoggles.dynamic import exc_report
             from rich.pretty import Pretty
