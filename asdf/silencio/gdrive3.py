@@ -247,13 +247,18 @@ class DriveBot:
 
     def get_checksums(self, folder_id, files=None):
         manifest = self.manifest(
-            folder_id, ('name', 'id', 'md5Checksum', 'parents', 'mimeType')
+            folder_id,
+            ('name', 'id', 'md5Checksum', 'parents', 'mimeType', 'createdTime')
         )
         if len(manifest) == 0:
             return {}
         files = manifest['name'].tolist() if files is None else files
         return {
-            f['name']: {'id': f['id'], 'md5': f['md5Checksum']}
+            f['name']: {
+                'id': f['id'],
+                'md5': f['md5Checksum'],
+                'created': f['createdTime']
+            }
             for f in manifest.to_dict('records')
             if f['name'] in files
         }

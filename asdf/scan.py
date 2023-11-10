@@ -693,6 +693,7 @@ def compare_roi_colors(analyses: pd.DataFrame):
             bad_indices.append(ix)
     return analyses.loc[ok_indices], analyses.loc[bad_indices]
 
+
 def find_matching_observations(
     analyses: pd.DataFrame, search_dir: str, search_regex: str
 ):

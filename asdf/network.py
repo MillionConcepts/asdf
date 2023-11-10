@@ -24,6 +24,7 @@ import botocore.config
 import gspread
 import pandas as pd
 import pydrive2.files
+import dateutil.parser as dtp
 from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import ClientError
 from cytoolz import merge
@@ -60,7 +61,7 @@ from asdf_settings.sources import (
     GOOGLE_SHARED_DRIVE_ID,
     DEBUG_METADATA_BACKUP_FOLDER_ID,
     GOOGLE_SHEET_ID,
-    METADATA_BACKUP_FOLDER_ID,
+    METADATA_BACKUP_FOLDER_ID, OLD_CUTOFF,
 )
 from marslab.bandset import BandSet
 from marslab.poolutils import wait_for_it, simple_log_callback
@@ -265,21 +266,27 @@ def asdf_drive_copy(file, folder_id, debug):
 
 
 def move_existing_files(name_dupes, drivebot, checksums):
-    names = tuple(map(lambda p: Path(p).name, name_dupes))
-    n_moved = 0
+    names = {Path(dupe).name: dupe for dupe in name_dupes}
+    unmoved = []
+    now = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
     for folder_id, files in checksums.items():
-        dupes = {k: v for k, v in files.items() if k in names}
+        dupes = {k: v for k, v in files.items() if k in names.keys()}
         if len(dupes) == 0:
             continue
         backup_folder_id = drivebot.cd(folder_id, "old")
+
         for k, f in dupes.items():
+            if (now - dtp.parse(f['created'])).total_seconds() < OLD_CUTOFF:
+                ASDFLOG.info(f"{k} created within {OLD_CUTOFF}s, not moving")
+                unmoved.append(names[k])
+                continue
             request = drivebot.mv(
                 file_id=f['id'], folder_id=backup_folder_id, defer=True
             )
             drivebot.add_request(request)
-            n_moved += 1
             ASDFLOG.info(f"moved {k}")
     drivebot.execute_batches()
+    return unmoved
 
 
 def upload_bandset_to_gdrive(
@@ -318,8 +325,8 @@ def upload_bandset_to_gdrive(
         )
     if (no_dupe_names is True) and (len(name_dupes) > 0):
         if move_existing is True:
-            move_existing_files(name_dupes, drivebot, checksums)
-            ok_files += name_dupes
+            unmoved = move_existing_files(name_dupes, drivebot, checksums)
+            ok_files += set(name_dupes).difference(unmoved)
         else:
             choice, ok_files = ask_about_dupe_names(
                 bandset,
