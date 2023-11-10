@@ -295,6 +295,7 @@ def fdsa_initiate(
             ASDFLOG.info(f"stopping on keyboard interrupt")
         except Exception as ex:
             from dustgoggles.dynamic import exc_report
+            from rich.pretty import Pretty
 
             ASDFLOG.error(f"failed to process {marslab_fn} with {roi_fn}")
-            ASDFLOG.error(exc_report(ex))
+            ASDFLOG.error(Pretty(exc_report(ex)))
