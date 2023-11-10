@@ -300,6 +300,7 @@ def asdf_body(
     reuse_mosaic=False,
     keep_intermediate=False,
     recreate_from=None,
+    move_existing=False
 ):
     """
     body component of the asdf command line function -- can be called multiple
@@ -568,7 +569,7 @@ def asdf_body(
             thumbnail_staging, rapidlooks.THUMBNAIL_SIZE
         )
         try:
-            upload_asdf_analysis(bandset, thumbnails, debug)
+            upload_asdf_analysis(bandset, thumbnails, debug, move_existing)
         except InterruptedError:
             return   # quit at user request due to dupe filenames
 

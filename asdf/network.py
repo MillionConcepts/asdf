@@ -42,6 +42,7 @@ from asdf.asdf_utils import obfuscated_name, tar_bytes
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
 from asdf.format import folder_names, cached_md5sum
 from asdf.pretty import NumberedChoicePrompt, metadata_open_prompt
+from asdf.silencio.gdrive3 import DriveBot
 from asdf.zcam_bandset import ZcamBandSet
 from asdf_settings.process import THREADS
 from asdf_settings.sources import (
@@ -54,6 +55,8 @@ from asdf_settings.sources import (
     GOOGLE_DRIVE_ROOT,
     DEBUG_GOOGLE_DRIVE_ROOT,
     DEBUG_GOOGLE_SHEET_ID,
+    DEBUG_GOOGLE_SHARED_DRIVE_ID,
+    GOOGLE_SHARED_DRIVE_ID,
     DEBUG_METADATA_BACKUP_FOLDER_ID,
     GOOGLE_SHEET_ID,
     METADATA_BACKUP_FOLDER_ID,
@@ -174,7 +177,7 @@ def make_asdf_s3_client():
     )
 
 
-def bind_asdf_bucket() -> Callable[[Any], str]:
+def bind_asdf_bucket() -> Callable[[Any, Any, bool], None]:
     client = make_asdf_s3_client()
     bucket = BACKUP_BUCKET
 
@@ -244,81 +247,44 @@ def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
     return links
 
 
-def asdf_drive_copy(file, folder_id):
-    drivebot = make_asdf_pydrive_client()
-    drivebot.cp(file, folder_id)
-
-
-def make_asdf_pydrive_client():
-    gauth = GoogleAuth()
-    scope = ["https://www.googleapis.com/auth/drive"]
-    gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        GOOGLE_CLIENT_SECRETS_FILE, scope
+def make_asdf_drivebot(debug=False):
+    creds = ServiceAccountCredentials.from_json_keyfile_name(
+        GOOGLE_CLIENT_SECRETS_FILE, ["https://www.googleapis.com/auth/drive"]
     )
-    return DriveBot(gauth)
+    if debug is True:
+        drive_id = DEBUG_GOOGLE_SHARED_DRIVE_ID
+    else:
+        drive_id = GOOGLE_SHARED_DRIVE_ID
+    return DriveBot(creds, shared_drive_id=drive_id)
 
 
-class DriveBot(GoogleDrive):
-    """
-    convenience wrapper adding abstract pseudo-filesystem operations to
-    a pydrive2 GoogleDrive object
-    """
+def asdf_drive_copy(file, folder_id, debug):
+    drivebot = make_asdf_drivebot(debug=debug)
+    drivebot.put(file, folder_id=folder_id)
 
-    # TODO: maybe fold in silencio after some more work
-    def mkdir(self, folder_name, parent_id):
-        gdrive_folder = self.CreateFile(
-            {
-                "title": folder_name,
-                "parents": [{"id": parent_id}],
-                "mimeType": "application/vnd.google-apps.folder",
-            }
-        )
-        gdrive_folder.Upload()
-        folder_id = gdrive_folder["id"]
-        return folder_id
 
-    def cp(self, source_path, target_folder):
-        upload = self.CreateFile(
-            {
-                "title": Path(source_path).name,
-                "parents": [{"id": target_folder}],
-            }
-        )
-        upload.SetContentFile(source_path)
-        upload.Upload()
-
-    def ls(self, folder_id, trashed=False):
-        filelist = self.ListFile(
-            {"q": f"'{folder_id}' in parents and trashed={trashed}"}
-        ).GetList()
-        return filelist
-
-    def get_checksums(self, folder_id, file_list=None):
-        if file_list is None:
-            file_list = self.ls(folder_id)
-        return {
-            file.get("title"): file.get("md5Checksum") for file in file_list
-        }
-
-    def cd(self, folder_name, parent_id):
-        root_filelist = self.ls(parent_id)
-        folder_list = [
-            file for file in root_filelist
-            if (
-                (file["title"] == folder_name)
-                and (file['explicitlyTrashed'] is False)
+def move_existing_files(name_dupes, drivebot, checksums):
+    names = tuple(map(lambda p: Path(p).name, name_dupes))
+    n_moved = 0
+    for folder_id, files in checksums.items():
+        dupes = {k: v for k, v in files.items() if k in names}
+        if len(dupes) == 0:
+            continue
+        backup_folder_id = drivebot.cd(folder_id, "old")
+        for f in dupes.values():
+            request = drivebot.mv(
+                file_id=f['id'], folder_id=backup_folder_id, defer=True
             )
-        ]
-        if len(folder_list) > 0:
-            folder_id = folder_list[0]["id"]
-        else:
-            folder_id = self.mkdir(folder_name, parent_id)
-        return folder_id
+            drivebot.add_request(request)
+            n_moved += 1
+    drivebot.execute_batches()
+    ASDF_CONSOLE.print(f"moved {n_moved} existing files")
 
 
 def upload_bandset_to_gdrive(
     bandset,
     debug=False,
+    move_existing=False,
     is_mosaic=False,
     noninteractive=False,
     no_dupe_names=True
@@ -328,19 +294,19 @@ def upload_bandset_to_gdrive(
         root = DEBUG_GOOGLE_DRIVE_ROOT
     else:
         root = GOOGLE_DRIVE_ROOT
-    drivebot = make_asdf_pydrive_client()
+    drivebot = make_asdf_drivebot(debug)
     # ASDFLOG.info("checking folder structure")
     sol_folder_name, obs_folder_name = folder_names(bandset, is_mosaic)
     # # note: this may produce unexpected behavior if people dupe folders and
     # # remove the default copy suffixes, etc.
-    folders = {'sol': drivebot.cd(sol_folder_name, root)}
-    folders['obs'] = drivebot.cd(obs_folder_name, folders['sol'])
-    folders['data'] = drivebot.cd("data", folders['obs'])
-    folders['browse'] = drivebot.cd("browse", folders['obs'])
+    folders = {'sol': drivebot.cd(root, sol_folder_name)}
+    folders['obs'] = drivebot.cd(folders['sol'], obs_folder_name)
+    folders['data'] = drivebot.cd(folders['obs'], 'data')
+    folders['browse'] = drivebot.cd(folders['obs'], 'browse')
     if is_mosaic is False:
-        folders['pixmap'] = drivebot.cd("pixmaps", folders["data"])
+        folders['pixmap'] = drivebot.cd(folders["data"], 'pixmaps')
     aprint(f"uploading all files to {sol_folder_name}/{obs_folder_name}")
-    dupes, name_dupes, ok_files = check_duplicates(
+    dupes, name_dupes, ok_files, checksums = check_duplicates(
         bandset.local_files, drivebot, folders
     )
     if len(dupes) > 0:
@@ -350,11 +316,20 @@ def upload_bandset_to_gdrive(
             f"{', '.join(Path(file).name for file in dupes)}\n"
         )
     if (no_dupe_names is True) and (len(name_dupes) > 0):
-        choice, ok_files = ask_about_dupe_names(
-            bandset, noninteractive, name_dupes, ok_files, drivebot, folders
-        )
-        if choice.startswith("quit"):
-            raise InterruptedError
+        if move_existing is True:
+            move_existing_files(name_dupes, drivebot, checksums)
+            ok_files += name_dupes
+        else:
+            choice, ok_files = ask_about_dupe_names(
+                bandset,
+                noninteractive,
+                name_dupes,
+                ok_files,
+                drivebot,
+                folders
+            )
+            if choice.startswith("quit"):
+                raise InterruptedError
     else:
         ok_files += name_dupes
 
@@ -364,14 +339,16 @@ def upload_bandset_to_gdrive(
     else:
         pool, results = None, None
     if len(ok_files) > 0:
-        upload_files_to_gdrive(drivebot, folders, ok_files, pool, results)
+        upload_files_to_gdrive(
+            drivebot, folders, ok_files, pool, results, debug
+        )
     obs_folder_url = f"https://drive.google.com/drive/folders/{folders['obs']}"
     bandset.summary[
         "NAME"
     ] = f"""=HYPERLINK("{obs_folder_url}", "{bandset.summary['NAME']}")"""
 
 
-def upload_files_to_gdrive(drivebot, folders, ok_files, pool, results):
+def upload_files_to_gdrive(drivebot, folders, ok_files, pool, results, debug):
     with ASDF_PROGRESS as prog:
         ASDF_RPH.task_id = prog.add_task("", total=len(ok_files))
         shuffle(ok_files)  # silly hack to speed up parallel uploads
@@ -384,8 +361,11 @@ def upload_files_to_gdrive(drivebot, folders, ok_files, pool, results):
             except StopIteration:
                 ASDFLOG.info(f"{file} has unknown type, not uploading")
                 continue
+            # TODO: split batches
             if pool is not None:
-                results[file] = pool.apply_async(asdf_drive_copy, (file, id_))
+                results[file] = pool.apply_async(
+                    asdf_drive_copy, (file, id_, debug)
+                )
             else:
                 drivebot.cp(file, id_)
                 ASDFLOG.info(f"uploaded {file}")
@@ -396,9 +376,10 @@ def upload_files_to_gdrive(drivebot, folders, ok_files, pool, results):
 
 
 def check_duplicates(local_files, drivebot, folders):
-    title_checksum_dict = merge(
-        drivebot.get_checksums(id_) for id_ in folders.values()
-    )
+    checksums = {id_: drivebot.get_checksums(id_) for id_ in folders.values()}
+    title_checksum_dict = {
+        k: v['md5'] for k, v in merge(*checksums.values()).items()
+    }
     dupes, name_dupes, ok_files = [], [], []
     for file in local_files:
         if is_apparent_duplicate(file, title_checksum_dict):
@@ -407,7 +388,7 @@ def check_duplicates(local_files, drivebot, folders):
             name_dupes.append(file)
         else:
             ok_files.append(file)
-    return dupes, name_dupes, ok_files
+    return dupes, name_dupes, ok_files, checksums
 
 
 def ask_about_dupe_names(
@@ -472,7 +453,7 @@ def ask_about_dupe_names(
     # note: this may have undesired results if multiple asdf uploads are
     # running at the exact same time, but this is probably an unlikely
     # edge case.
-    _, name_dupes, ok_files = check_duplicates(
+    _, name_dupes, ok_files, _ = check_duplicates(
         bandset.local_files, drivebot, folders
     )
     if len(name_dupes) > 0:
@@ -540,9 +521,11 @@ def upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails):
             bandset.summary[name] = '=IMAGE("' + link + '")'
 
 
-def handle_bandset_file_upload(bandset, debug, is_mosaic=False):
+def handle_bandset_file_upload(
+    bandset, debug, move_existing=False, is_mosaic=False
+):
     try:
-        upload_bandset_to_gdrive(bandset, debug, is_mosaic)
+        upload_bandset_to_gdrive(bandset, debug, move_existing, is_mosaic)
         aprint("completed Google Drive upload")
         return "ok"
     except (pydrive2.files.ApiRequestError, socket.timeout) as api_error:
@@ -562,6 +545,7 @@ def upload_asdf_analysis(
     bandset: ZcamBandSet,
     thumbnails: MutableMapping,
     debug: bool = False,
+    move_existing: bool = False
 ):
     s3_debug_prefix, sheet_backup_folder_id, sheet_id = remote_ids(debug)
     with ASDF_CONSOLE.status(
@@ -570,7 +554,7 @@ def upload_asdf_analysis(
         backup_data_to_s3(bandset, s3_debug_prefix)
     aprint("completed marslab and ROI backup")
     aprint("... uploading files to Google Drive space ...")
-    upload_result = handle_bandset_file_upload(bandset, debug)
+    upload_result = handle_bandset_file_upload(bandset, debug, move_existing)
     if upload_result == "quit":
         raise InterruptedError
     with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
@@ -586,7 +570,9 @@ def upload_asdf_analysis(
 def upload_mosaic(mosaic: BandSet, thumbnails, debug):
     s3_debug_prefix, sheet_backup_folder_id, sheet_id = remote_ids(debug)
     aprint("... uploading files to Google Drive space ...")
-    upload_result = handle_bandset_file_upload(mosaic, debug, True)
+    upload_result = handle_bandset_file_upload(
+        mosaic, debug, is_mosaic=True
+    )
     if upload_result == "quit":
         raise InterruptedError
     with ASDF_CONSOLE.status("handling google sheet", spinner="star"):
