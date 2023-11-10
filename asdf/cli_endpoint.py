@@ -35,7 +35,8 @@ def asdf_initiate(
     seriously_no_images: "sn" = False,
     reuse_mosaic: "rm" = False,
     keep_intermediate: "ki" = False,
-    move_existing = False
+    move_existing=False,
+    spatial: "xyz" = False
 ):
     """
     processes and archives everything
@@ -78,6 +79,7 @@ def asdf_initiate(
     :param keep_intermediate: keep intermediate mosaic files after completion?
     :param move_existing: move existing Google Drive files to an "old"
         subdirectory.
+    :param spatial: try to make spatial products?
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
@@ -134,17 +136,19 @@ def asdf_initiate(
         seriously_no_images,
         reuse_mosaic,
         keep_intermediate,
+        move_existing,
+        spatial
     )
     from asdf.flow import asdf_body
 
     if is_multiple is not True:
-        return asdf_body(observation, *asdf_args, move_existing=move_existing)
+        return asdf_body(observation, *asdf_args)
     for ix, obs in enumerate(observation):
         aprint(
             f"[bold cyan1]... processing observation {ix+1} of "
             f"{len(observation)} ... "
         )
-        asdf_body(obs, *asdf_args, move_existing=move_existing)
+        asdf_body(obs, *asdf_args)
 
 
 def perform_path_dump(dump_paths, is_multiple, observation):
@@ -207,7 +211,8 @@ def fdsa_initiate(
     do_empties: "de" = "True",
     skip_successes: "ss" = "False",
     seriously_no_images: "sn" = False,
-    move_existing = False
+    move_existing=False,
+    spatial=False
 ):
     """reprocesses and archives everything"""
     if (argument := do_empties.title()) in ("True", "False"):
@@ -274,7 +279,8 @@ def fdsa_initiate(
             noninteractive=True,
             skip_pixmaps=skip_pixmaps,
             seriously_no_images=seriously_no_images,
-            move_existing=move_existing
+            move_existing=move_existing,
+            spatial=spatial
         )
         console.style = "FDSA"
         ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")

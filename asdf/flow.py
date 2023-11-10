@@ -299,8 +299,9 @@ def asdf_body(
     seriously_no_images=False,
     reuse_mosaic=False,
     keep_intermediate=False,
+    move_existing=False,
+    spatial=False,
     recreate_from=None,
-    move_existing=False
 ):
     """
     body component of the asdf command line function -- can be called multiple
@@ -465,6 +466,12 @@ def asdf_body(
                 " prototype ..."
             )
             marslab_data = fdsa_insert(marslab_data, prototype)
+
+    if spatial is True:
+        aprint(Rule(" making spatial products "))
+        bandset.make_space_fits(outpath=outpath)
+        bandset.make_spatial_products(outpath)
+
     aprint(Rule(" writing data files "))
     if we_do_not_have_rois:
         aprint("[dark_orange]No ROI file passed; using null values for data.")

@@ -20,7 +20,7 @@ import pdr
 from more_itertools import chunked
 from scipy.interpolate import griddata
 
-from asdf.console import aprint
+from asdf.console import aprint, ASDFLOG
 from asdf_settings.rapidlooks import FONT_PATH
 from marslab.geom import transform_angle, sph2cart
 from marslab.imgops.imgutils import normalize_range
@@ -471,7 +471,7 @@ def make_spatial_maps(coords, iof_data, cahvore):
         axes.append('incidence')
         maps["emission"] = make_emission_map(surf_norm_vectors, rover_vectors)
         axes.append('emission')
-        maps["phase"] = make_phase_map(sun_vector, rover_vectors, surf_norm_vectors)
+        maps["phase"] = make_phase_map(sun_vector, rover_vectors)
         axes.append('phase')
         del uvw
     # interpolate coordinate mesh per axis
@@ -816,6 +816,7 @@ def make_spatial_products(
             maps = read_space_fits(
                 Path(outpath, f"data/space_{ref_band[0]}_{bandset.name}.fits")
             )
+            ASDFLOG.info("loaded spatial FITS file")
         except FileNotFoundError:
             # TODO, maybe: check the other eye anyway? This would be
             #  especially important in a case with only right-eye data,
@@ -832,6 +833,7 @@ def make_spatial_products(
                 c if c == "COLOR" else f"{eye}_{c}" for c in roi_dims.columns
             ]
             dims[eye] = roi_dims
+            ASDFLOG.info("mapped ROIs in space")
         if write_images is False:
             continue
         try:
@@ -848,6 +850,7 @@ def make_spatial_products(
 
 
 def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
+    ASDFLOG.info(f"generating {eye.lower()}-eye spatial products")
     iof_data = bandset.fetch_precached(ref_band)
     cahvore = get_cahvore(iof_data)
     image = normalize_range(bandset.get_band(ref_band), (0, 1), 0.1)
@@ -884,6 +887,7 @@ def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
             browsepath / f"{name}_{eyepre}_{bandset.name}.png", **savekwargs
         )
         plt.close(fig)
+        ASDFLOG.info(f"wrote {name}_{eyepre}_{bandset.name}.png")
 
 
 def write_nav_evals(nav_evals, bs, outpath):
