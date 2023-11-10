@@ -186,12 +186,14 @@ def check_successes(marslab_fn, roi_fn, logfile='logs/asdf.log'):
     with open(logfile) as stream:
         log = stream.readlines()
     successes = [line for line in log if 'successfully processed' in line]
-    marslab_fn, roi_fn = map(lambda p: Path(p).name, (marslab_fn, roi_fn))
+    roi_fn = None if roi_fn is None else Path(roi_fn.name)
+    marslab_fn = Path(marslab_fn.name)
     for success in successes:
-        marslab, roi = (
-            re.search('marslab.*csv', success).group(),
-            re.search(r'roi.*fits\.gz', success).group()
-        )
+        marslab = re.search('marslab.*csv', success).group()
+        try:
+            roi = (re.search(r'roi.*fits\.gz', success).group())
+        except AttributeError:
+            roi = None
         if (marslab == marslab_fn) and (roi == roi_fn):
             return True
     return False
