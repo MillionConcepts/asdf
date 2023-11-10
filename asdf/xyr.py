@@ -882,12 +882,12 @@ def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
     dpi = dpi_from_image(scalefig)
     savekwargs = {"dpi": dpi, "bbox_inches": "tight", "pad_inches": 0}
     for fig, name in zip(figs, names):
+        fn = browsepath / f"{name}_{eyepre}_{bandset.name}.png"
         fig.tight_layout()
-        fig.savefig(
-            browsepath / f"{name}_{eyepre}_{bandset.name}.png", **savekwargs
-        )
+        fig.savefig(fn, **savekwargs)
         plt.close(fig)
-        ASDFLOG.info(f"wrote {name}_{eyepre}_{bandset.name}.png")
+        ASDFLOG.info(f"wrote {fn}")
+        bandset.local_files.append(str(fn))
 
 
 def write_nav_evals(nav_evals, bs, outpath):
@@ -919,5 +919,5 @@ def make_space_fits(bandset, ref_bands, outpath):
         outfile = write_space_fits_file(
             maps, navrecs[ref_band], iof_data, bandset, Path(outpath, "data")
         )
-        outfiles.append(outfile)
+        outfiles.append(str(outfile))
     return outfiles
