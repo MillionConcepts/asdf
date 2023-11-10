@@ -85,19 +85,19 @@ def asdf_initiate(
     with console.status(".. initializing ...", spinner="star"):
         initialize_loggers()
         insert_settings_module_path(config)
-    # find all associated files and ask the user about them
-    if noninteractive_all:  # run all sequences without user input
-        noninteractive = "all"
-    if abbreviate:  # construct a path from the abbreviated template
-        from asdf.format import parse_abbreviated_inputs
+        # find all associated files and ask the user about them
+        if noninteractive_all:  # run all sequences without user input
+            noninteractive = "all"
+        if abbreviate:  # construct a path from the abbreviated template
+            from asdf.format import parse_abbreviated_inputs
 
-        # TODO: Accept separators other than commas and robustify against
-        #  white space.
-        directory, seq_id = parse_abbreviated_inputs(*path.split(","))
-        explicit_path = None
-    else:  # use the path provided, willy-nilly
-        directory, seq_id, explicit_path = None, None, path
-    from asdf.chatter import find_and_offer_observations
+            # TODO: Accept separators other than commas and robustify against
+            #  white space.
+            directory, seq_id = parse_abbreviated_inputs(*path.split(","))
+            explicit_path = None
+        else:  # use the path provided, willy-nilly
+            directory, seq_id, explicit_path = None, None, path
+        from asdf.chatter import find_and_offer_observations
 
     observation, is_multiple = find_and_offer_observations(
         root_dir=directory,

@@ -13,6 +13,7 @@ import time
 import urllib.request
 from collections.abc import Callable, MutableMapping
 from functools import partial
+from more_itertools import divide
 from numbers import Number
 from pathlib import Path
 from random import shuffle
@@ -62,7 +63,7 @@ from asdf_settings.sources import (
     METADATA_BACKUP_FOLDER_ID,
 )
 from marslab.bandset import BandSet
-from marslab.poolutils import wait_for_it
+from marslab.poolutils import wait_for_it, simple_log_callback
 
 
 def get_public_m20_waypoints():
@@ -333,46 +334,62 @@ def upload_bandset_to_gdrive(
     else:
         ok_files += name_dupes
 
-    if THREADS.get("upload") is not None:
-        from multiprocessing import Pool
-        pool, results = Pool(THREADS["upload"]), {}
-    else:
-        pool, results = None, None
     if len(ok_files) > 0:
-        upload_files_to_gdrive(
-            drivebot, folders, ok_files, pool, results, debug
-        )
+        upload_files_to_gdrive(folders, ok_files, debug)
     obs_folder_url = f"https://drive.google.com/drive/folders/{folders['obs']}"
     bandset.summary[
         "NAME"
     ] = f"""=HYPERLINK("{obs_folder_url}", "{bandset.summary['NAME']}")"""
 
 
-def upload_files_to_gdrive(drivebot, folders, ok_files, pool, results, debug):
+def _upload_filelist(targets, debug, log_cache, concurrent=False):
+    bot = make_asdf_drivebot(debug)
+    for rec in targets:
+        bot.put(rec['path'], folder_id=rec['folder_id'])
+        if concurrent is True:
+            log_cache.append(f"uploaded {rec['path']}")
+        else:
+            ASDFLOG.info(f"uploaded {rec['path']}")
+
+
+def upload_files_to_gdrive(folders, ok_files, debug):
     with ASDF_PROGRESS as prog:
         ASDF_RPH.task_id = prog.add_task("", total=len(ok_files))
-        shuffle(ok_files)  # silly hack to speed up parallel uploads
+        targets = []
         for file in ok_files:
             try:
-                folder_name = next(
+                folder = next(
                     filter(lambda t: t in file, ("pixmap", "data", "browse"))
                 )
-                id_ = folders[folder_name]
+                targets.append({'path': file, 'folder_id': folders[folder]})
             except StopIteration:
                 ASDFLOG.info(f"{file} has unknown type, not uploading")
-                continue
-            # TODO: split batches
-            if pool is not None:
-                results[file] = pool.apply_async(
-                    asdf_drive_copy, (file, id_, debug)
+        if THREADS.get("upload") is not None:
+            from concurrent.futures import ThreadPoolExecutor
+
+            pool = ThreadPoolExecutor(THREADS['upload'])
+            log_cache = []
+            results = {
+                i: pool.submit(
+                    _upload_filelist, tuple(chunk), debug, log_cache, True
                 )
-            else:
-                drivebot.cp(file, id_)
-                ASDFLOG.info(f"uploaded {file}")
-        if pool is not None:
-            wait_for_it(pool, results, ASDFLOG, message=f"uploaded ")
-            pool.terminate()
+                for i, chunk in enumerate(divide(THREADS['upload'], targets))
+            }
+            while not all(p.done() for p in results.values()):
+                while len(log_cache) > 0:
+                    text = log_cache.pop()
+                    ASDFLOG.info(text)
+                    time.sleep(0.1)
+            while len(log_cache) > 0:
+                text = log_cache.pop()
+                ASDFLOG.info(text)
+        else:
+            _upload_filelist(targets, debug, None, False)
         ASDF_PROGRESS.remove_task(ASDF_RPH.task_id)
+    if THREADS.get('upload') is not None:
+        for p in results.values():
+            if p.exception() is not None:
+                raise p.exception()
 
 
 def check_duplicates(local_files, drivebot, folders):

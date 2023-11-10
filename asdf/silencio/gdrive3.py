@@ -268,14 +268,14 @@ class DriveBot:
             return request
         return request.execute()
 
-    def add_request(self, request):
+    def add_request(self, request, callback=None, request_id=None):
         if len(self.batches) == 0:
             self.batches.append(self.new_batch_http_request())
         try:
-            self.batches[-1].add(request)
+            self.batches[-1].add(request, callback, request_id)
         except BatchError:
             self.batches.append(self.new_batch_http_request())
-            self.add_request(request)
+            self.add_request(request, callback, request_id)
 
     def execute_batches(self, clear_batches=True):
         execution = tuple(
