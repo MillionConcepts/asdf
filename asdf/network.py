@@ -430,7 +430,7 @@ def ask_about_dupe_names(
         f"{', '.join(Path(d).name for d in name_dupes)}{suffix}\n"
     )
     if noninteractive is True:
-        return "skip these files", []
+        return "skip these files", ok_files
     data_files = [
         d for d in name_dupes
         if any(w in d for w in ("context", "marslab", "roi", "pretty"))
@@ -539,10 +539,12 @@ def upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails):
 
 
 def handle_bandset_file_upload(
-    bandset, debug, move_existing=False, is_mosaic=False
+    bandset, debug, move_existing=False, is_mosaic=False, noninteractive=False
 ):
     try:
-        upload_bandset_to_gdrive(bandset, debug, move_existing, is_mosaic)
+        upload_bandset_to_gdrive(
+            bandset, debug, move_existing, is_mosaic, noninteractive
+        )
         aprint("completed Google Drive upload")
         return "ok"
     except (pydrive2.files.ApiRequestError, socket.timeout) as api_error:
@@ -562,7 +564,8 @@ def upload_asdf_analysis(
     bandset: ZcamBandSet,
     thumbnails: MutableMapping,
     debug: bool = False,
-    move_existing: bool = False
+    move_existing: bool = False,
+    noninteractive: bool = False
 ):
     s3_debug_prefix, sheet_backup_folder_id, sheet_id = remote_ids(debug)
     with ASDF_CONSOLE.status(
@@ -571,7 +574,9 @@ def upload_asdf_analysis(
         backup_data_to_s3(bandset, s3_debug_prefix)
     aprint("completed marslab and ROI backup")
     aprint("... uploading files to Google Drive space ...")
-    upload_result = handle_bandset_file_upload(bandset, debug, move_existing)
+    upload_result = handle_bandset_file_upload(
+        bandset, debug, move_existing, noninteractive=noninteractive
+    )
     if upload_result == "quit":
         raise InterruptedError
     with ASDF_CONSOLE.status("handling google sheet", spinner="star"):

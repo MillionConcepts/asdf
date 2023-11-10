@@ -576,7 +576,13 @@ def asdf_body(
             thumbnail_staging, rapidlooks.THUMBNAIL_SIZE
         )
         try:
-            upload_asdf_analysis(bandset, thumbnails, debug, move_existing)
+            upload_asdf_analysis(
+                bandset,
+                thumbnails,
+                debug,
+                move_existing,
+                noninteractive=noninteractive
+            )
         except InterruptedError:
             return   # quit at user request due to dupe filenames
 
