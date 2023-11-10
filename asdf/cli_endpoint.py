@@ -216,7 +216,6 @@ def fdsa_initiate(
     seriously_no_images: "sn" = False,
     move_existing=False,
     spatial=False,
-    execution_log=None
 ):
     """reprocesses and archives everything"""
     if (argument := do_empties.title()) in ("True", "False"):
@@ -271,36 +270,20 @@ def fdsa_initiate(
             f"{len(reprocess_pairs)}"
         )
         console.style = "none"
-        exception = ""
-        try:
-            asdf_body(
-                obs,
-                roi_fn,
-                upload,
-                output,
-                skip_rapidlooks,
-                debug=debug,
-                console=console,
-                recreate_from=marslab_fn,
-                noninteractive=True,
-                skip_pixmaps=skip_pixmaps,
-                seriously_no_images=seriously_no_images,
-                move_existing=move_existing,
-                spatial=spatial
-            )
-            console.style = "FDSA"
-            ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")
-        except Exception as ex:
-            exception = f"{type(ex)}: {ex}"
-            raise
-        finally:
-            if execution_log is not None:
-                if not Path(execution_log).exists():
-                    with open(execution_log, "w") as stream:
-                        stream.write("time,marslab,roi,exception,pid\n")
-                logline = (
-                    f"{dt.datetime.utcnow().isoformat()[:19]},"
-                    f"{marslab_fn},{roi_fn},{exception},{os.getpid()}\n"
-                )
-                with open(execution_log, "w") as stream:
-                    stream.write(logline)
+        asdf_body(
+            obs,
+            roi_fn,
+            upload,
+            output,
+            skip_rapidlooks,
+            debug=debug,
+            console=console,
+            recreate_from=marslab_fn,
+            noninteractive=True,
+            skip_pixmaps=skip_pixmaps,
+            seriously_no_images=seriously_no_images,
+            move_existing=move_existing,
+            spatial=spatial
+        )
+        console.style = "FDSA"
+        ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")
