@@ -1,7 +1,8 @@
 import warnings
 from collections import defaultdict
-from functools import partial
+from functools import partial, reduce
 from itertools import product
+from multiprocessing import Pool
 from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping, Union, Literal, Sequence
@@ -17,10 +18,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pdr
-from more_itertools import chunked
+from more_itertools import chunked, divide
+from rich.rule import Rule
 from scipy.interpolate import griddata
 
 from asdf.console import aprint, ASDFLOG
+from asdf_settings.process import THREADS
 from asdf_settings.rapidlooks import FONT_PATH
 from marslab.geom import transform_angle, sph2cart
 from marslab.imgops.imgutils import normalize_range
@@ -256,13 +259,15 @@ def pdr_imsize(data: pdr.Data):
     return data.metaget_('LINES') * data.metaget_('LINE_SAMPLES')
 
 
-def map_spatial_products(
-    xyrs: Sequence[Path],
-    iof_datas: Mapping[str, pdr.Data],
-    cutoffs: Mapping[str, Union[int, float]] = DEFAULT_XYR_CUTOFFS
-):
-    nav_recs, nav_evals = [], []
-    aprint(f"loading {len(xyrs)} candidate XYR files")
+def check_xyrs(xyrs, iof_datas, cutoffs):
+    nav_evals, nav_recs = [], []
+    for k, v in iof_datas.items():
+        if isinstance(v, Path):
+            # this occurs in the multiprocessing case.
+            # it's slightly lazy-looking to reload but we're not actually
+            # reading the IOFs here, only the metadata, so it's much easier
+            # and faster than serializing the Data object
+            iof_datas[k] = open_attached(v)
     for xyr_file in xyrs:
         xyr = open_attached(xyr_file)
         nxyz = np.moveaxis(xyr.get_scaled("IMAGE"), 0, 2)
@@ -291,6 +296,40 @@ def map_spatial_products(
             )
             mapped[band].append(rec | {'coords': coords, 'eval': nav_eval})
         nav_evals.append(nav_eval)
+    for band, results in mapped.items():
+        for r in results:
+            del r['data']
+    return nav_evals, mapped
+
+
+def map_spatial_products(
+    xyrs: Sequence[Path],
+    iof_datas: Mapping[str, pdr.Data],
+    cutoffs: Mapping[str, Union[int, float]] = DEFAULT_XYR_CUTOFFS
+):
+    aprint(f"checking {len(xyrs)} candidate XYR files")
+    # TODO: maybepool
+    pool = None if THREADS['look'] is None else Pool(THREADS['look'])
+    if pool is None:
+        nav_evals, nav_recs, mapped = check_xyrs(xyrs, iof_datas, cutoffs)
+    else:
+        results = []
+        args = (
+            {k: Path(v.filename) for k, v in iof_datas.items()}, dict(cutoffs)
+        )
+        for chunk in divide(THREADS['look'], xyrs):
+            results.append(pool.apply_async(check_xyrs, (chunk, *args)))
+        pool.close()
+        pool.join()
+        nav_evals, mapped = [], None
+        for r in results:
+            neval, nmap = r.get()
+            nav_evals.append(neval)
+            if mapped is None:
+                mapped = nmap
+            else:
+                for k, v in nmap.items():
+                    mapped[k] += v
     outrecs = {}
     for band in iof_datas.keys():
         if len(mapped[band]) == 0:
@@ -459,8 +498,9 @@ def make_spatial_maps(coords, iof_data, cahvore):
         maps["uvwmask"][coords["uvwj"], coords["uvwi"]] = True
         # make illumination geometry maps before interpolating u, v, w
         sun_vector = calc_sun_vector(iof_data)
-        rover_vectors = calc_rover_vectors(np.dstack([maps["x"], maps["y"], maps["z"]]),
-                                           cahvore)
+        rover_vectors = calc_rover_vectors(
+            np.dstack([maps["x"], maps["y"], maps["z"]]), cahvore
+        )
         surf_norm_vectors = calc_surf_norm_vectors(uvw)
         maps["incidence"] = make_incidence_map(sun_vector, surf_norm_vectors)
         axes.append('incidence')
@@ -487,6 +527,8 @@ def make_spatial_maps(coords, iof_data, cahvore):
         # just overwrite the 'mesh' values
         maps[ax] = gridarray
     maps["imask"] = ~np.isfinite(maps["x"])
+    if 'u' in maps.keys():
+        maps["umask"] = ~np.isfinite(maps['u'])
     # make zcam rangemap from xyzmap
     maps["range"] = make_rangemap(
         np.dstack([maps["x"], maps["y"], maps["z"]]), cahvore["C"]
@@ -533,12 +575,19 @@ def read_space_fits(path):
     info = hdul.info(output=False)[1:]
     imask_info = next(filter(lambda i: i[1].lower() == "imask", info))
     arrays["imask"] = hdul[imask_info[0]].data.astype(bool)
+    try:
+        nmask_info = next(filter(lambda i: i[1].lower() == "umask", info))
+        arrays['umask'] = hdul[nmask_info[0]].data.astype(bool)
+    except StopIteration:
+        pass
     for hdu_info in info:
-        if (name := hdu_info[1].lower()) == "imask":
+        if (name := hdu_info[1].lower()) in ("imask", 'umask'):
             continue
         array = hdul[hdu_info[0]].data
         if "mask" in name:
             arrays[name] = array.astype(bool)
+        elif name in ('u', 'v', 'w', 'incidence', 'emission', 'phase'):
+            arrays[name] = np.ma.masked_array(array, arrays['umask'])
         else:
             arrays[name] = np.ma.masked_array(array, arrays["imask"])
         del array
@@ -901,6 +950,13 @@ def make_space_fits(bandset, ref_bands, outpath):
     }
     navrecs, nav_evals = map_spatial_products(bandset.xyrs, iof_datas)
     outfiles.append(write_nav_evals(nav_evals, bandset, Path(outpath, "data")))
+    if len(set(ref_bands).intersection(navrecs.keys())) == 0:
+        aprint(
+            "f[bold dark orange]no XYR matches, skipping spatial product "
+            "generation."
+        )
+        return outfiles
+    aprint(Rule("generating spatial products"))
     for ref_band, iof_data in iof_datas.items():
         if ref_band not in navrecs:
             aprint(
