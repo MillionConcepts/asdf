@@ -259,7 +259,6 @@ def pdr_imsize(data: pdr.Data):
 def map_spatial_products(
     xyrs: Sequence[Path],
     iof_datas: Mapping[str, pdr.Data],
-    uvwdir: Path,
     cutoffs: Mapping[str, Union[int, float]] = DEFAULT_XYR_CUTOFFS
 ):
     nav_recs, nav_evals = [], []
@@ -302,18 +301,14 @@ def map_spatial_products(
         aprint(f"selected {Path(rec['fn']).name} for {band}")
         # TODO: make this simultaneous-across-eyes as well (when possible)
         try:
-            uvw_file = [
-                f
-                for f in uvwdir.iterdir()
-                if f.name == Path(rec["fn"]).name.replace("XYR", "UVW")
-            ][0]
-            uvw_data = pdr.read(uvw_file)
+            uvw = str(rec['fn']).replace("xyr", 'uvw').replace('XYR', 'UVW')
+            uvw_data = pdr.read(uvw)
             nuvw = np.moveaxis(uvw_data.get_scaled("IMAGE"), 0, 2)
             for ix, comp in enumerate(("u", "v", "w")):
                 rec["coords"][comp] = nuvw[
                     rec["coords"]["sj"], rec["coords"]["si"], ix
                 ]
-                rec["uvw"], rec["uvw_path"] = nuvw, uvw_file
+                rec["uvw"], rec["uvw_path"] = nuvw, uvw
         except (FileNotFoundError, IndexError):
             aprint(f"[bold dark_orange]no UVW file for {Path(rec['fn']).name}")
             rec["uvw"], rec["uvw_path"] = None, None
@@ -900,12 +895,11 @@ def write_nav_evals(nav_evals, bs, outpath):
 def make_space_fits(bandset, ref_bands, outpath):
     if bandset.xyrs is None:
         return no_ncam_match()
-    uvwdir = bandset.xyrs[0].parents[1] / "nuvw"
     outfiles = []
     iof_datas = {
         ref_band: bandset.fetch_precached(ref_band) for ref_band in ref_bands
     }
-    navrecs, nav_evals = map_spatial_products(bandset.xyrs, iof_datas, uvwdir)
+    navrecs, nav_evals = map_spatial_products(bandset.xyrs, iof_datas)
     outfiles.append(write_nav_evals(nav_evals, bandset, Path(outpath, "data")))
     for ref_band, iof_data in iof_datas.items():
         if ref_band not in navrecs:
