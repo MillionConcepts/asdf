@@ -308,7 +308,7 @@ def map_spatial_products(
                 rec["coords"][comp] = nuvw[
                     rec["coords"]["sj"], rec["coords"]["si"], ix
                 ]
-                rec["uvw"], rec["uvw_path"] = nuvw, uvw
+                rec["uvw"], rec["uvw_path"] = nuvw, Path(uvw)
         except (FileNotFoundError, IndexError):
             aprint(f"[bold dark_orange]no UVW file for {Path(rec['fn']).name}")
             rec["uvw"], rec["uvw_path"] = None, None
