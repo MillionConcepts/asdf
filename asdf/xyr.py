@@ -212,11 +212,11 @@ def check_coords(coords, npix, cutoffs):
 
 
 def pick_biggest_navrec(nav_recs):
-    if 'hull_ratio' in nav_recs[0]['eval']:
-        sizes = [rec["eval"]['hull_ratio'] for rec in nav_recs]
-    else:
-        sizes = [len(rec["coords"].get("i", [])) for rec in nav_recs]
-    return nav_recs[np.argmax(sizes)]
+    scores = [
+        rec['eval']['hull_ratio'] ** 2 * len(rec["coords"].get("i", []))
+        for rec in nav_recs
+    ]
+    return nav_recs[np.argmax(scores)]
 
 
 def npi2cv(rowmajor: Sequence[Sequence[int]]) -> np.ndarray:
