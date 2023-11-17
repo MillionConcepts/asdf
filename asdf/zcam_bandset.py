@@ -680,7 +680,6 @@ class ZcamBandSet(BandSet):
     def make_spatial_products(
         self,
         outpath=".",
-        ref_bands=('L1', 'R1'),
         write_images=True,
         calc_rois=True
     ):
@@ -689,6 +688,16 @@ class ZcamBandSet(BandSet):
             self.bulk_debayer("all")
             self.count_rois()
             self.format_metadata()
+        preferred_ref_bands = (1, 2, 3, 4, 5, 6, "0R", "0G", "0B")
+        ref_bands = []
+        for eye in ("L", "R"):
+            try:
+                for band in iter(preferred_ref_bands):
+                    if f"{eye}{band}" in self.raw.keys():
+                        ref_bands.append(f"{eye}{band}")
+                        break
+            except StopIteration:
+                pass
         dims = make_spatial_products(
             self, outpath, ref_bands, write_images, calc_rois
         )
