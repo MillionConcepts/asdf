@@ -675,7 +675,9 @@ class ZcamBandSet(BandSet):
             self.match_navcam(roots)
         if self.xyrs is None:
             raise FileNotFoundError("No matching XYRs found.")
-        self.local_files += make_space_fits(self, ref_bands, outpath)
+        outputs, successful = make_space_fits(self, ref_bands, outpath)
+        self.local_files += outputs
+        return successful
 
     def make_spatial_products(
         self,
@@ -698,8 +700,6 @@ class ZcamBandSet(BandSet):
                         break
             except StopIteration:
                 pass
-        dims = make_spatial_products(
+        return make_spatial_products(
             self, outpath, ref_bands, write_images, calc_rois
         )
-        if isinstance(dims, pd.DataFrame):
-            self.compact = pd.merge(self.compact, dims, on='COLOR')

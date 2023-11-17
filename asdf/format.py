@@ -333,7 +333,8 @@ def drop_excess_stats(compact):
     filts = list(DERIVED_CAM_DICT["ZCAM"]["filters"])
     for column in compact.columns:
         if column.startswith("LEFT") or column.startswith("RIGHT"):
-            compact = compact.drop(column, axis=1)
+            if not any(f"_{s}" in column for s in COMPACT_MARSLAB_STATS):
+                compact = compact.drop(column, axis=1)
         if "_" not in column:
             continue
         if (

@@ -470,8 +470,11 @@ def asdf_body(
     if spatial is True:
         aprint(Rule(" processing spatial input products "))
         try:
-            bandset.make_space_fits(outpath=outpath)
-            bandset.make_spatial_products(outpath)
+            success = bandset.make_space_fits(outpath=outpath)
+            if success is True:
+                dims = bandset.make_spatial_products(outpath)
+                if isinstance(dims, pd.DataFrame):
+                    marslab_data = pd.merge(marslab_data, dims, on='COLOR')
         except FileNotFoundError:
             aprint("[dark orange]missing relevant spatial products.")
     aprint(Rule(" writing data files "))

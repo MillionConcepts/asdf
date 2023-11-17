@@ -311,7 +311,7 @@ def map_spatial_products(
     # TODO: maybepool
     pool = None if THREADS['look'] is None else Pool(THREADS['look'])
     if pool is None:
-        nav_evals, nav_recs, mapped = check_xyrs(xyrs, iof_datas, cutoffs)
+        nav_evals, mapped = check_xyrs(xyrs, iof_datas, cutoffs)
     else:
         results = []
         args = (
@@ -653,11 +653,11 @@ def compute_roi_dims(
         h, w = pix_bbox_dims(roi_coords, xyz)
         rec = {
             "COLOR": name.split(" ")[0].lower(),
-            "H": h,
-            "W": w,
-            "HW": h * w,
-            "A": maps["area"][roi_coords].sum(),
-            "D": maps["range"][roi_coords].mean(),
+            "H": h.astype(np.float32),
+            "W": w.astype(np.float32),
+            "HW": (h * w).astype(np.float32),
+            "A": maps["area"][roi_coords].sum().astype(np.float32),
+            "D": maps["range"][roi_coords].mean().astype(np.float32),
         }
         recs.append(rec)
     return recs
@@ -868,7 +868,7 @@ def make_spatial_products(
             return no_spatial_data()
         eye = {"L": "LEFT", "R": "RIGHT"}[ref_band[0]]
         xyzm = np.ma.dstack([maps["x"], maps["y"], maps["z"]])
-        if calc_rois and bandset.rois:
+        if calc_rois and (bandset.rois is not None):
             # TODO, maybe: generate this along with space fits files instead?
             maps["area"] = make_area_array(maps)
             rois = {r.name: r for r in bandset.rois if r.name.endswith(eye)}
@@ -955,7 +955,7 @@ def make_space_fits(bandset, ref_bands, outpath):
             "f[bold dark orange]no XYR matches, skipping spatial product "
             "generation."
         )
-        return outfiles
+        return outfiles, False
     aprint(Rule("generating spatial products"))
     for ref_band, iof_data in iof_datas.items():
         if ref_band not in navrecs:
@@ -970,4 +970,4 @@ def make_space_fits(bandset, ref_bands, outpath):
             maps, navrecs[ref_band], iof_data, bandset, Path(outpath, "data")
         )
         outfiles.append(str(outfile))
-    return outfiles
+    return outfiles, True
