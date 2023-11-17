@@ -468,7 +468,7 @@ def asdf_body(
             marslab_data = fdsa_insert(marslab_data, prototype)
 
     if spatial is True:
-        aprint(Rule(" making spatial products "))
+        aprint(Rule(" processing spatial input products "))
         try:
             bandset.make_space_fits(outpath=outpath)
             bandset.make_spatial_products(outpath)
@@ -530,6 +530,8 @@ def asdf_body(
             # suppressing irrelevant warnings from numpy about divides-by-zero
             # and matplotlib about opening a bunch of figures
             with warnings.catch_warnings():
+                import logging
+                logging.getLogger('matplotlib').setLevel('ERROR')
                 warnings.simplefilter("ignore")
                 bandset.make_look_set(look_instructions, timeout=120)
             prog.remove_task(ASDF_RPH.task_id)
