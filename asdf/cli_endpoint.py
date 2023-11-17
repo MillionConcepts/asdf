@@ -297,10 +297,9 @@ def fdsa_initiate(
             raise
         except Exception as ex:
             from dustgoggles.dynamic import exc_report
-            from rich.pretty import Pretty
 
             ASDFLOG.error(f"failed to process {marslab_fn} with {roi_fn}")
-            ASDFLOG.error(Pretty(exc_report(ex)))
+            ASDFLOG.error(exc_report(ex))
             if power_through_errors is False:
                 raise
 
