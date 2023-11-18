@@ -952,7 +952,7 @@ def make_space_fits(bandset, ref_bands, outpath):
     outfiles.append(write_nav_evals(nav_evals, bandset, Path(outpath, "data")))
     if len(set(ref_bands).intersection(navrecs.keys())) == 0:
         aprint(
-            "f[bold dark orange]no XYR matches, skipping spatial product "
+            "[bold dark orange]no XYR matches, skipping spatial product "
             "generation."
         )
         return outfiles, False
