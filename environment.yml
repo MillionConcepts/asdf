@@ -11,7 +11,7 @@ dependencies:
   - git
   - jupyter
   - pdr
-  - clize
+  - fire
   - ipython
   - python-Levenshtein
   - scipy

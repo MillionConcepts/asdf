@@ -1,45 +1,40 @@
-import os
+from typing import Optional, Literal
 
-import datetime as dt
 from pathlib import Path
 import re
 
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
 
-# NOTE: ignore any complaints from static analyzers about parameter annotations
-# for the following function. THEY ARE NOT MALFORMED TYPE HINTS, but
-# instructions to clize to create single-letter aliases for parameters in the
-# CLI. (--output, -o; etc.)
 def asdf_initiate(
     path,
-    roi_path=None,
+    roi_path: Optional[str] = None,
     *,
-    output: "o" = None,
-    upload=False,
-    abbreviate: "a" = False,
-    skip_rapidlooks: "r" = False,
-    suffix: "s" = "",
-    noninteractive: "n" = False,
-    noninteractive_all: "na" = False,
-    debug: "d" = False,
-    keep_broadband: "kb" = False,
-    keep_caltarget: "kg" = False,
-    keep_thumbnails: "kt" = False,
-    mosaic: "m"=False,
-    merspect: "mer" = None,
-    recursive: "v"=False,
-    dump_paths: "dp" = "",
-    save_plain_images=False,
-    image_regex: "ir" = None,
-    config=None,
-    skip_pixmaps: "sp" = False,
-    skip_errmaps: "se" = True,
-    seriously_no_images: "sn" = False,
-    reuse_mosaic: "rm" = False,
-    keep_intermediate: "ki" = False,
-    move_existing=False,
-    spatial: "xyz" = False
+    output: Optional[str] = None,
+    upload: bool = False,
+    abbreviate: bool = False,
+    skip_rapidlooks: bool = False,
+    suffix: str = "",
+    noninteractive: bool = False,
+    noninteractive_all: bool = False,
+    debug: bool = False,
+    keep_broadband: bool = False,
+    keep_caltarget: bool  = False,
+    keep_thumbnails: bool = False,
+    mosaic: bool = False,
+    merspect: Optional[str] = None,
+    recursive: bool = False,
+    pathdump: str = "",
+    save_plain_images: bool = False,
+    image_regex: Optional[str] = None,
+    config: Optional[str] = None,
+    skip_pixmaps: bool = False,
+    skip_errmaps: bool = True,
+    seriously_no_images: bool = False,
+    reuse_mosaic: bool = False,
+    keep_intermediate: bool = False,
+    move_existing: bool = False,
+    spatial: bool = False
 ):
     """
     processes and archives everything
@@ -67,7 +62,7 @@ def asdf_initiate(
     :param keep_caltarget: include frames from apparent caltarget observations
         in searches
     :param recursive: search all directories under the chosen path
-    :param dump_paths: dump paths and quit after producing file list
+    :param pathdump: dump paths and quit after producing file list
     :param keep_thumbnails: include thumbnails in searches
     :param mosaic: run in mosaic creation mode
     :param save_plain_images: save images without labels or borders
@@ -120,8 +115,8 @@ def asdf_initiate(
         # meaningful log/output for this case was already provided by
         # `find_and_offer_observation`
         return
-    if dump_paths:
-        return perform_path_dump(dump_paths, is_multiple, observation)
+    if pathdump:
+        return perform_path_dump(pathdump, is_multiple, observation)
     asdf_args = (
         roi_path,
         upload,
@@ -203,22 +198,22 @@ def fdsa_initiate(
     marslab_path,
     image_path,
     *,
-    output: "o" = None,
-    upload=False,
-    skip_rapidlooks: "r" = False,
-    debug: "d" = False,
-    seq_id: "i" = "",
-    sol: "l" = "",
-    marslab_regex: "mr" = None,
-    image_regex: "ir" = ".*IOF_N.*",
-    config=None,
-    skip_pixmaps: "sp" = False,
-    do_empties: "de" = "True",
-    skip_successes: "ss" = "False",
-    seriously_no_images: "sn" = False,
-    move_existing=False,
-    spatial: "xyz" = False,
-    power_through_errors: "pt" = False
+    output: Optional[str] = None,
+    upload: bool = False,
+    skip_rapidlooks: bool = False,
+    debug: bool = False,
+    seq_id: Optional[str] = "",
+    sol: Optional[str] = "",
+    marslab_regex: Optional[str] = None,
+    image_regex: Optional[str] = ".*IOF_N.*",
+    config: Optional[str] = None,
+    skip_pixmaps: bool = False,
+    do_empties: Literal["True", "False", "only"] = "True",
+    skip_successes: Literal["True", "False"] = "False",
+    seriously_no_images: bool = False,
+    move_existing: bool = False,
+    spatial: bool = False,
+    power_through_errors: bool = False
 ):
     """reprocesses and archives everything"""
     if (argument := do_empties.title()) in ("True", "False"):

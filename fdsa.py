@@ -1,9 +1,9 @@
 """user-facing fdsa CLI script"""
 
-from clize import run
+import fire
 
 
-# tell clize to handle command line call
+# tell fire to handle command line call
 if __name__ == "__main__":
     import asdf.cli_endpoint
-    run(asdf.cli_endpoint.fdsa_initiate)
+    fire.Fire(asdf.cli_endpoint.fdsa_initiate)
