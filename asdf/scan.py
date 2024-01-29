@@ -672,6 +672,7 @@ def fetch_analysis_files(path: Union[str, Path]):
             other_files.append(syspath(file))
     return marslab_files, roi_files, other_files
 
+from hostess.profilers import DEFAULT_PROFILER
 
 def compare_roi_colors(analyses: pd.DataFrame):
     """
@@ -679,14 +680,18 @@ def compare_roi_colors(analyses: pd.DataFrame):
     marslab file
     """
     from astropy.io import fits
+    from isal import igzip
 
     ok_indices = []
     bad_indices = []
     for ix, row in analyses.iterrows():
         marslab = pd.read_csv(row["MARSLAB"])
-        roi = fits.open(row["ROI"])
+        with igzip.open(row["ROI"]) as decompressed:
+            roi = fits.open(decompressed)
+            roi_colors = {
+                rec[1].split(' ')[0].lower() for rec in roi.info(False)
+            }
         marslab_colors = set(marslab["COLOR"].unique())
-        roi_colors = {hdu.header["NAME"].strip() for hdu in roi}
         if marslab_colors == roi_colors:
             ok_indices.append(ix)
         else:
