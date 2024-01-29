@@ -3,7 +3,7 @@ channels:
   # note: packages _must_ be installed from conda-forge. defaults has a newer/incompatible version of libgsl.
   - conda-forge
 dependencies:
-  - python=3.10
+  - python=3.11
   - numpy
   - dustgoggles
   - pandas
@@ -31,5 +31,6 @@ dependencies:
   - sh
   - pip
   - python-isal
+  - pyarrow
   - pip:
       - git+https://github.com/MillionConcepts/pretty-plot.git
