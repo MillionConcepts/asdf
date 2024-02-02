@@ -1,5 +1,5 @@
 from csv import DictReader
-from functools import partial
+from functools import cache, partial
 from io import BytesIO
 from operator import attrgetter
 from pathlib import Path
@@ -89,6 +89,7 @@ class DriveBot:
             return request.execute()
         return request
 
+    @cache
     def cd(self, parent_id, name):
         existing = self.ls(folder_id=parent_id)
         if name in existing.keys():
@@ -241,6 +242,25 @@ class DriveBot:
             )
             parameters["removeParents"] = request.execute()["parents"][0]
         request = self.files().update(**parameters, **self.extra_parameters)
+        if defer is True:
+            return request
+        return request.execute()
+
+    def cp(
+        self,
+        filename: str,
+        path_name: Optional[str] = None,
+        file_id: Optional[str] = None,
+        target_folder_name: Optional[str] = None,
+        target_folder_id: Optional[str] = None,
+        defer: bool = False,
+    ):
+        file_id = self._pick_id(path_name, file_id)
+        target_folder_id = self._pick_id(target_folder_name, target_folder_id)
+        copy_body = {'name': filename, 'parents': [target_folder_id]}
+        request = self.files().copy(
+            fileId=file_id, body=copy_body, **self.extra_parameters
+        )
         if defer is True:
             return request
         return request.execute()
