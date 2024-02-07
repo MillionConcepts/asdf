@@ -90,11 +90,16 @@ class DriveBot:
         return request
 
     @cache
-    def cd(self, parent_id, name):
+    def cd(self, parent_id, name, mkdir=True):
         existing = self.ls(folder_id=parent_id)
+        # TODO: check if this is actually a folder
         if name in existing.keys():
             return existing[name]
-        return self.mkdir(name, parent_id=parent_id)['id']
+        if mkdir is True:
+            return self.mkdir(name, parent_id=parent_id)['id']
+        raise FileNotFoundError(
+            f"{name} does not exist in {parent_id} & mkdir is False"
+        )
 
     def manifest(self, folder_id, fields=None):
         kwargs = {'query': f"'{folder_id}' in parents and trashed=false"}
@@ -285,7 +290,7 @@ class DriveBot:
 
     def rm(self, name=None, file_id=None, defer=False):
         file_id = self._pick_id(name, file_id)
-        request = self.files().delete(fileId=file_id)
+        request = self.files().delete(fileId=file_id, **self.extra_parameters)
         if defer is True:
             return request
         return request.execute()
