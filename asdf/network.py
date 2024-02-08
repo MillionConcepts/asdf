@@ -313,9 +313,16 @@ def upload_bandset_to_gdrive(
     folders['browse'] = drivebot.cd(folders['obs'], 'browse')
     if is_mosaic is False:
         folders['pixmap'] = drivebot.cd(folders["data"], 'pixmaps')
+    if any("spatial" in f.name for f in bandset.local_files):
+        folders['spatial'] = drivebot.cd(folders['browse'], 'spatial')
     aprint(f"uploading all files to {sol_folder_name}/{obs_folder_name}")
     dupes, name_dupes, ok_files, checksums = check_duplicates(
-        list(map(str, bandset.local_files)), drivebot, folders
+        list(map(str, bandset.local_files)), 
+        drivebot, 
+        {
+            k: v for k, v in folders.items() 
+            if k in ['data', 'browse', 'pixmap', 'spatial']
+        }
     )
     if len(dupes) > 0:
         aprint(
@@ -366,7 +373,10 @@ def upload_files_to_gdrive(folders, ok_files, debug):
         for file in ok_files:
             try:
                 folder = next(
-                    filter(lambda t: t in file, ("pixmap", "data", "browse"))
+                    filter(
+                        lambda t: t in file,
+                        ("pixmap", "spatial", "data", "browse")
+                    )
                 )
                 targets.append({'path': file, 'folder_id': folders[folder]})
             except StopIteration:
@@ -559,6 +569,7 @@ def handle_bandset_file_upload(
             f"[bold red]:confused_face: Sorry, couldn't upload files to "
             f"Google Drive: {api_error}"
         )
+        ASDFLOG.error(f"failed upload: {api_error}")
         return "continue"
     except InterruptedError:
         aprint("[bold red] halting at user request.")

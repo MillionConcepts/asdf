@@ -278,15 +278,21 @@ class DriveBot:
         if len(manifest) == 0:
             return {}
         files = manifest['name'].tolist() if files is None else files
-        return {
-            f['name']: {
+        checksums = {}
+        for f in manifest.to_dict('records'):
+            if (name := f['name']) not in files:
+                continue
+            # if someone has thrown a Google Workspace object in the folder,
+            # it won't have a checksum, and we never, ever care about it
+            # in a situation where we are producing checksums
+            if (checksum := f.get('md5Checksum')) is None:
+                continue
+            checksums[name] = {
                 'id': f['id'],
-                'md5': f['md5Checksum'],
+                'md5': f.get('md5Checksum'),
                 'created': f['createdTime']
             }
-            for f in manifest.to_dict('records')
-            if f['name'] in files
-        }
+        return checksums
 
     def rm(self, name=None, file_id=None, defer=False):
         file_id = self._pick_id(name, file_id)

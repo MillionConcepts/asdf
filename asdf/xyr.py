@@ -921,7 +921,7 @@ def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
         figs.append(draw_photometry_map(maps["phase"]))
         names.append("phase")
     eyepre = eye.lower()[0]
-    browsepath = Path(outpath, "browse")
+    browsepath = Path(outpath, "browse", "spatial")
     browsepath.mkdir(exist_ok=True, parents=True)
     dpi = dpi_from_image(scalefig)
     savekwargs = {"dpi": dpi, "bbox_inches": "tight", "pad_inches": 0}
