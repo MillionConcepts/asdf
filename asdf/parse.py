@@ -33,10 +33,11 @@ ZCAM_FN_PARSERS = {
 
 
 MARSLAB_FN_PATTERN = re.compile(
-    r"(?P<FTYPE>marslab|roi)_SOL(?P<SOL>\d{4})_((?P<FORMAT>extended|rc)_)?"
-    r"(?P<SEQ_ID>\w+)_RSM(?P<RSM>\d+)(-(?P<ANALYSIS_NAME>.+?))?"
-    r"\.(?P<EXTENSION>fits\.gz|fits|csv)"
+    r"(?P<FTYPE>marslab|roi)_((?P<FORMAT>extended|rc)_SOL(?P<SOL>\d{4}))?_"
+    r"(?P<SEQ_ID>\w+)_RSM(?P<RSM>\d+)(-(?P<ANALYSIS_NAME>.+?))?\."
+    r"(?P<EXTENSION>fits\.gz|fits|csv)"
 )
+
 
 def parse_marslab_fn(fn):
     fn = fn.name if isinstance(fn, Path) else fn
