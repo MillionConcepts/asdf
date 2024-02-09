@@ -1,6 +1,7 @@
 from csv import DictReader
 from functools import cache, partial
 from io import BytesIO
+import json
 from operator import attrgetter
 from pathlib import Path
 import re
@@ -33,6 +34,11 @@ def infer_mimetype(path: Union[str, Path]) -> str:
         return "application/octet-stream"
 
 
+class ExecutionError(Exception):
+    """executing a batch failed."""
+    pass
+
+
 class DriveResource(discovery.Resource):
     about: Callable
     files: Callable
@@ -56,6 +62,7 @@ class DriveBot:
             self.extra_parameters = {"supportsAllDrives": True}
         else:
             self.extra_parameters = {}
+        self.errors = []
         self.scanner = DriveScanner(self)
         self.temp_filesystem = {}
 
@@ -302,7 +309,10 @@ class DriveBot:
         return request.execute()
 
     def add_request(self, request, callback=None, request_id=None):
-        if len(self.batches) == 0:
+        if (
+            len(self.batches) == 0
+            or len(self.batches[-1]._requests) >= 100
+        ):
             self.batches.append(self.new_batch_http_request())
         try:
             self.batches[-1].add(request, callback, request_id)
@@ -310,10 +320,33 @@ class DriveBot:
             self.batches.append(self.new_batch_http_request())
             self.add_request(request, callback, request_id)
 
-    def execute_batches(self, clear_batches=True):
+    def execute_batches(self, clear_batches=True, raise_errors=True):
+        # TODO: add an HTTPError catch, not sure which kind
         execution = tuple(
             map(lambda x: x(), map(attrgetter("execute"), self.batches))
         )
+        for batchnum, batch in enumerate(self.batches):
+            for reqix, (meta, response) in batch._responses.items():
+                response = response.decode('utf-8')
+                if len(response) > 0:
+                    response = json.loads(response)
+                else:
+                    response = {}
+                error = response.get('error')
+                status = meta['status']
+                if (error is not None) or (status != '204'):
+                    err_rec = {
+                        'request': json.loads(
+                            self.batches[batchnum]._requests[reqix].to_json()
+                        ),
+                        'status': status,
+                        'response': response,
+                        'error': error,
+                        'batchnum': batchnum
+                    }
+                    self.errors.append(err_rec)
+        if len(self.errors) > 0 and raise_errors is True:
+            raise ExecutionError("some requests failed. check self.errors.")
         if clear_batches:
             self.batches = []
         return execution

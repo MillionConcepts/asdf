@@ -965,7 +965,9 @@ def make_space_fits(bandset, ref_bands, outpath):
             )
             continue
         coords, zc = navrecs[ref_band]["coords"], get_cahvore(iof_data)
+        ASDFLOG.info(f"generated coords for {ref_band}")
         maps = make_spatial_maps(coords, iof_data, zc)
+        ASDFLOG.info(f"generated coords for {ref_band}")
         outfile = write_space_fits_file(
             maps, navrecs[ref_band], iof_data, bandset, Path(outpath, "data")
         )
