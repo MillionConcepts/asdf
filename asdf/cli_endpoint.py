@@ -1,6 +1,6 @@
-from typing import Optional, Literal
-
+import datetime as dt
 from pathlib import Path
+from typing import Optional, Literal
 import re
 
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
@@ -209,17 +209,15 @@ def fdsa_initiate(
     config: Optional[str] = None,
     skip_pixmaps: bool = False,
     do_empties: Literal["True", "False", "only"] = "True",
-    skip_successes: Literal["True", "False"] = "False",
+    skip_successes: bool = False,
     seriously_no_images: bool = False,
     move_existing: bool = False,
     spatial: bool = False,
     power_through_errors: bool = False
 ):
     """reprocesses and archives everything"""
-    if (argument := do_empties.title()) in ("True", "False"):
-        do_empties = True if argument == "True" else False
-    if (argument := skip_successes.title()) in ("True", "False"):
-        skip_successes = True if argument == "True" else False
+    if (emptyarg := do_empties.title()) in ("True", "False"):
+        do_empties = True if emptyarg == "True" else False
     console = ASDF_CONSOLE
     console.style = "FDSA"
     with console.status(
@@ -293,8 +291,13 @@ def fdsa_initiate(
         except Exception as ex:
             from dustgoggles.dynamic import exc_report
 
-            ASDFLOG.error(f"failed to process {marslab_fn} with {roi_fn}")
-            ASDFLOG.error(str(exc_report(ex)))
+            message = (
+                f"{dt.datetime.now().isoformat()}:\nfailed to process {marslab_fn} "
+                f"with {roi_fn}\n{exc_report(ex)}\n\n"
+            )
+            ASDFLOG.error(message)
+            with open("logs/errors.log", "a") as stream:
+                stream.write(message)
             if power_through_errors is False:
                 raise
 

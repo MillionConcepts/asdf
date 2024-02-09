@@ -672,7 +672,6 @@ def fetch_analysis_files(path: Union[str, Path]):
             other_files.append(syspath(file))
     return marslab_files, roi_files, other_files
 
-from hostess.profilers import DEFAULT_PROFILER
 
 def compare_roi_colors(analyses: pd.DataFrame):
     """
