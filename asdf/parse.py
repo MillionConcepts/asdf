@@ -33,7 +33,7 @@ ZCAM_FN_PARSERS = {
 
 
 MARSLAB_FN_PATTERN = re.compile(
-    r"(?P<FTYPE>marslab|roi)_((?P<FORMAT>extended|rc)_SOL(?P<SOL>\d{4}))?_"
+    r"(?P<FTYPE>marslab|roi)_((?P<FORMAT>extended|rc)_)?SOL(?P<SOL>\d{4})_"
     r"(?P<SEQ_ID>\w+)_RSM(?P<RSM>\d+)(-(?P<ANALYSIS_NAME>.+?))?\."
     r"(?P<EXTENSION>fits\.gz|fits|csv)"
 )
