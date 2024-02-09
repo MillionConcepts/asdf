@@ -31,22 +31,18 @@ ZCAM_FN_PARSERS = {
     "PRODUCER": offlabel_producer,
 }
 
+\
+    r"(?P<FTYPE>marslab|roi)_SOL(?P<SOL>\d{4})_((?P<FORMAT>extended|rc)_)?"
+    r"(?P<SEQ_ID>\w+)_RSM(?P<RSM>\d+)(-(?P<ANALYSIS_NAME>.+?))?"
+    r"\.(?P<EXTENSION>fits\.gz|fits|csv)"
+)
 
 def parse_marslab_fn(fn):
-    basename = Path(fn).name
-    field_regexes = {
-        # TODO: legacy support, remove RMS later
-        "RSM": r"(?:RMS|RSM)(\d+)",
-        "SOL": r"SOL(\d+)",
-        "SEQ_ID": r"(zcam\d+)",
-        # TODO: legacy support, remove marslab and roi later
-        "ANALYSIS_NAME": r".*?-(.*?)-(?=(marslab|roi|csv|fits))",
-    }
-    parsedict = {}
-    for field, regex in field_regexes.items():
-        search = re.search(regex, basename)
-        parsedict[field] = search.group(1) if search else None
-    return parsedict
+    fn = fn.name if isinstance(fn, Path) else fn
+    parsed = MARSLAB_FN_PATTERN.search(fn).groupdict()
+    if parsed['FORMAT'] is None and parsed['FTYPE'] == 'marslab':
+        parsed['FORMAT'] = 'compact'
+    return parsed
 
 
 def parse_pointing(sequence: Union[Mapping, pd.DataFrame]) -> dict:
