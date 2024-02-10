@@ -115,7 +115,7 @@ class DriveBot:
         scanner = DriveScanner(self, **kwargs)
         scanner.get()
         try:
-            return scanner.make_manifest()[1]
+            return scanner.make_manifest()[0]
         except NoResultsError:
             return pd.DataFrame(columns=scanner.fields)
 
