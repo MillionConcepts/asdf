@@ -4,33 +4,27 @@ channels:
   - conda-forge
 dependencies:
   - python=3.11
-  - numpy
-  - dustgoggles
-  - pandas
-  - matplotlib
-  - git
-  - jupyter
-  - pdr
-  - fire
-  - ipython
-  - python-Levenshtein
-  - scipy
-  - opencv
-  - fs
-  - gspread
-  - boto3
-  - pathos
-  - rich
   - astropy
-  - sympy
-  - pytest
-  - pydrive2
-  - marslab
+  - boto3
+  - dustgoggles
+  - fire
+  - fs
+  - git
+  - gspread
   - hugin
-  - scikit-image
-  - sh
+  - ipython
+  - jupyter
+  - marslab
+  - matplotlib
+  - opencv
+  - pdr
   - pip
   - python-isal
   - pyarrow
+  - pytest
+  - rich
+  - scikit-image
+  - sh
   - pip:
       - git+https://github.com/MillionConcepts/pretty-plot.git
+      - git+https://github.com/MillionConcepts/silencio.git
