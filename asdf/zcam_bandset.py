@@ -709,7 +709,13 @@ class ZcamBandSet(BandSet):
         )
 
     def has_space_fits(self, outpath: Path):
-        for e in {x for x in ('L', 'R') if (self.metadata['EYE'] == x).any()}:
-            if not (outpath / f"space_{e}_{self.name}.fits").exists():
+        missed = 0
+        for eye in ('L', 'R'):
+            if not (self.metadata['BAND'].str.startswith(eye)).any():
+                missed += 1
+                continue
+            if not (outpath / f"data/space_{eye}_{self.name}.fits").exists():
                 return False
+        if missed == 2:
+            raise FileNotFoundError("This bandset has no valid metadata.")
         return True

@@ -65,9 +65,6 @@ def pick_thumbs(rapids):
     return cache
 
 
-
-
-
 def _process_mosaic(
     observation,
     roi_path,
@@ -464,17 +461,21 @@ def asdf_body(
     if spatial is True:
         aprint(Rule(" processing spatial input products "))
         can_make_spatial = True
-        if reuse_spatial or not bandset.has_space_fits(outpath):
+        if not (reuse_spatial and bandset.has_space_fits(outpath)):
             try:
                 bandset.make_space_fits(outpath=outpath)
             except FileNotFoundError:
                 aprint("[dark orange]missing relevant spatial products.")
                 can_make_spatial = False
+        else:
+            aprint("... [bright_green]reusing existing space FITS ...")
         if can_make_spatial is True:
-            dims = bandset.make_spatial_products(outpath)
+            dims = bandset.make_spatial_products(
+                outpath,
+                write_images=not (skip_rapidlooks or seriously_no_images)
+            )
             if isinstance(dims, pd.DataFrame):
                 marslab_data = pd.merge(marslab_data, dims, on='COLOR')
-
     aprint(Rule(" writing data files "))
     if we_do_not_have_rois:
         aprint("[dark_orange]No ROI file passed; using null values for data.")

@@ -665,7 +665,7 @@ def compute_roi_dims(
             "A": maps["area"][roi_coords].sum().astype(np.float32),
             "D": maps["range"][roi_coords].mean().astype(np.float32),
         }
-        for photfield in ('emission', 'indidence', 'phase'):
+        for photfield in ('incidence', 'emission', 'phase'):
             if photfield in maps.keys():
                 rec[
                     photfield[0].upper()
