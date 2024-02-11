@@ -169,64 +169,74 @@ RGB_BANDMAP_THRESHOLD = [
         "send": False,
     },
 ]
+
+
+# TODO: put this somewhere else
+def maybeclip(image, centiles=(1, 99)):
+    try:
+        return centile_clip(image, centiles)
+    except IndexError:
+        return np.full_like(image, np.nan)
+
+
 # RGB_BANDMAP_DEFAULTS are added to these
 # noinspection PyTypeChecker
 mafic_map = {
-        # placing single quotes causes asdf to print the title verbatim
-        "name": "'mafic bandmap R0R/R1 BD910 R1/R5'",
-        "params": {
-            "norm_kwargs": {"bounds": (0.2, 1)},
-            "red": {
-                "look": "ratio",
-                "mask": {"instructions": RGB_BANDMAP_THRESHOLD + SKY_MASK},
-                "bands": ("R0R", "R4"),
-                "limiter": {
-                    # switch this to a masked-outside thing
-                    "function": np.ma.masked_less,
-                    "params": {"value": 1, "copy": False},
-                },
-                "postfilter": {
-                    # "function": lambda array: np.zeros(array.shape)
-                    "function": centile_clip,
-                    "params": {"centiles": (50, 98)},
-                },
+    # placing single quotes causes asdf to print the title verbatim
+    "name": "'mafic bandmap R0R/R1 BD910 R1/R5'",
+    "params": {
+        "norm_kwargs": {"bounds": (0.2, 1)},
+        "red": {
+            "look": "ratio",
+            "mask": {"instructions": RGB_BANDMAP_THRESHOLD + SKY_MASK},
+            "bands": ("R0R", "R4"),
+            "limiter": {
+                # switch this to a masked-outside thing
+                "function": np.ma.masked_less,
+                "params": {"value": 1, "copy": False},
             },
-            # red: pathological? maybe plagioclase?
-            # yellow: low-ca pyroxene or olivine
-            # green: high-ca pyroxene or olivine
-            # cyan/purple: just green and red
-            # blue: ?
-            "green": {
-                "mask": {"instructions": RGB_BANDMAP_THRESHOLD + SKY_MASK},
-                "look": "band_depth",
-                "bands": ("R1", "R5", "R3"),
-                "limiter": {
-                    "function": np.ma.masked_outside,
-                    "params": {"v1": 0, "v2": 1, "copy": False},
-                },
-                "postfilter": {
-                    # "function": lambda array: np.zeros(array.shape)
-                    "function": centile_clip,
-                    "params": {"centiles": (10, 98)},
-                },
-            },
-            "blue": {
-                "look": "ratio",
-                "mask": {"instructions": RGB_BANDMAP_THRESHOLD + SKY_MASK},
-                "bands": ("R1", "R5"),
-                "limiter": {
-                    "function": np.ma.masked_less,
-                    "params": {"value": 1.05, "copy": False},
-                },
-                "postfilter": {
-                    # "function": lambda array: np.zeros(array.shape)
-                    "function": centile_clip,
-                    "params": {"centiles": (10, 98)},
-                }
-                # postfilter with percentile clip maybe just on the top
+            "postfilter": {
+                # "function": lambda array: np.zeros(array.shape)
+                "function": maybeclip,
+                "params": {"centiles": (50, 98)},
             },
         },
-    }
+        # red: pathological? maybe plagioclase?
+        # yellow: low-ca pyroxene or olivine
+        # green: high-ca pyroxene or olivine
+        # cyan/purple: just green and red
+        # blue: ?
+        "green": {
+            "mask": {"instructions": RGB_BANDMAP_THRESHOLD + SKY_MASK},
+            "look": "band_depth",
+            "bands": ("R1", "R5", "R3"),
+            "limiter": {
+                "function": np.ma.masked_outside,
+                "params": {"v1": 0, "v2": 1, "copy": False},
+            },
+            "postfilter": {
+                # "function": lambda array: np.zeros(array.shape)
+                "function": maybeclip,
+                "params": {"centiles": (10, 98)},
+            },
+        },
+        "blue": {
+            "look": "ratio",
+            "mask": {"instructions": RGB_BANDMAP_THRESHOLD + SKY_MASK},
+            "bands": ("R1", "R5"),
+            "limiter": {
+                "function": np.ma.masked_less,
+                "params": {"value": 1.05, "copy": False},
+            },
+            "postfilter": {
+                # "function": lambda array: np.zeros(array.shape)
+                "function": maybeclip,
+                "params": {"centiles": (10, 98)},
+            }
+            # postfilter with percentile clip maybe just on the top
+        },
+    },
+}
 mmap_unmasked = deepcopy(mafic_map)
 for channel in ("red", "green", "blue"):
     del mmap_unmasked["params"][channel]["mask"]
