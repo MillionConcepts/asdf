@@ -52,10 +52,9 @@ from asdf_settings.sources import (
     GOOGLE_SHARED_DRIVE_ID,
     DEBUG_METADATA_BACKUP_FOLDER_ID,
     GOOGLE_SHEET_ID,
-    METADATA_BACKUP_FOLDER_ID, OLD_CUTOFF,
+    METADATA_BACKUP_FOLDER_ID
 )
 from marslab.bandset import BandSet
-from marslab.poolutils import wait_for_it, simple_log_callback
 
 
 def get_public_m20_waypoints():
