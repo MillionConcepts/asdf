@@ -8,7 +8,7 @@ from functools import reduce
 from operator import mul
 from pathlib import Path
 import re
-from typing import Union, Sequence
+from typing import Optional, Sequence, Union
 from urllib.error import URLError
 
 from cytoolz.dicttoolz import valfilter
@@ -41,7 +41,7 @@ from asdf.labels import get_pixel_map_heuristic, cached_aux_skimmer
 
 
 def skim_products(
-    products, field_filters=None, aux_skimmer=cached_aux_skimmer
+    products, field_filters=None, aux_skimmer=cached_aux_skimmer, rsm=None
 ):
     # prefilters that don't require dipping into the header,
     #  for speed and stability on networked filesystems
@@ -62,15 +62,22 @@ def skim_products(
             products = filtered_products
     ASDFLOG.info("... skimming headers for grouping information ...")
     products = products.sort_values(by="CTIME").reset_index(drop=True)
-    skim_results = []
-    bad_files = []
-    keep_paths = []
+    skim_results, bad_files, keep_paths, rsm_rejects = [], [], [], []
     for product in products["PATH"]:
         try:
-            skim_results.append(aux_skimmer(product))
+            skim_result = aux_skimmer(product)
+            if rsm is not None and skim_result['RSM'] not in rsm:
+                rsm_rejects.append(product)
+                continue
+            skim_results.append(skim_result)
             keep_paths.append(product)
         except (FileNotFoundError, TypeError, KeyError, SyntaxError) as _error:
             bad_files.append(product)
+    if len(rsm_rejects) > 0:
+        ASDFLOG.info(
+            f"... rejected {len(rsm_rejects)} / {len(products)} "
+            f"on RSM criterion ..."
+        )
     if len(bad_files) > 0:
         ASDFLOG.warning(
             f"... only {str(len(skim_results))} "
@@ -143,6 +150,7 @@ def scan_zcam_files(
     regex_filter=None,
     keep_thumbnails=False,
     recursive=False,
+    rsm=None
 ):
     products = ls_zcam(root_dir, recursive, regex_filter)
     if products is None:
@@ -163,7 +171,7 @@ def scan_zcam_files(
         field_filters["SEQ_ID"] = target_seq_id
     if keep_thumbnails is False:
         field_filters["THUMBNAIL"] = "N"
-    products = skim_products(products, field_filters)
+    products = skim_products(products, field_filters, rsm=rsm)
     if len(products) == 0:
         raise ValueError("sorry, no matching products found in path.")
     stems = products["PATH"].str.rsplit("/", n=1, expand=True)
@@ -231,7 +239,7 @@ def cluster_observations(
                 rate_completion,
                 rate_compression,
                 rate_cal_offset,
-                rate_rc_version,
+                # rate_rc_version,
                 rate_version,
                 rate_creation_time,
             )
@@ -370,7 +378,8 @@ def validate_caltarget_sol_consistency(group, seq_id):
 def validate_rc_consistency(group, seq_id):
     parsed_rc_fns = group["RC_FILE"].map(parse_zcam_fn)
     rc_ok, rc_warning = True, None
-    for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
+    # for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
+    for key in ("SITE", "DRIVE", "SEQ_ID"):
         if not all_equal([fn[key] for fn in parsed_rc_fns]):
             rc_warning, rc_ok = (
                 f"warning: could not process some or all pointings of "
@@ -607,10 +616,13 @@ def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
         .reset_index(drop=True)
     )
     # did something go horribly wrong?
+    matchcols = ['SOL', 'SEQ_ID', 'RSM', 'ANALYSIS_NAME']
+    checkroi = paired_roi[[c for c in paired_roi.columns if c in matchcols]]
+    checkmars = paired_marslab[[c for c in paired_marslab.columns if c in matchcols]]
     check_equal = (
-        paired_roi.iloc[:, 1:]
+        checkroi.iloc[:, 1:]
         .dropna(axis=1)
-        .eq(paired_marslab.iloc[:, 1:].dropna(axis=1))
+        .eq(checkmars.iloc[:, 1:].dropna(axis=1))
     )
     if not check_equal.all(axis=None):
         raise ValueError("clustering has gone horribly wrong.")
@@ -641,7 +653,7 @@ def make_marslab_metadata_df(marslab_fn_list):
 
 
 def prune_analysis_df(
-    df: pd.DataFrame, sol=None, seq_id=None, file_regex=None
+    df: pd.DataFrame, sol=None, seq_id=None, file_regex=None, rsm=None
 ):
     if sol not in (None, ""):
         if isinstance(sol, Sequence) and not isinstance(sol, str):
@@ -654,6 +666,8 @@ def prune_analysis_df(
         ].copy()
     if file_regex:
         df = df.loc[df["PATH"].str.match(file_regex)]
+    if rsm is not None:
+        df = df.loc[df['RSM'].isin(rsm)]
     return df
 
 
@@ -699,7 +713,10 @@ def compare_roi_colors(analyses: pd.DataFrame):
 
 
 def find_matching_observations(
-    analyses: pd.DataFrame, search_dir: str, search_regex: str
+    analyses: pd.DataFrame,
+    search_dir: str,
+    search_regex: str,
+    rsm: Optional[tuple[int]] = None
 ):
     # This does not presently support thumbnails; we may need to collect
     # more metadata
@@ -715,6 +732,7 @@ def find_matching_observations(
         regex_filter=search_regex,
         target_sol=target_sols,
         target_seq_id=target_seq_ids,
+        rsm=rsm
     )
     parser_warnings = []
     misses = []
