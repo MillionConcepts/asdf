@@ -1,7 +1,7 @@
 import datetime as dt
 from pathlib import Path
-from typing import Optional, Literal
 import re
+from typing import Optional, Literal
 
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
@@ -34,6 +34,7 @@ def asdf_initiate(
     reuse_mosaic: bool = False,
     keep_intermediate: bool = False,
     move_existing: bool = False,
+    rsm: Optional[tuple[int]] = None,
     spatial: bool = False,
     reuse_spatial: bool = True,
 ):
@@ -78,6 +79,7 @@ def asdf_initiate(
     :param keep_intermediate: keep intermediate mosaic files after completion?
     :param move_existing: move existing Google Drive files to an "old"
         subdirectory.
+    :param rsm: restrict to specific RSMs? (comma-separated list of numbers)
     :param spatial: try to make spatial products?
     :param reuse_spatial: if matching spatial FITS files exist in the output
         path, reuse them rather than trying to regenerate them from scratch?
@@ -113,6 +115,7 @@ def asdf_initiate(
         recursive=recursive,
         regex_filter=image_regex,
         mosaic=mosaic,
+        rsm=rsm,
     )
     if observation is None:
         # meaningful log/output for this case was already provided by
@@ -216,6 +219,7 @@ def fdsa_initiate(
     skip_successes: bool = False,
     seriously_no_images: bool = False,
     move_existing: bool = False,
+    rsm: Optional[tuple[int]] = None,
     spatial: bool = False,
     reuse_spatial: bool = True,
     power_through_errors: bool = False
@@ -243,7 +247,8 @@ def fdsa_initiate(
         seq_id,
         marslab_regex=marslab_regex,
         image_regex=image_regex,
-        do_empties=do_empties
+        do_empties=do_empties,
+        rsm=rsm
     )
     if reprocess_pairs is None:
         return
@@ -298,8 +303,8 @@ def fdsa_initiate(
             from dustgoggles.dynamic import exc_report
 
             message = (
-                f"{dt.datetime.now().isoformat()}:\nfailed to process {marslab_fn} "
-                f"with {roi_fn}\n{exc_report(ex)}\n\n"
+                f"{dt.datetime.now().isoformat()}:\nfailed to process "
+                f"{marslab_fn} with {roi_fn}\n{exc_report(ex)}\n\n"
             )
             ASDFLOG.error(message)
             with open("logs/errors.log", "a") as stream:

@@ -99,6 +99,19 @@ def get_scan_results(
     return results, problems, hidden
 
 
+def format_rsm_option(rsm):
+    try:
+        rsm = (rsm,) if not isinstance(rsm, tuple) else rsm
+        assert isinstance(rsm[0], int)
+        return rsm
+    except (KeyError, AssertionError):
+        aprint(
+            "[bold red]Invalid format for --rsm argument. "
+            "::sad_face:: Please pass an integer or a comma-separated "
+            "list of integers."
+        )
+
+
 def find_and_offer_observations(
     root_dir,
     explicit_path=None,
@@ -113,6 +126,8 @@ def find_and_offer_observations(
     console; ask the user to select a observation if there is more than one;
     ask the user to confirm the observation if there is only one.
     """
+    if (rsm := scan_kwargs.get('rsm')) is not None:
+        scan_kwargs['rsm'] = format_rsm_option(rsm)
     # TODO: pass polite error message rather than not-enough-values traceback
     #  when no results are found in a directory
     results, problems, hidden = get_scan_results(
@@ -332,7 +347,7 @@ def handle_map_checks(bandset, code="pix_map"):
 
 
 def loudly_ingest_analyses(
-    path, sol=None, seq_id=None, file_regex=None, do_empties=True
+    path, sol=None, seq_id=None, file_regex=None, do_empties=True, rsm=None
 ):
     ASDF_CONSOLE.style = "FDSA"
     if not cached_exists(path):
@@ -360,12 +375,12 @@ def loudly_ingest_analyses(
     )
     if (len(roi) == 0) or (len(marslab) == 0):
         return sorry_analysis()
-    marslab = prune_analysis_df(marslab, sol, seq_id, file_regex)
-    roi = prune_analysis_df(roi, sol, seq_id, file_regex)
+    marslab = prune_analysis_df(marslab, sol, seq_id, file_regex, rsm)
+    roi = prune_analysis_df(roi, sol, seq_id, file_regex, rsm)
     aprint(
         f"[italic bright_green]{len(roi)} ROI and {len(marslab)} marslab "
         f"files in path [dark_turquoise]matched[/dark_turquoise] sol, seq_id, "
-        f"and regex filters"
+        f"rsm, and regex filters"
     )
     if len(marslab) == 0:
         return sorry_analysis()
@@ -461,9 +476,12 @@ def setup_reprocess(
     marslab_regex=None,
     image_regex=None,
     do_empties=True,
+    rsm=None
 ):
+    if rsm is not None:
+        rsm = format_rsm_option(rsm)
     analyses = loudly_ingest_analyses(
-        marslab_path, sol, seq_id, marslab_regex, do_empties
+        marslab_path, sol, seq_id, marslab_regex, do_empties, rsm
     )
     if analyses is None:
         return None, None
@@ -476,7 +494,9 @@ def setup_reprocess(
                 reprocess_pairs,
                 parser_warnings,
                 misses,
-            ) = find_matching_observations(analyses, image_path, image_regex)
+            ) = find_matching_observations(
+                analyses, image_path, image_regex, rsm
+            )
         except (PermissionError, FileNotFoundError, ValueError) as err:
             prog.remove_task(ASDF_RPH_SPIN.task_id)
             aprint(str(err) + " :confused_face:", style="bold red")

@@ -21,6 +21,7 @@ import pdr
 from more_itertools import chunked, divide
 from rich.rule import Rule
 from scipy.interpolate import griddata
+from scipy.spatial import QhullError
 
 from asdf.console import aprint, ASDFLOG
 from asdf_settings.process import THREADS
@@ -186,7 +187,6 @@ def make_rangemap(xyz, origin=(0, 0, 0)):
     return np.linalg.norm(xyz - origin, axis=-1)
 
 
-# aprint(f"{Path(navrec['fn']).name} has no match.")
 def check_coords(coords, npix, cutoffs):
     ji, checks = [coords.get(ax, []) for ax in ("j", "i")], {'status': 'ok'}
     n_match = len(ji[0])
@@ -200,8 +200,11 @@ def check_coords(coords, npix, cutoffs):
     if 'hull_ratio' in cutoffs:
         if checks['status'] == 'no_match':
             checks['hull_ratio'] = 0
+        elif (hullstats := hullsize(ji))[0] == 0:
+            checks['hullratio'] = 0
+            checks['status'] = 'hull_ratio'
         else:
-            hsize, hull = hullsize(ji)
+            hsize, hull = hullstats
             checks['hull_ratio'] = hsize / npix
             hull = np.squeeze(hull)
             corners = [
@@ -520,7 +523,10 @@ def make_spatial_maps(coords, iof_data, cahvore):
         values = maps[ax][sources]
         if not values[np.isfinite(values)].any():
             continue
-        interp = griddata(sources, values, targets, method="linear")
+        try:
+            interp = griddata(sources, values, targets, method="linear")
+        except QhullError:
+            continue
         gridarray = np.empty(iof_shape, np.float32)
         gridarray[sources] = values
         gridarray[targets] = interp
@@ -891,10 +897,14 @@ def make_spatial_products(
             raise
         except Exception as ex:
             aprint(f"couldn't write images for {eye}: {type(ex)},{ex}")
+            ASDFLOG.error(f"couldn't write images for {eye}: {type(ex)},{ex}")
         finally:
             plt.close("all")  # in case rendering crashed somewhere unexpected
-    if dims != {}:
-        dims = pd.merge(*tuple(dims.values()), on="COLOR")
+    valid_dims = [d for d in dims.values() if len(d) > 0]
+    if len(valid_dims) == 2:
+        dims = pd.merge(*valid_dims, on="COLOR")
+    elif len(valid_dims) == 1:
+        dims = valid_dims[0]
     return dims
 
 
@@ -972,7 +982,7 @@ def make_space_fits(bandset, ref_bands, outpath):
         coords, zc = navrecs[ref_band]["coords"], get_cahvore(iof_data)
         ASDFLOG.info(f"generated coords for {ref_band}")
         maps = make_spatial_maps(coords, iof_data, zc)
-        ASDFLOG.info(f"generated coords for {ref_band}")
+        ASDFLOG.info(f"generated maps for {ref_band}")
         outfile = write_space_fits_file(
             maps, navrecs[ref_band], iof_data, bandset, Path(outpath, "data")
         )

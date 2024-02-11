@@ -236,14 +236,25 @@ def format_observation(observation: pd.DataFrame):
     tailtext.append(", starting LTST " + str(starting_ltst))
     if type(observation.get("CALTARGET_LTST")) == pd.Series:
         caltext = Text()
-        caltarget_sol = parse_zcam_fn(observation['CALTARGET_FILE'].iloc[0])['SOL']
+        caltarget_sol = parse_zcam_fn(
+            observation['CALTARGET_FILE'].iloc[0]
+        )['SOL']
         caltext.append(f"caltarget SOL {caltarget_sol}")
         dec_cal_ltst = min(observation['CALTARGET_LTST'])
-        caltarget_ltst = str(int(dec_cal_ltst))+':'+str(round(dec_cal_ltst % 1*60))
+        caltarget_ltst = (
+            str(int(dec_cal_ltst)) + ':' + str(round(dec_cal_ltst % 1 * 60))
+        )
         caltext.append(f", starting LTST {caltarget_ltst}")
-        dec_ltst = int(starting_ltst.split(':')[0])+int(starting_ltst.split(':')[1])/60
-        goodness = round(np.log(1/(abs(constant_dict.get("SOL")-caltarget_sol)+abs(
-            dec_ltst-dec_cal_ltst))+1), 2)
+        dec_ltst = (
+            int(starting_ltst.split(':')[0])
+            + int(starting_ltst.split(':')[1]) / 60
+        )
+        delta_sol = abs(constant_dict.get("SOL") - caltarget_sol)
+        delta_ltst = abs(dec_ltst - dec_cal_ltst)
+        if delta_sol == delta_ltst == 0:
+            goodness = 'inf (self-calibrated)'
+        else:
+            goodness = round(np.log(1 / (delta_sol + delta_ltst)+ 1), 2)
         caltext.append(f", goodness {goodness}")
     else:
         caltext = None

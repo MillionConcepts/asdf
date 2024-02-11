@@ -668,14 +668,27 @@ class ZcamBandSet(BandSet):
             self.metadata.loc[self.metadata['BAND'] == band, 'PATH'].iloc[0]
         ]
 
-    # TODO: choose different reference bands if L1/R1 are not available
-    # TODO: feedback about product creation / matching / blah blah blah
-    def make_space_fits(self, ref_bands=("L1", "R1"), outpath=".", roots=None):
+    def _spatial_ref_bands(self):
+        preference_order = (1, 2, 3, 4, 5, 6, "0R", "0G", "0B")
+        ref_bands = []
+        for eye in ("L", "R"):
+            try:
+                for band in iter(preference_order):
+                    if f"{eye}{band}" in self.raw.keys():
+                        ref_bands.append(f"{eye}{band}")
+                        break
+            except StopIteration:
+                pass
+        return ref_bands
+
+    def make_space_fits(self, outpath=".", roots=None):
         if self.xyrs is None:
             self.match_navcam(roots)
         if self.xyrs is None:
             raise FileNotFoundError("No matching XYRs found.")
-        outputs, successful = make_space_fits(self, ref_bands, outpath)
+        outputs, successful = make_space_fits(
+            self, self._spatial_ref_bands(), outpath
+        )
         self.local_files += outputs
         return successful
 
@@ -690,18 +703,9 @@ class ZcamBandSet(BandSet):
             self.bulk_debayer("all")
             self.count_rois()
             self.format_metadata()
-        preferred_ref_bands = (1, 2, 3, 4, 5, 6, "0R", "0G", "0B")
-        ref_bands = []
-        for eye in ("L", "R"):
-            try:
-                for band in iter(preferred_ref_bands):
-                    if f"{eye}{band}" in self.raw.keys():
-                        ref_bands.append(f"{eye}{band}")
-                        break
-            except StopIteration:
-                pass
+
         return make_spatial_products(
-            self, outpath, ref_bands, write_images, calc_rois
+            self, outpath, self._spatial_ref_bands(), write_images, calc_rois
         )
 
     def has_space_fits(self, outpath: Path):
