@@ -185,7 +185,9 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
 
 # statistical/metadata columns we add along with mean value to
 # FILTER_DATA_COLUMNS
-COMPACT_MARSLAB_STATS = ["STD", "COUNT", "W", "H", "HW", "A", "D"]
+COMPACT_MARSLAB_STATS = [
+    "STD", "COUNT", "W", "H", "HW", "A", "D", "I", "E", "P"
+]
 
 # mapping from field names to label parameters.
 
