@@ -3,48 +3,39 @@ functions for uploading, downloading, querying, fetching, etc.
 TODO, maybe: consolidate utility-type functions into their own module
  and move top-level handlers to chatter?
 """
+from collections.abc import Callable, MutableMapping
 import datetime as dt
 import getpass
 import io
 import json
-import shutil
-import socket
-import time
-import urllib.request
-from collections.abc import Callable, MutableMapping
-from functools import partial
 from more_itertools import divide
 from numbers import Number
 from pathlib import Path
-from random import shuffle
-from typing import Any, Union
+import shutil
+import socket
+import time
+from typing import Any
+import urllib.request
 
 import boto3
+from boto3.exceptions import S3UploadFailedError
 import botocore.config
 import gspread
-import pandas as pd
-import pydrive2.files
-import dateutil.parser as dtp
-from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import ClientError
 from cytoolz import merge
-from dustgoggles.func import catch_interaction
+import dateutil.parser as dtp
 from dustgoggles.pivot import itemize_numpy
-
-# TODO: handling authentication differently in gspread and pydrive
-#  is messy but expedient. it's possible that it will be more stable
-#  and/or performant to merge these through a lower-level oauth call,
-#  however, and this should be evaluated.
+from googleapiclient.errors import Error as GoogleError
 from oauth2client.service_account import ServiceAccountCredentials
-from pydrive2.auth import GoogleAuth
-from pydrive2.drive import GoogleDrive
+import pandas as pd
+from silencio.gdrive3 import DriveBot
 from urllib3.connection import BaseSSLError
+
 
 from asdf.asdf_utils import obfuscated_name, tar_bytes
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
 from asdf.format import folder_names, cached_md5sum
 from asdf.pretty import NumberedChoicePrompt, metadata_open_prompt
-from asdf.silencio.gdrive3 import DriveBot
 from asdf.zcam_bandset import ZcamBandSet
 from asdf_settings.process import THREADS
 from asdf_settings.sources import (
@@ -265,34 +256,9 @@ def asdf_drive_copy(file, folder_id, debug):
     drivebot.put(file, folder_id=folder_id)
 
 
-def move_existing_files(name_dupes, drivebot, checksums):
-    names = {Path(dupe).name: dupe for dupe in name_dupes}
-    unmoved = []
-    now = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
-    for folder_id, files in checksums.items():
-        dupes = {k: v for k, v in files.items() if k in names.keys()}
-        if len(dupes) == 0:
-            continue
-        backup_folder_id = drivebot.cd(folder_id, "old")
-
-        for k, f in dupes.items():
-            if (now - dtp.parse(f['created'])).total_seconds() < OLD_CUTOFF:
-                ASDFLOG.info(f"{k} created within {OLD_CUTOFF}s, not moving")
-                unmoved.append(names[k])
-                continue
-            request = drivebot.mv(
-                file_id=f['id'], folder_id=backup_folder_id, defer=True
-            )
-            drivebot.add_request(request)
-            ASDFLOG.info(f"moved {k}")
-    drivebot.execute_batches()
-    return unmoved
-
-
 def upload_bandset_to_gdrive(
     bandset,
     debug=False,
-    move_existing=False,
     is_mosaic=False,
     noninteractive=False,
     no_dupe_names=True
@@ -335,20 +301,16 @@ def upload_bandset_to_gdrive(
             f"{', '.join(Path(file).name for file in dupes)}\n"
         )
     if (no_dupe_names is True) and (len(name_dupes) > 0):
-        if move_existing is True:
-            unmoved = move_existing_files(name_dupes, drivebot, checksums)
-            ok_files += set(name_dupes).difference(unmoved)
-        else:
-            choice, ok_files = ask_about_dupe_names(
-                bandset,
-                noninteractive,
-                name_dupes,
-                ok_files,
-                drivebot,
-                folders
-            )
-            if choice.startswith("quit"):
-                raise InterruptedError
+        choice, ok_files = ask_about_dupe_names(
+            bandset,
+            noninteractive,
+            name_dupes,
+            ok_files,
+            drivebot,
+            folders
+        )
+        if choice.startswith("quit"):
+            raise InterruptedError
     else:
         ok_files += name_dupes
 
@@ -560,15 +522,13 @@ def upload_and_link_thumbnails(bandset, s3_debug_prefix, thumbnails):
 
 
 def handle_bandset_file_upload(
-    bandset, debug, move_existing=False, is_mosaic=False, noninteractive=False
+    bandset, debug, is_mosaic=False, noninteractive=False
 ):
     try:
-        upload_bandset_to_gdrive(
-            bandset, debug, move_existing, is_mosaic, noninteractive
-        )
+        upload_bandset_to_gdrive(bandset, debug, is_mosaic, noninteractive)
         aprint("completed Google Drive upload")
         return "ok"
-    except (pydrive2.files.ApiRequestError, socket.timeout) as api_error:
+    except (GoogleError, socket.timeout) as api_error:
         aprint(
             f"[bold red]:confused_face: Sorry, couldn't upload files to "
             f"Google Drive: {api_error}"
@@ -586,7 +546,6 @@ def upload_asdf_analysis(
     bandset: ZcamBandSet,
     thumbnails: MutableMapping,
     debug: bool = False,
-    move_existing: bool = False,
     noninteractive: bool = False
 ):
     s3_debug_prefix, sheet_backup_folder_id, sheet_id = remote_ids(debug)
@@ -597,7 +556,7 @@ def upload_asdf_analysis(
     aprint("completed marslab and ROI backup")
     aprint("... uploading files to Google Drive space ...")
     upload_result = handle_bandset_file_upload(
-        bandset, debug, move_existing, noninteractive=noninteractive
+        bandset, debug, noninteractive=noninteractive
     )
     if upload_result == "quit":
         raise InterruptedError

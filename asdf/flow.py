@@ -299,7 +299,6 @@ def asdf_body(
     seriously_no_images=False,
     reuse_mosaic=False,
     keep_intermediate=False,
-    move_existing=False,
     spatial=False,
     reuse_spatial=True,
     recreate_from=None,
@@ -583,11 +582,7 @@ def asdf_body(
         )
         try:
             upload_asdf_analysis(
-                bandset,
-                thumbnails,
-                debug,
-                move_existing,
-                noninteractive=noninteractive
+                bandset, thumbnails, debug, noninteractive=noninteractive
             )
         except InterruptedError:
             return   # quit at user request due to dupe filenames

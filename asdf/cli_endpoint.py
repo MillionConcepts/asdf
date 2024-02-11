@@ -33,7 +33,6 @@ def asdf_initiate(
     seriously_no_images: bool = False,
     reuse_mosaic: bool = False,
     keep_intermediate: bool = False,
-    move_existing: bool = False,
     rsm: Optional[tuple[int]] = None,
     spatial: bool = False,
     reuse_spatial: bool = True,
@@ -77,8 +76,6 @@ def asdf_initiate(
     :param reuse_mosaic: reuse existing intermediate mosaic products if
         present?
     :param keep_intermediate: keep intermediate mosaic files after completion?
-    :param move_existing: move existing Google Drive files to an "old"
-        subdirectory.
     :param rsm: restrict to specific RSMs? (comma-separated list of numbers)
     :param spatial: try to make spatial products?
     :param reuse_spatial: if matching spatial FITS files exist in the output
@@ -140,7 +137,6 @@ def asdf_initiate(
         seriously_no_images,
         reuse_mosaic,
         keep_intermediate,
-        move_existing,
         spatial,
         reuse_spatial
     )
@@ -218,7 +214,6 @@ def fdsa_initiate(
     do_empties: Literal["True", "False", "only"] = "True",
     skip_successes: bool = False,
     seriously_no_images: bool = False,
-    move_existing: bool = False,
     rsm: Optional[tuple[int]] = None,
     spatial: bool = False,
     reuse_spatial: bool = True,
@@ -289,7 +284,6 @@ def fdsa_initiate(
                 noninteractive=True,
                 skip_pixmaps=skip_pixmaps,
                 seriously_no_images=seriously_no_images,
-                move_existing=move_existing,
                 spatial=spatial,
                 reuse_spatial=reuse_spatial
             )
