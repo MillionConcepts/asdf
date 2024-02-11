@@ -10,12 +10,14 @@ dependencies:
   - fire
   - fs
   - git
+  - google-api-python-client
   - gspread
   - hugin
   - ipython
   - jupyter
   - marslab
   - matplotlib
+  - oauth2client
   - opencv
   - pdr
   - pip
