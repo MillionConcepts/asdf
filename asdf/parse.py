@@ -33,17 +33,23 @@ ZCAM_FN_PARSERS = {
 
 
 MARSLAB_FN_PATTERN = re.compile(
-    r"(?P<FTYPE>marslab|roi)_((?P<FORMAT>extended|rc)_)?SOL(?P<SOL>\d{4})_"
-    r"(?P<SEQ_ID>\w+)_RSM(?P<RSM>\d+)(-(?P<ANALYSIS_NAME>.+?))?\."
-    r"(?P<EXTENSION>fits\.gz|fits|csv)"
+    r"(?P<FTYPE>marslab|roi|space)"
+    r"(_((?P<EYE>[LR])|(?P<FORMAT>extended|rc)))?"
+    r"_SOL(?P<SOL>\d{4})"
+    r"_(?P<SEQ_ID>\w+)"
+    r"_RSM(?P<RSM>\d+)"
+    r"(-(?P<ANALYSIS_NAME>.+?))?"
+    r"\.(?P<EXTENSION>fits\.gz|fits|csv)"
 )
 
 
 def parse_marslab_fn(fn):
     fn = fn.name if isinstance(fn, Path) else fn
     parsed = MARSLAB_FN_PATTERN.search(fn).groupdict()
-    if parsed['FORMAT'] is None and parsed['FTYPE'] == 'marslab':
+    if parsed['FTYPE'] == 'marslab' and parsed['FORMAT'] is None:
         parsed['FORMAT'] = 'compact'
+    elif parsed['FTYPE'].startswith('space'):
+        parsed['FTYPE'] = 'space'
     return parsed
 
 

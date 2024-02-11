@@ -34,7 +34,8 @@ def asdf_initiate(
     reuse_mosaic: bool = False,
     keep_intermediate: bool = False,
     move_existing: bool = False,
-    spatial: bool = False
+    spatial: bool = False,
+    reuse_spatial: bool = True,
 ):
     """
     processes and archives everything
@@ -78,6 +79,8 @@ def asdf_initiate(
     :param move_existing: move existing Google Drive files to an "old"
         subdirectory.
     :param spatial: try to make spatial products?
+    :param reuse_spatial: if matching spatial FITS files exist in the output
+        path, reuse them rather than trying to regenerate them from scratch?
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
@@ -135,7 +138,8 @@ def asdf_initiate(
         reuse_mosaic,
         keep_intermediate,
         move_existing,
-        spatial
+        spatial,
+        reuse_spatial
     )
     from asdf.flow import asdf_body
 
@@ -213,6 +217,7 @@ def fdsa_initiate(
     seriously_no_images: bool = False,
     move_existing: bool = False,
     spatial: bool = False,
+    reuse_spatial: bool = True,
     power_through_errors: bool = False
 ):
     """reprocesses and archives everything"""
@@ -280,7 +285,8 @@ def fdsa_initiate(
                 skip_pixmaps=skip_pixmaps,
                 seriously_no_images=seriously_no_images,
                 move_existing=move_existing,
-                spatial=spatial
+                spatial=spatial,
+                reuse_spatial=reuse_spatial
             )
             console.style = "FDSA"
             ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")

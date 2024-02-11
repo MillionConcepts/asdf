@@ -301,6 +301,7 @@ def asdf_body(
     keep_intermediate=False,
     move_existing=False,
     spatial=False,
+    reuse_spatial=True,
     recreate_from=None,
 ):
     """
@@ -400,19 +401,13 @@ def asdf_body(
         ):
             handle_map_checks(bandset, code="pix_map")
     else:
-        aprint(
-            "[dark_orange]skip-pixmaps flag active; skipping pixel "
-            "flag map handling"
-        )
-
+        aprint("[dark_orange]skip-pixmaps active; skipping pixel map handling")
     if skip_errmaps is not True:
         aprint(Rule(" looking for error maps "))
         with console.status("... handling error maps ...", spinner="star"):
             handle_map_checks(bandset, code="iof_err")
     else:
-        aprint(
-            "[dark_orange]skip-errmaps flag active; skipping error map handling"
-        )
+        aprint("[dark_orange]skip-errmaps active; skipping error map handling")
 
     # handle ROI file conversion, ROI counting, user input per-ROI metadata
     if we_do_not_have_rois:
@@ -469,14 +464,18 @@ def asdf_body(
 
     if spatial is True:
         aprint(Rule(" processing spatial input products "))
-        try:
-            success = bandset.make_space_fits(outpath=outpath)
-            if success is True:
-                dims = bandset.make_spatial_products(outpath)
-                if isinstance(dims, pd.DataFrame):
-                    marslab_data = pd.merge(marslab_data, dims, on='COLOR')
-        except FileNotFoundError:
-            aprint("[dark orange]missing relevant spatial products.")
+        can_make_spatial = True
+        if reuse_spatial or not bandset.has_space_fits(outpath):
+            try:
+                bandset.make_space_fits(outpath=outpath)
+            except FileNotFoundError:
+                aprint("[dark orange]missing relevant spatial products.")
+                can_make_spatial = False
+        if can_make_spatial is True:
+            dims = bandset.make_spatial_products(outpath)
+            if isinstance(dims, pd.DataFrame):
+                marslab_data = pd.merge(marslab_data, dims, on='COLOR')
+
     aprint(Rule(" writing data files "))
     if we_do_not_have_rois:
         aprint("[dark_orange]No ROI file passed; using null values for data.")

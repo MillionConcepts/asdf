@@ -703,3 +703,9 @@ class ZcamBandSet(BandSet):
         return make_spatial_products(
             self, outpath, ref_bands, write_images, calc_rois
         )
+
+    def has_space_fits(self, outpath: Path):
+        for e in {x for x in ('L', 'R') if (self.metadata['EYE'] == x).any()}:
+            if not (outpath / f"space_{e}_{self.name}.fits").exists():
+                return False
+        return True
