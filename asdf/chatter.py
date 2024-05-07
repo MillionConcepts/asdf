@@ -251,8 +251,8 @@ def ask_user_about_roi(
 
 def _sort_fields() -> list[str]:
     order = {f: i for i, f in enumerate(ROI_METADATA_FIELDS)}
-    ok = True
-    while ok is True:
+    ok = False
+    while ok is False:
         ok = True
         for k, v in CONDITIONAL_FIELDS.items():
             if order[k] < order[v]:
