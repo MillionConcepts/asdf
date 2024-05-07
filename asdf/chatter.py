@@ -277,7 +277,6 @@ def input_roi_metadata(marslab_data, ci):
             continue
         marslab_data[field] = ""
         if is_feature_mismatch(constants, field):
-            print(field)
             continue
         if field == "MEMBER":
             if "FORMATION" not in constants.keys():
