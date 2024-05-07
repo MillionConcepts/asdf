@@ -31,14 +31,14 @@ LEGACY_METADATA_FIELDS = [
 LEGACY_SUBTYPE_FIELDS = ["ROCK_SURFACE", "SOIL_LOCATION"]
 
 # fields relevant only to specific feature types. users will only be queried
-# about these fields if they have set FEATURE = the key of the list. Don't put
-# these before the FEATURE query or they'll never be asked about.
+# about these fields if they have set FEATURE = the key of the list.
 FEATURE_EXCLUSIVE_ROI_FIELDS = {
     # similarly, for the special MEMBER selection behavior to work, FORMATION
     # needs to come before MEMBER in this list.
     "rock": ["FEATURE_SUBTYPE", "FORMATION", "MEMBER", "FLOAT"],
     "soil": ["FEATURE_SUBTYPE", "GRAIN_SIZE"],
 }
+
 # don't mess with this statement if you want to be able to use exclusive_fields
 # later. it pulls all the lists out of FEATURE_EXCLUSIVE_ROI_FIELDS
 exclusive_fields = list(
@@ -47,10 +47,16 @@ exclusive_fields = list(
     )
 )
 
-# TODO: convert distance to per-observation rather than per-ROI
+# defines ROIs that depend on answers to other fields. For each key-value pair,
+# we will never attempt to ask the user about the field corresponding to the
+# key before the field corresponding to the value.
+CONDITIONAL_FIELDS = {
+    'MEMBER': 'FORMATION',
+} | {k: 'FEATURE' for k in exclusive_fields}
 
-# fields we want to ask the user about at each ROI. This order is preserved.
-# the asterisk is a shorthand for "insert all of these fields at this position"
+# fields we could ask the user about at each ROI. This order is preserved
+# except as necessary to ensure the ordering of CONDITIONAL_FIELDS.
+# the asterisk is shorthand for "insert all of these fields at this position".
 ROI_METADATA_FIELDS = (
     "FEATURE",
     *exclusive_fields,

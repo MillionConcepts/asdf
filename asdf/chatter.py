@@ -1,6 +1,7 @@
 """
 secondary-level handlers & wrappers for asdf workflow
 """
+import array
 from itertools import chain
 import os
 from pathlib import Path
@@ -65,6 +66,7 @@ from asdf_settings.metadata import (
     PIXEL_FLAG_NAMES,
     ROI_METADATA_FIELD_CHOICES,
     LEGACY_METADATA_FIELDS, FEATURE_SUBTYPES, LEGACY_SUBTYPE_FIELDS,
+    CONDITIONAL_FIELDS,
 )
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
 import pretty_plot as pplot
@@ -247,11 +249,25 @@ def ask_user_about_roi(
     return roi_metadata
 
 
+def _sort_fields() -> list[str]:
+    order = {f: i for i, f in enumerate(ROI_METADATA_FIELDS)}
+    while True:
+        ok = True
+        for k, v in CONDITIONAL_FIELDS.items():
+            if order[k] < order[v]:
+                order[v] = min(order.values()) - 1
+                ok = False
+        if ok is True:
+            break
+    fields = []
+    for v in sorted(order.values()):
+        fields.append(next(k for k in order.keys() if order[k] == v))
+    return fields
+
+
 def input_roi_metadata(marslab_data, ci):
-    constants = {}
-    exclusive = list(set(chain(*FEATURE_EXCLUSIVE_ROI_FIELDS.values())))
-    other = [f for f in ROI_METADATA_FIELDS if f not in exclusive]
-    for field in other + exclusive:
+    fields, constants = _sort_fields(), {}
+    for field in fields:
         # TODO: this may all be excessively sloppy
         options = None
         if field in (
@@ -276,7 +292,7 @@ def input_roi_metadata(marslab_data, ci):
             if "FEATURE" not in constants.keys():
                 continue
             if field not in (
-                FEATURE_EXCLUSIVE_ROI_FIELDS.get(constants["FEATURE"], [])
+                    FEATURE_EXCLUSIVE_ROI_FIELDS.get(constants["FEATURE"], [])
             ):
                 continue
             options = FEATURE_SUBTYPES[constants["FEATURE"]]
@@ -297,7 +313,7 @@ def input_roi_metadata(marslab_data, ci):
             Text("Please enter information about the ")
             .append_text(colorize_merspect_roi_name(region))
             .append_text(Text(" ROI.")),
-        )
+            )
         user_provided_metadata = ask_user_about_roi(region, ci, constants)
         for field, value in user_provided_metadata.items():
             if field not in marslab_data.columns:
