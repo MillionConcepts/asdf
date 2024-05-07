@@ -50,9 +50,9 @@ exclusive_fields = list(
 # defines ROIs that depend on answers to other fields. For each key-value pair,
 # we will never attempt to ask the user about the field corresponding to the
 # key before the field corresponding to the value.
-CONDITIONAL_FIELDS = {
+CONDITIONAL_FIELDS = {k: 'FEATURE' for k in exclusive_fields} | {
     'MEMBER': 'FORMATION',
-} | {k: 'FEATURE' for k in exclusive_fields}
+}
 
 # fields we could ask the user about at each ROI. This order is preserved
 # except as necessary to ensure the ordering of CONDITIONAL_FIELDS.
