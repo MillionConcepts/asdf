@@ -249,15 +249,18 @@ def ask_user_about_roi(
     return roi_metadata
 
 
+def _fix_order(order):
+    for k, v in CONDITIONAL_FIELDS.items():
+        if order[k] < order[v]:
+            order[v] = min(order.values()) - 1
+            return False
+    return True
+
+
 def _sort_fields() -> list[str]:
     order = {f: i for i, f in enumerate(ROI_METADATA_FIELDS)}
-    ok = False
-    while ok is False:
-        ok = True
-        for k, v in CONDITIONAL_FIELDS.items():
-            if order[k] < order[v]:
-                order[v] = min(order.values()) - 1
-                ok = False
+    while _fix_order(order) is False:
+        continue
     fields = []
     for v in sorted(order.values()):
         fields.append(next(k for k in order.keys() if order[k] == v))
