@@ -212,15 +212,13 @@ def ask_user_about_roi(
     roi_metadata = {}
     for field in metadata_fields:
         # ignore legacy fields
-        if field in LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS:
-            continue
-        # fill 'empty' fields like notes
-        if field in EMPTY_METADATA_FIELDS:
-            roi_metadata[field] = ""
-            continue
-        # don't ask people soil questions about rocks, etc
-        if is_feature_mismatch(roi_metadata, field):
-            roi_metadata[field] = ""
+        if (
+            field in LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS
+            # skip 'empty' fields like notes
+            or field in EMPTY_METADATA_FIELDS
+            # don't ask people soil questions about rocks, etc
+            or is_feature_mismatch(roi_metadata, field)
+        ):
             continue
         # if a user has told us a field is the same everywhere, don't bother
         # them about it
@@ -251,7 +249,9 @@ def ask_user_about_roi(
 
 def input_roi_metadata(marslab_data, ci):
     constants = {}
-    for field in ROI_METADATA_FIELDS:
+    exclusive = list(set(chain(*FEATURE_EXCLUSIVE_ROI_FIELDS.values())))
+    other = [f for f in ROI_METADATA_FIELDS if f not in exclusive]
+    for field in other + exclusive:
         # TODO: this may all be excessively sloppy
         options = None
         if field in (
@@ -260,7 +260,9 @@ def input_roi_metadata(marslab_data, ci):
             + LEGACY_SUBTYPE_FIELDS
         ):
             continue
+        marslab_data[field] = ""
         if is_feature_mismatch(constants, field):
+            print(field)
             continue
         if field == "MEMBER":
             if "FORMATION" not in constants.keys():
