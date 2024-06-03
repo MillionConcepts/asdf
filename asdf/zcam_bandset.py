@@ -19,7 +19,7 @@ import asdf
 from asdf.asdf_utils import (
     load_roi_file,
     null_marslab_data_section,
-    dashify,
+    dashwrite,
     save_roi_file,
     cast_to_reference,
 )
@@ -461,21 +461,17 @@ class ZcamBandSet(BandSet):
             metadata_file = io.BytesIO()
             extended_file = io.BytesIO()
             rc_metadata_file = io.BytesIO()
-        dashify(self.extended).to_csv(extended_file, index=False)
+        dashwrite(self.extended, extended_file)
         if verbose and (in_memory is False):
             aprint("wrote extended-format marslab file: " + extended_file)
-        dashify(self.compact).to_csv(metadata_file, index=False)
+        dashwrite(self.compact, metadata_file)
         if verbose and (in_memory is False):
             aprint("wrote compact-format marslab file: " + metadata_file)
         if self.rc_compact is not None:
-            dashify(self.rc_compact).to_csv(rc_metadata_file, index=False)
+            dashwrite(self.rc_compact, rc_metadata_file)
             if verbose and (in_memory is False):
                 aprint("wrote caltarget marslab file: " + rc_metadata_file)
-        if in_memory is True:
-            metadata_file.seek(0)
-            extended_file.seek(0)
-            rc_metadata_file.seek(0)
-        else:
+        if in_memory is False:
             self.local_files.append(extended_file)
             self.local_files.append(metadata_file)
             if self.rc_compact is not None:

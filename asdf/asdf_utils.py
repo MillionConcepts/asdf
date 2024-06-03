@@ -15,10 +15,15 @@ from fs.osfs import OSFS
 from asdf.console import aprint
 
 
-# TODO: pandas futurewarning re: elementwise comparison between strings and
-#  other things deep behing the API
-def dashify(df):
-    return df.replace("", "-").fillna("-")
+def dashwrite(df, target: Union[io.BufferedIOBase, str]):
+    buf = io.BytesIO() if isinstance(target, str) else target
+    df.astype('str').replace('', '-').to_csv(buf, index=None)
+    buf.seek(0)
+    if isinstance(target, str):
+        with open(target, "wb") as stream:
+            stream.write(buf.read().replace(b'NaN', b'-'))
+    buf.seek(0)
+    return buf
 
 
 def obfuscated_name():
