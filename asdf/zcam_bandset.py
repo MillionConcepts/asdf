@@ -11,6 +11,8 @@ from typing import Sequence, Optional
 import numpy as np
 import pandas as pd
 import pdr
+from dustgoggles.func import zero
+
 from asdf_settings import rapidlooks
 from cytoolz import keyfilter, groupby
 from matplotlib import pyplot as plt
@@ -445,38 +447,40 @@ class ZcamBandSet(BandSet):
         self.rc_compact = polish_metadata(self.rc_compact, creation_time)
         self.rc_compact = self.rc_compact.copy()  # defrag
 
-    def write_data_files(self, outpath=".", verbose=False, in_memory=False):
-        if in_memory is False:
-            datapath = Path(outpath, "data")
-            stem = f"_{self.name + self.suffix}.csv"
-            metadata_file = str(Path(datapath, f"marslab{stem}"))
-            extended_file = str(Path(datapath, f"marslab_extended{stem}"))
-            if self.rc_compact is not None:
-                rc_metadata_file = str(Path(datapath, f"marslab_rc{stem}"))
-            else:
-                rc_metadata_file = None
-            if not datapath.exists():
-                os.makedirs(datapath)
-        else:
-            metadata_file = io.BytesIO()
-            extended_file = io.BytesIO()
-            rc_metadata_file = io.BytesIO()
-        dashwrite(self.extended, extended_file)
-        if verbose and (in_memory is False):
-            aprint("wrote extended-format marslab file: " + extended_file)
-        dashwrite(self.compact, metadata_file)
-        if verbose and (in_memory is False):
-            aprint("wrote compact-format marslab file: " + metadata_file)
+    def _marslab_to_memory(self):
+        buffers = []
+        for attr, suf in zip(("compact", "extended"), ("", "_extended")):
+            buffers.append(dashwrite(getattr(self, attr)))
         if self.rc_compact is not None:
-            dashwrite(self.rc_compact, rc_metadata_file)
-            if verbose and (in_memory is False):
-                aprint("wrote caltarget marslab file: " + rc_metadata_file)
+            buffers.append(dashwrite(self.rc_compact))
+        else:
+            buffers.append(None)
+        return buffers
+
+    def _marslab_to_disk(self, outpath, verbose):
+        datapath = Path(outpath, "data")
+        if not datapath.exists():
+            os.makedirs(datapath)
+        files, stem = [], f"_{self.name + self.suffix}.csv"
+        pr = aprint if verbose is True else zero
+        for attr, suf in zip(("compact", "extended"), ("", "_extended")):
+            files.append(str(datapath / f"marslab{suf}{stem}"))
+            dashwrite(getattr(self, attr), files[-1])
+            self.local_files.append(files[-1])
+            pr(f"wrote {attr}-format marslab file: {files[-1]}")
+        if self.rc_compact is not None:
+            files.append(str(datapath / f"marslab_rc{stem}"))
+            self.local_files.append(files[-1])
+            dashwrite(self.rc_compact, files[-1])
+            pr(f"wrote caltarget marslab file: {files[-1]}")
+        else:
+            files.append(None)
+        return tuple(files)
+
+    def write_marslab_files(self, outpath=".", verbose=False, in_memory=False):
         if in_memory is False:
-            self.local_files.append(extended_file)
-            self.local_files.append(metadata_file)
-            if self.rc_compact is not None:
-                self.local_files.append(rc_metadata_file)
-        return metadata_file, extended_file, rc_metadata_file
+            return self._marslab_to_disk(outpath, verbose)
+        return self._marslab_to_memory()
 
     # TODO: so very very sloppy
     @staticmethod

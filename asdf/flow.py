@@ -477,7 +477,7 @@ def asdf_body(
     # glom all the data and metadata together into our three output formats
     bandset.format_metadata()
     # write the compact and extended versions, save the summary in memory
-    bandset.write_data_files(outpath, verbose=True)
+    bandset.write_marslab_files(outpath, verbose=True)
 
     # image-saving closure
     save_images = partial(
