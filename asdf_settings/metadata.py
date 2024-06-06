@@ -72,7 +72,7 @@ ROI_METADATA_FIELDS = (
 # {field} is replaced with the field name
 ROI_METADATA_FIELD_PROMPTS = {
     "FEATURE": "What category of {field} is / are {title} ROI(s)?",
-    "FEATURE_SUBTYPE": "What category of {field} are {title} ROI(s)?",
+    "FEATURE_SUBTYPE": "What category of {field} is / are {title} ROI(s)?",
     "FLOAT": "Is / are the rock(s) associated with {title} ROI(s) a {field}?",
     "DESCRIPTION": "Enter any additional {field} for {title} ROI(s)"
     "(press Enter to skip)",
