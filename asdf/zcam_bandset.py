@@ -1,17 +1,16 @@
-import datetime as dt
-import io
-import os
-import shutil
-import warnings
 from collections.abc import MutableMapping
+import datetime as dt
 from functools import partial
+import os
 from pathlib import Path
+import shutil
 from typing import Sequence, Optional
+import warnings
 
+from dustgoggles.func import zero
 import numpy as np
 import pandas as pd
 import pdr
-from dustgoggles.func import zero
 
 from asdf_settings import rapidlooks
 from cytoolz import keyfilter, groupby
