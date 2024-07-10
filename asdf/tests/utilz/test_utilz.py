@@ -1,22 +1,20 @@
+import numpy as np
+import pandas as pd
 import re
+import rich
 import shutil
-from unittest.mock import patch
-
+from PIL import Image
 from astropy.io import fits
 from cytoolz import valfilter
 from dustgoggles.func import disjoint, intersection, constant
 from fs.osfs import OSFS
-import numpy as np
-import pandas as pd
-import pandas.api.types
-import rich
-from PIL import Image
+from operator import eq
+from unittest.mock import patch
 
 import asdf.chatter
 import asdf.cli_endpoint
 import asdf.flow
 import asdf.pretty
-from marslab.compat.xcam import numeric_columns
 
 RUNTIME_VARIABLE_COLUMNS = re.compile(
     r"(ASDF_VERSION|FILE_TIMESTAMP|CREATOR|.*_PATH)"
@@ -36,63 +34,53 @@ def record_mismatches(results, absent, novel):
     return results
 
 
-def drop_variable_and_mismatched(df, mismatches) -> pd.DataFrame:
-    variable_columns = [
-        col for col in df.columns if re.match(RUNTIME_VARIABLE_COLUMNS, col)
-    ]
-    mismatched_columns = [col for col in df.columns if col in mismatches]
-    return df.drop(columns=(variable_columns + mismatched_columns))
+def _undash(series):
+    if series.dtype.char != 'O':
+        return series
+    series = series.replace('-', None)
+    try:
+        return series.astype(float)
+    except ValueError:
+        return series
 
 
-def compare_csv_files(test_path, ref_path, ignore_fields = None):
-    problems = []
-    test_df, ref_df = pd.read_csv(test_path), pd.read_csv(ref_path)
-    if ignore_fields is not None:
-        for field in ignore_fields:
-            test_df = test_df.drop(columns=field, errors='ignore')
-            ref_df = ref_df.drop(columns=field, errors='ignore')
-    ref_df = ref_df.replace('-', float('nan')).dropna(axis=1)
-    test_df = test_df.replace('-', float('nan')).dropna(axis=1)
-    test_mismatches, ref_mismatches = disjoint(test_df.columns, ref_df.columns)
-    # are we missing, or have we added, entire columns?
-    if len(test_mismatches + ref_mismatches):
-        for col in test_mismatches:
-            problems.append(f"{col} found only in test")
-        for col in ref_mismatches:
-            problems.append(f"{col} found only in reference")
-    # don't try to compare columns we know to be absent, or which we expect to
-    # change between runs even if all inputs are the same(e.g., creation time)
-    test_df_pruned = drop_variable_and_mismatched(
-        test_df, test_mismatches
-    ).sort_index(axis=1)
-    ref_df_pruned = drop_variable_and_mismatched(
-        ref_df, ref_mismatches
-    ).sort_index(axis=1)
-    # pandas.api.types.is_numeric_dtype(data[col])
-    numeric = numeric_columns(test_df_pruned)
-    numeric_diff =np.isclose(
-        test_df_pruned[numeric].values,
-        ref_df_pruned[numeric].values
-    )
-    numeric_diff = pd.DataFrame(numeric_diff)
-    numeric_diff.columns = numeric
-    non_numeric = [
-        col for col in test_df_pruned.columns
-        if not pandas.api.types.is_numeric_dtype(test_df_pruned[col])
-    ]
-    non_numeric_diff = test_df_pruned[non_numeric] == ref_df_pruned[non_numeric]
-    diff = pd.concat([numeric_diff, non_numeric_diff], axis=1)
-    # remaining columns are completely equal -- quit
-    if diff.all(axis=None):
-        return problems
-    diff = diff.loc[:, ~diff.all(axis=0).values]
-    for col in diff.columns:
-        problems.append(
-            f"mismatched values in {col}: "
-            f"{test_df.loc[~diff[col], col].values}, "
-            f"{ref_df.loc[~diff[col], col].values}"
-        )
-    return problems
+def compare_elements(r, t, varcols=()):
+    mismatches = {}
+    maxlen = min(len(r), len(t))
+    for c in set(r.columns).intersection(t.columns).difference(varcols):
+        rv, tv = r[c].iloc[:maxlen].copy(), t[c].iloc[:maxlen].copy()
+        rv, tv = map(_undash, (rv, tv))
+        if all(map(pd.api.types.is_float_dtype, (rv, tv))):
+            equal = np.isclose
+        else:
+            equal = eq
+        val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
+        if val_mismatch.any():
+            mismatches[c] = {
+                'ref': rv[val_mismatch].values,
+                'test': tv[val_mismatch].values,
+                'ix': val_mismatch.index[val_mismatch].values
+            }
+    return mismatches
+
+
+def compare_csv_files(ref_path, test_path, varcols=()):
+    comparison = {}
+    r, t = map(pd.read_csv, (ref_path, test_path))
+    if len(r) != len(t):
+        comparison["row_count"] = {"ref": len(r), "test": len(t)}
+    if len(r.columns) != len(t.columns):
+        comparison["column_count"] = {
+            "ref": len(r.columns), "test": len(t.columns)
+        }
+    missing_cols = set(r.columns).difference(t.columns)
+    new_cols = set(t.columns.difference(r.columns))
+    if len(missing_cols) + len(new_cols) > 0:
+        comparison["column_names"] = {"new": new_cols, "missing": missing_cols}
+    if len(value_mismatches := compare_elements(r, t, varcols)) > 0:
+        comparison["elements"] = value_mismatches
+    comparison["issues"] = list(comparison.keys())
+    return comparison
 
 
 def compare_browse_images(test_path, ref_path):
