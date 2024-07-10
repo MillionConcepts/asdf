@@ -1,24 +1,50 @@
-import numpy as np
-import pandas as pd
+import random
+
+from string import ascii_letters, digits, printable
+
+from random import choices, randint
+
+from types import NoneType
+
+from operator import eq
+from pathlib import Path
 import re
-import rich
-import shutil
-from PIL import Image
+from typing import (
+    Collection, Hashable, Literal, NotRequired, Optional, TypedDict, Union
+)
+from unittest.mock import patch
+
 from astropy.io import fits
 from cytoolz import valfilter
-from dustgoggles.func import disjoint, intersection, constant
+from dustgoggles.func import constant, disjoint, intersection
 from fs.osfs import OSFS
-from operator import eq
-from unittest.mock import patch
+import numpy as np
+import pandas as pd
+from PIL import Image
+import rich
+import shutil
 
 import asdf.chatter
 import asdf.cli_endpoint
 import asdf.flow
 import asdf.pretty
 
+# noinspection PyTypedDict
+RELEVANT_TYPECODES = ''.join(
+    {*[np.typecodes[t] for t in ['AllInteger', 'AllFloat']], 'O'}
+)
+RNG = np.random.default_rng()
 RUNTIME_VARIABLE_COLUMNS = re.compile(
     r"(ASDF_VERSION|FILE_TIMESTAMP|CREATOR|.*_PATH)"
 )
+
+
+def _insert_nulls_inplace(
+    series: pd.Series, length: int, null: Union[NoneType, np.nan, Literal['-']]
+) -> None:
+    series.loc[
+        RNG.choice(series.index, RNG.integers(1, min(length, 20)))
+    ] = null
 
 
 def tree(root_path):
@@ -44,43 +70,73 @@ def _undash(series):
         return series
 
 
-def compare_elements(r, t, varcols=()):
-    mismatches = {}
-    maxlen = min(len(r), len(t))
-    for c in set(r.columns).intersection(t.columns).difference(varcols):
-        rv, tv = r[c].iloc[:maxlen].copy(), t[c].iloc[:maxlen].copy()
-        rv, tv = map(_undash, (rv, tv))
-        if all(map(pd.api.types.is_float_dtype, (rv, tv))):
-            equal = np.isclose
-        else:
-            equal = eq
-        val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
-        if val_mismatch.any():
-            mismatches[c] = {
-                'ref': rv[val_mismatch].values,
-                'test': tv[val_mismatch].values,
-                'ix': val_mismatch.index[val_mismatch].values
-            }
-    return mismatches
+class SeriesComparison(TypedDict):
+    ref: pd.Series
+    test: pd.Series
+    ix: pd.Index
 
 
-def compare_csv_files(ref_path, test_path, varcols=()):
+class CSVComparison(TypedDict):
+    row_count: NotRequired[dict[Literal["ref", "test"], int]]
+    column_count: NotRequired[dict[Literal["ref", "test"], int]]
+    column_names: NotRequired[dict[Literal["new", "missing"], set[Hashable]]]
+    elements: NotRequired[SeriesComparison]
+    issues: NotRequired[
+        list[Literal["row_count", "column_count", "column_names", "elements"]]
+    ]
+
+
+def compare_series(
+    ref: pd.Series, test: pd.Series
+) -> Optional[SeriesComparison]:
+    maxlen = min(len(ref), len(test))
+    rv, tv = map(lambda s: _undash(s.iloc[:maxlen].copy()), (ref, test))
+    if all(map(pd.api.types.is_float_dtype, (rv, tv))):
+        equal = np.isclose
+    else:
+        equal = eq
+    val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
+    if not val_mismatch.any():
+        return None
+    return {
+        k: s[val_mismatch].values
+        for k, s in zip(('ref', 'test', 'ix'), (rv, tv, val_mismatch.index))
+    }
+
+
+def compare_dfs(
+    ref: pd.DataFrame, test: pd.DataFrame, varcols: Collection[Hashable] = ()
+) -> CSVComparison:
     comparison = {}
-    r, t = map(pd.read_csv, (ref_path, test_path))
-    if len(r) != len(t):
-        comparison["row_count"] = {"ref": len(r), "test": len(t)}
-    if len(r.columns) != len(t.columns):
+    if len(ref) != len(test):
+        comparison["row_count"] = {"ref": len(ref), "test": len(test)}
+    if len(ref.columns) != len(test.columns):
         comparison["column_count"] = {
-            "ref": len(r.columns), "test": len(t.columns)
+            "ref": len(ref.columns), "test": len(test.columns)
         }
-    missing_cols = set(r.columns).difference(t.columns)
-    new_cols = set(t.columns.difference(r.columns))
+    missing_cols = set(ref.columns).difference(test.columns)
+    new_cols = set(test.columns.difference(ref.columns))
     if len(missing_cols) + len(new_cols) > 0:
         comparison["column_names"] = {"new": new_cols, "missing": missing_cols}
-    if len(value_mismatches := compare_elements(r, t, varcols)) > 0:
-        comparison["elements"] = value_mismatches
-    comparison["issues"] = list(comparison.keys())
+    shared = set(ref.columns).intersection(test.columns).difference(varcols)
+    element_mismatches = valfilter(
+        lambda d: d is not None,
+        {c: compare_series(ref[c], test[c]) for c in shared}
+    )
+    if len(element_mismatches) > 0:
+        comparison["elements"] = element_mismatches
+    if len(comparison.keys()) > 0:
+        comparison["issues"] = list(comparison.keys())
     return comparison
+
+
+def compare_csv_files(
+    ref_path: Union[str, Path],
+    test_path: Union[str, Path],
+    varcols: Collection[Hashable] = ()
+) -> CSVComparison:
+    # noinspection PyTypeChecker
+    return compare_dfs(*map(pd.read_csv, (ref_path, test_path)), varcols)
 
 
 def compare_browse_images(test_path, ref_path):
@@ -232,3 +288,35 @@ def regen_asdf_e2e_case(case):
     # checksum_df.to_csv(
     #     Path(case["temp_path"], case["checksum_path"].name), index=False
     # )
+
+
+def _random_string_series(length: int) -> pd.Series:
+    strings = [
+        ''.join(RNG.choice(tuple(printable), RNG.integers(0, 50)))
+        for _ in range(length)
+    ]
+    return pd.Series(strings)
+
+
+def make_awful_random_dataframe():
+    colnames = [
+        ''.join(RNG.choice(tuple(ascii_letters + digits), 12))
+        for _ in range(randint(1, 50))
+    ]
+    dtype_codes = RNG.choice(tuple(RELEVANT_TYPECODES), len(colnames))
+    length, columns = RNG.integers(1, 3000), {}
+    for colname, code in zip(colnames, dtype_codes):
+        null = np.nan
+        if code in np.typecodes['AllFloat']:
+            columns[colname] = pd.Series(
+                RNG.random(length) * 10.0 ** RNG.integers(-10, 10, length)
+            )
+        elif code in np.typecodes['AllInteger']:
+            columns[colname] = pd.Series(RNG.integers(-10000, 10000, length))
+        elif code == 'O':
+            columns[colname] = _random_string_series(length)
+            # noinspection PyTypeChecker
+            null = RNG.choice([None, '-', np.nan])
+        if code in np.typecodes['AllFloat'] + 'O' and RNG.random() > 0.5:
+            _insert_nulls_inplace(columns[colname], length, null)
+    return pd.DataFrame(columns)

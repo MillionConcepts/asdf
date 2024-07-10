@@ -1,9 +1,15 @@
+from string import printable
+
+import pandas as pd
+import random
+
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-from asdf.tests.utilz.test_utilz import compare_browse_images
+from asdf.tests.utilz.test_utilz import compare_browse_images, \
+    make_awful_random_dataframe, RNG, compare_csv_files
 
 COMP_EXPECTATIONS = {
     'alpha': ['images have different modes or color spaces'],
@@ -52,3 +58,46 @@ def test_compare_browse_images():
     finally:
         for path in testpaths.values():
             path.unlink(missing_ok=True)
+
+
+def test_compare_csv_files():
+    ref_path = Path(__file__).parent / "ref.csv"
+    cases = ("ok", "colcount", "rowcount", "colnames", "elements")
+    test_paths = {c: Path(__file__).parent / f"test_{c}.csv" for c in cases}
+    for _ in range(20):
+        ref_df = make_awful_random_dataframe()
+        ref_df.to_csv(ref_path, index=None)
+        for case in cases:
+            test_df = ref_df.copy()
+            if case == "colcount":
+                test_df = test_df.iloc[:, 0:RNG.integers(1, len(ref_df) - 1)]
+            elif case == "rowcount":
+                test_df = test_df.iloc[0:RNG.integers(1, len(ref_df) - 1)]
+            elif case == "colnames":
+                bad_colix = RNG.integers(len(test_df.columns))
+                test_df.columns = [
+                    c if i != bad_colix else f"{test_df.columns[bad_colix]}_haha!"
+                    for i, c in enumerate(test_df.columns)
+                ]
+            elif case == "elements":
+                tcol = test_df.columns[RNG.integers(len(test_df.columns))]
+                trows = RNG.choice(test_df.index, RNG.integers(1, len(ref_df) - 1))
+                if pd.api.types.is_float_dtype(test_df[tcol]):
+                    test_df.loc[trows, tcol] = RNG.random(len(trows))
+                elif pd.api.types.is_integer_dtype(test_df[tcol]):
+                    test_df.loc[trows, tcol] = RNG.integers(-100, 100, len(trows))
+                else:
+                    test_df.loc[
+                        trows, tcol
+                    ] = RNG.choice([*printable, None], len(trows))
+            elif case != "ok":
+                raise ValueError(f"unknown CSV test case {case}")
+            test_df.to_csv(test_paths[case], index=None)
+            comparison = compare_csv_files(ref_path, test_paths[case])
+
+
+
+
+
+
+
