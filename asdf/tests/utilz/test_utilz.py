@@ -23,7 +23,7 @@ RUNTIME_VARIABLE_COLUMNS = re.compile(
 
 def tree(root_path):
     tree_fs = OSFS(str(root_path))
-    return list(tree_fs.walk.files())
+    return list(map(lambda f: f.strip('/'), tree_fs.walk.files()))
 
 
 def record_mismatches(results, absent, novel):
@@ -96,7 +96,7 @@ def compare_browse_images(test_path, ref_path):
     diff = abs(test_array.astype(np.float32) - ref_array.astype(np.float32))
     if np.mean(diff) > 1.5e-2:
         problems.append(
-            f" images differ on average by {np.mean(diff)}, > 1.5e-2"
+            f"images differ on average by {np.mean(diff)}, > 1.5e-2"
         )
     if diff[diff > 50].size > 500:
         problems.append(f"images have > 500 pixels that differ by > 50")
