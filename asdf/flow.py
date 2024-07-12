@@ -451,10 +451,13 @@ def asdf_body(
                 "something has gone wrong in loading ROI data.",
                 style="red bold",
             )
-        if bandset.pixmaps:
+        if bandset.pixmaps is not None and len(bandset.pixmaps) > 0:
             aprint("... counting ROIs on pixel flag maps ...")
             bandset.count_pixmaps()
             complain_about_pixmap_counts(bandset.pixmap_counts)
+        marslab_data = (
+            marslab_data.sort_values(by='COLOR').reset_index(drop=True)
+        )
         if not recreate_from:
             # prompt users for info on each ROI
             marslab_data = input_roi_metadata(marslab_data, ci)
