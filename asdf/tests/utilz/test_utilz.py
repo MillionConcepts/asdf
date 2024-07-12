@@ -87,12 +87,12 @@ class CSVComparison(TypedDict):
 
 
 def compare_series(
-    ref: pd.Series, test: pd.Series
+    ref: pd.Series, test: pd.Series, rtol: float = 1e-5, atol: float = 1e-5
 ) -> Optional[SeriesComparison]:
     maxlen = min(len(ref), len(test))
     rv, tv = map(lambda s: _undash(s.iloc[:maxlen].copy()), (ref, test))
     if all(map(pd.api.types.is_float_dtype, (rv, tv))):
-        equal = np.isclose
+        equal = lambda a, b: np.isclose(a, b, rtol, atol)
     else:
         equal = eq
     val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
@@ -105,8 +105,16 @@ def compare_series(
 
 
 def compare_dfs(
-    ref: pd.DataFrame, test: pd.DataFrame, varcols: Collection[Hashable] = ()
+    ref: pd.DataFrame,
+    test: pd.DataFrame,
+    varcols: Collection[str] = (),
+    key_column: Optional[Hashable] = None,
+    rtol: float = 1e-5,
+    atol: float = 1e-5
 ) -> CSVComparison:
+    if key_column is not None:
+        ref = ref.sort_values(by=key_column).reset_index(drop=True)
+        test = test.sort_values(by=key_column).reset_index(drop=True)
     comparison = {}
     if len(ref) != len(test):
         comparison["row_count"] = {"ref": len(ref), "test": len(test)}
@@ -118,10 +126,13 @@ def compare_dfs(
     new_cols = set(test.columns.difference(ref.columns))
     if len(missing_cols) + len(new_cols) > 0:
         comparison["column_names"] = {"new": new_cols, "missing": missing_cols}
-    shared = set(ref.columns).intersection(test.columns).difference(varcols)
+    shared = set(ref.columns).intersection(test.columns)
+    if len(varcols) > 0:
+        varpat = re.compile('|'.join(varcols))
+        shared = {s for s in shared if not re.match(varpat, s)}
     element_mismatches = valfilter(
         lambda d: d is not None,
-        {c: compare_series(ref[c], test[c]) for c in shared}
+        {c: compare_series(ref[c], test[c], rtol, atol) for c in shared}
     )
     if len(element_mismatches) > 0:
         comparison["elements"] = element_mismatches
@@ -133,10 +144,19 @@ def compare_dfs(
 def compare_csv_files(
     ref_path: Union[str, Path],
     test_path: Union[str, Path],
-    varcols: Collection[Hashable] = ()
+    varcols: Collection[Hashable] = (),
+    key_column: Optional[Hashable] = None,
+    rtol: float = 1e-5,
+    atol: float = 1e-5
 ) -> CSVComparison:
     # noinspection PyTypeChecker
-    return compare_dfs(*map(pd.read_csv, (ref_path, test_path)), varcols)
+    return compare_dfs(
+        *map(pd.read_csv, (ref_path, test_path)),
+        varcols,
+        key_column,
+        rtol,
+        atol
+    )
 
 
 def compare_browse_images(test_path, ref_path):
