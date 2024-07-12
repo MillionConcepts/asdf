@@ -174,7 +174,7 @@ def find_and_offer_observations(
             return tuple(results.values())[int(obs_choice) - 1], False
         return tuple(results.values()), True
     else:
-        if not confirm_observation():
+        if confirm_observation() is False:
             return reject_scan(
                 "halting due to user rejection of file list. If "
                 "[italic]asdf[/italic] didn't find what you expected, "
