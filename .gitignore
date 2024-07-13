@@ -171,3 +171,4 @@ logs/
 /rapid/data/
 /asdf/tests/asdftestlog.txt
 
+!/asdf/tests/data/e2e_input_tests/

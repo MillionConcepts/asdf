@@ -1,12 +1,3 @@
-from pathlib import Path
-
-
-E2E_INPUT_TEST_PATHS = {
-    "iof_path": "/datascratch/zcam_data/products/1180/iof",
-    "sel_path": "/home/michael/Desktop/asdf/asdf/tests/data/e2e_input_tests/test_0/data/zcam03921.sel"
-}
-
-
 E2E_INPUT_TEST_RESPONSES = {
     # answer 1 to everything
     0: ('1',) * 14,

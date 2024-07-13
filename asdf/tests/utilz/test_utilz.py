@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 from astropy.io import fits
 from cytoolz import valfilter
-from dustgoggles.func import constant, disjoint, intersection
+from dustgoggles.func import constant, disjoint, intersection, gmap
 from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
@@ -28,6 +28,7 @@ import asdf.chatter
 import asdf.cli_endpoint
 import asdf.flow
 import asdf.pretty
+from asdf.tests.utilz.settings import VARCOLS
 
 # noinspection PyTypedDict
 RELEVANT_TYPECODES = ''.join(
@@ -194,30 +195,66 @@ def compare_roi_fits(test_path, ref_path):
     return problems
 
 
-def dispatched_asdf_comparison(file, test_fs, ref_fs, ignore_fields=None):
-    test_path, ref_path = (test_fs.getsyspath(file), ref_fs.getsyspath(file))
-    if file.endswith("csv"):
-        return compare_csv_files(test_path, ref_path, ignore_fields)
-    if file.endswith("png"):
+def dispatched_asdf_comparison(
+    file,
+    ref_root: Path,
+    test_root: Path,
+    use_color_as_key_column: bool = True,
+    marslab_rtol: float = 1e-5,
+    marslab_atol: float = 1e-5,
+    varcols: Collection[str] = VARCOLS,
+):
+    test_path, ref_path = test_root / file, ref_root / file
+    if file.suffix == '.csv' and file.name.startswith('marslab'):
+        return compare_csv_files(
+            ref_path,
+            test_path,
+            varcols,
+            "COLOR" if use_color_as_key_column is True else None,
+            marslab_rtol,
+            marslab_atol
+        )
+    if file.suffix == ".png":
         return compare_browse_images(test_path, ref_path)
-    if file.endswith(".fits.gz"):
+    if file.suffixes == [".fits", ".gz"]:
         return compare_roi_fits(test_path, ref_path)
+    # TODO, maybe: write a comparison for these?
+    if file.suffix == '.sel':
+        return []
     return [f"unknown file type"]
 
 
-def compare_asdf_outputs(test_root, ref_root, ignore_fields=None):
-    test, reference = tree(test_root), tree(ref_root)
+def compare_asdf_outputs(
+    ref_root: Path,
+    test_root: Path,
+    use_color_as_key_column: bool = True,
+    marslab_rtol: float = 1e-5,
+    marslab_atol: float = 1e-5,
+    varcols: Collection[str] = VARCOLS,
+    skiptypes: Collection[str] = ()
+):
+    test, reference = gmap(Path, tree(test_root)), gmap(Path, tree(ref_root))
+    if len(skiptypes) > 0:
+        skippy = re.compile('|'.join(skiptypes))
+        test = [t for t in test if not re.match(skippy, t.name)]
+        reference = [r for r in reference if not re.match(skippy, r.name)]
     problems = {}
     novel_files, absent_files = disjoint(test, reference)
     # note files that are completely new or missing
-    if len(novel_files + absent_files):
+    if len(novel_files + absent_files) > 0:
         problems |= record_mismatches(problems, absent_files, novel_files)
     # do comparisons between others
     for file in intersection(test, reference):
-        problems[file] = dispatched_asdf_comparison(
-            file, OSFS(test_root), OSFS(ref_root), ignore_fields
+        problems[str(file)] = dispatched_asdf_comparison(
+            file,
+            ref_root,
+            test_root,
+            use_color_as_key_column,
+            marslab_rtol,
+            marslab_atol,
+            varcols
         )
-    return valfilter(lambda x: x != [], problems)
+    return valfilter(lambda x: x is not None and len(x) > 0, problems)
 
 
 def print_mismatches(absent_files, novel_files):
@@ -340,3 +377,15 @@ def make_awful_random_dataframe():
         if code in np.typecodes['AllFloat'] + 'O' and RNG.random() > 0.5:
             _insert_nulls_inplace(columns[colname], length, null)
     return pd.DataFrame(columns)
+
+
+def callgen(responses):
+    """creates a generator-like callable"""
+    response_iter = iter(responses)
+
+    def get_next_response(*_, **__):
+        resp = next(response_iter)
+        print(f" ****{resp}**** ")
+        return resp
+
+    return get_next_response
