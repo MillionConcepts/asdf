@@ -389,3 +389,21 @@ def callgen(responses):
         return resp
 
     return get_next_response
+
+
+# these  are lazy convenience functions for recording console input when
+# generating test cases
+def make_input_tee(fn):
+    def tee_input():
+        result = input()
+        with open(fn, "a") as stream:
+            stream.write(f"{result}\n")
+        return result
+
+    return tee_input
+
+
+def record_console_input(fn='recording.log'):
+    input_patch = patch("rich.console.input", make_input_tee(fn))
+    input_patch.start()
+    return input_patch

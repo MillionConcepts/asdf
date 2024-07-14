@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from asdf.tests.utilz.settings import REF_INPUT_PATH
+from asdf.tests.utilz.settings import REF_INPUT_DIR
 
-PROD_PATH = REF_INPUT_PATH / "products"
-ROI_PATH = REF_INPUT_PATH / "rois"
+PROD_PATH = REF_INPUT_DIR / "products"
+ROI_PATH = REF_INPUT_DIR / "rois"
 
 # tests for a bunch of different user responses on the same inputs
 USER_INPUT_PRODUCT_PATH = PROD_PATH / "1180/iof"
@@ -45,25 +45,27 @@ USER_INPUT_TEST_RESPONSES = {
 }
 
 NO_ROI_CASES = {
-    1: {'path': PROD_PATH / "0088/iof", 'noninteractive': True},
-    2: {'path': PROD_PATH / "0364/iof"}
+    0: {'path': PROD_PATH / "0036/iof", 'noninteractive': True},
+    1: {'path': PROD_PATH / "0557/iof"}
 }
 FULL_CASES = {
-    1: {
+    0: {
         'path': PROD_PATH / "0782/iof",
         'roi_path': (
             ROI_PATH / "roi_SOL0782_zcam03635_RSM1114-regolith.fits.gz"
         ),
         'obs_ix': 1,
-        'responses': (
-
-        )
+        'responses': (2, 1, 1, 1, "\n", 1, 4, 2, 2, 1, 1, 1, 1, 2, 2, 2, 1)
     },
-    2: {
+    1: {
         'path': PROD_PATH / "0383/iof",
         'roi_path': ROI_PATH / 'roi_SOL0383_zcam03336_RSM98.fits.gz',
         'obs_ix': 2,
-        'responses': ()
+        'responses': (
+            1, 2, 1, 1, 1, 3, 1, 2, 2, "good regolith", "bad regolith",
+            "excellent regolith", "not sure", "mixed feelings again",
+            "i forget about this one"
+        )
     }
 }
 TEST_CASES = [

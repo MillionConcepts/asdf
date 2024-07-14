@@ -5,7 +5,7 @@ settings will not be optimal across environments.
 
 THREADS = {
     'save': 5,
-    'look': None,
+    'look': 5,
     'upload': 3,
     'mosaic_gen': 6,
     'mosaic_save': None,
