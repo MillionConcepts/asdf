@@ -8,9 +8,9 @@ import sys
 from itertools import product
 from pathlib import Path
 
-import numpy as np
-from matplotlib.cm import register_cmap
+from matplotlib import colormaps
 from matplotlib.colors import ListedColormap
+import numpy as np
 
 
 # TODO: clean this up
@@ -63,9 +63,9 @@ def make_red_blue_accent_cmap():
     return ListedColormap(vals, name="red_blue")
 
 
-register_cmap(cmap=make_aqua_pink_accent_cmap())
-register_cmap(cmap=make_red_blue_accent_cmap())
-register_cmap(cmap=make_orange_teal_cmap())
+colormaps.register(cmap=make_aqua_pink_accent_cmap())
+colormaps.register(cmap=make_red_blue_accent_cmap())
+colormaps.register(cmap=make_orange_teal_cmap())
 
 
 def make_bilateralfilter(d, sigmaColor, sigmaSpace):
