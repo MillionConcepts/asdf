@@ -7,7 +7,6 @@ import json
 import pytest
 import shutil
 
-import asdf_settings.process
 from asdf.console import ASDFLOG
 from asdf.tests.e2e_cases import TEST_CASES
 from asdf.tests.utilz.e2e_utilz import generate_e2e_outputs

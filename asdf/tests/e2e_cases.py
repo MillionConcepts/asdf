@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from asdf.tests.utilz.settings import REF_INPUT_DIR
 
 PROD_PATH = REF_INPUT_DIR / "products"
@@ -85,4 +83,3 @@ TEST_CASES += [
 ]
 
 TEST_CASES += [{'name': f'full_{k}'} | v for k, v in FULL_CASES.items()]
-

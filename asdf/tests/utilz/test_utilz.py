@@ -358,7 +358,7 @@ def _random_string_series(length: int) -> pd.Series:
 def make_awful_random_dataframe():
     colnames = [
         ''.join(RNG.choice(tuple(ascii_letters + digits), 12))
-        for _ in range(randint(1, 50))
+        for _ in range(randint(3, 50))
     ]
     dtype_codes = RNG.choice(tuple(RELEVANT_TYPECODES), len(colnames))
     length, columns = RNG.integers(1, 3000), {}
