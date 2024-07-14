@@ -88,6 +88,7 @@ def bulk_scrape_asdf_metadata(
     return bulk_scraped
 
 
+# TODO: not currently used. refer to dead code in asdf.scan
 def get_pixel_map_heuristic(putative_pixmap_path):
     data = pdr.read(putative_pixmap_path)
     if data.metaget("PIXEL_MAP_VALUES") is not None:

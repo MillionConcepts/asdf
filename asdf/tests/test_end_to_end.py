@@ -41,7 +41,7 @@ def test_e2e(case):
         if (TEST_OUTPUT_DIR / case['name']).exists():
             shutil.rmtree(TEST_OUTPUT_DIR / case['name'])
         if len(issues) > 0:
-            ERRDUMP_LOG_PATH.parent.mkdir(exist_ok=True, parents=True)
+            ERRDUMP_LOG_PATH.mkdir(exist_ok=True)
             err_json_file = ERRDUMP_LOG_PATH / f"{case['name']}.json"
             with err_json_file.open("w") as stream:
                 stream.write(

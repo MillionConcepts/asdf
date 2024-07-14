@@ -635,20 +635,6 @@ class ZcamBandSet(BandSet):
             for eye in ("left", "right"):
                 self.draw_eye_pixmaps(edgemaps, eye, verbose)
 
-    def titular_target(self):
-        """
-        return the observation name, if set, falling back
-        to the first ROI target name, if available
-        """
-        target_name = self.metadata["NAME"].iloc[0]
-        if (not target_name) and (self.counts is not None):
-            if len(self.counts["TARGET"].dropna()) > 0:
-                target_name = self.metadata["TARGET"].dropna().iloc[0]
-        # TODO: check if this is a nan, make it an empty string or whatever
-        if target_name:
-            return target_name
-        return ""
-
     def match_navcam(self, roots: Optional[Sequence[Path]] = None):
         roots = [] if roots is None else roots
         roots.append(Path(self.metadata['PATH'][0]).parents[2])

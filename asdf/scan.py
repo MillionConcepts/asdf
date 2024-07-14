@@ -34,7 +34,7 @@ from asdf.parse import (
     looks_like_marslab,
     looks_like_roi,
 )
-from asdf.labels import get_pixel_map_heuristic, cached_aux_skimmer
+from asdf.labels import cached_aux_skimmer
 
 # TODO: make all the error-printing statements in this module more consistent
 #  with style in other modules

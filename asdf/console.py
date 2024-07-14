@@ -100,6 +100,7 @@ class SpinTextColumn(TextColumn):
             ]
         else:
             self.spinners = []
+        # NOTE: the postspinner feature is not currently used
         if postspinner_names:
             self.postspinners = [
                 Spinner(spinner_name, style=style, speed=speed)
@@ -116,10 +117,12 @@ class SpinTextColumn(TextColumn):
             )
         else:
             text = Text(_text, style=self.style, justify=self.justify)
+        # NOTE: these objects are not currently ever highlighted
         if self.highlighter:
             self.highlighter.highlight(text)
         if self.spinners:
             text = render_spinners(self.spinners, task) + text
+        # NOTE: postspinners are not currently used
         if self.postspinners:
             text = text + render_spinners(self.postspinners, task)
         return text
