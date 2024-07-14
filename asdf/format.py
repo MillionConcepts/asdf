@@ -2,11 +2,13 @@
 formatting and helper functions for other asdf modules.
 """
 from functools import partial, cache
+import io
 import getpass
 from hashlib import md5
 import os
 from pathlib import Path
 import re
+from typing import Literal, Optional, Union, Callable
 
 from dustgoggles.structures import NestingDict
 from marslab.compat.xcam import DERIVED_CAM_DICT
@@ -15,9 +17,9 @@ from marslab.imgops.pltutils import dpi_from_image
 from marslab.imgops.regions import count_rois_on_image, roi_stats
 from marslab.imgops.render import make_thumbnail, simple_figure
 import matplotlib.figure
-import matplotlib.font_manager as mplf
 import numpy as np
 import pandas as pd
+from PIL.Image import Image
 
 from asdf.console import ASDF_CONSOLE, aprint
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
@@ -26,7 +28,7 @@ from asdf_settings import rapidlooks, sources
 
 def compile_looks():
     """
-    compile looks at runtime -- makes settings.rapidlooks readable while
+    "Compile" looks at runtime. makes settings.rapidlooks readable while
     avoiding circular imports.
     """
     from asdf_settings.generators import look_assembler
@@ -96,11 +98,20 @@ def save_plainly(look, filename, outpath):
         look.save(Path(outpath, filename))
 
 
-def annotate_and_save(title, annotation, look, filename, outpath):
-    # TODO: decide if these annotation things should live on zcambandset --
-    #  this is not urgent. I think _maybe_ they should be separate.
+def annotate_and_save(
+    title: str,
+    annotation: str,
+    look: Union[np.ndarray, matplotlib.figure.Figure, Image],
+    filename: str,
+    outpath: Union[Path, str]
+) -> Literal[0]:
+    """
+    Format standard annotations for a figure and save the annotated figure
+    to disk in a nice compact layout.
+    """
     if not isinstance(look, matplotlib.figure.Figure):
         look = simple_figure(look)
+    # noinspection PyTypeChecker
     render_figure_labels(look.axes[0], title, annotation)
     look.savefig(
         Path(outpath, filename),
@@ -109,10 +120,15 @@ def annotate_and_save(title, annotation, look, filename, outpath):
         pad_inches=0
     )
     absolutely_destroy(look)
+    # TODO: why does this return 0?
     return 0
 
 
-def render_figure_labels(ax, title, annot):
+def render_figure_labels(ax: matplotlib.axes.Axes, title: str, annot: str):
+    """
+    Typeset standard title and annotation onto an Axes object. Modifies that
+    Axes inplace.
+    """
     render = partial(
         ax.text,
         x=0.5,
@@ -131,8 +147,14 @@ def render_figure_labels(ax, title, annot):
     render(x=a_x, y=a_y, s=annot, fontproperties=rapidlooks.ANNOTATION_FONT)
 
 
-def clean_sequence_id(seq_id):
-    # Make sure that the sequence ID is in the proper format
+def clean_sequence_id(seq_id: Union[str, int]) -> str:
+    """
+    Put a sequence ID in a specific format: 'ZCAM' + 5 integers. This is
+    necessary because there are various formats used, including lowercase
+    and just the integer.
+    """
+    # TODO: this will return None if seq_id is 0 as well as "", which we may
+    #  not want
     if not seq_id:
         return None
     if "ZCAM" in str(seq_id).upper():
@@ -142,11 +164,11 @@ def clean_sequence_id(seq_id):
 
 
 def parse_abbreviated_inputs(
-    sol,
-    seq_id,
-    root_path_abbreviation=None,
-    product_subdirectory=None,
-):
+    sol: Union[str, int],
+    seq_id: Union[str, int],
+    root_path_abbreviation: Optional[str] = None,
+    product_subdirectory: Optional[str] = None,
+) -> Union[tuple[Path, str], tuple[None, None]]:
     """Commonly used directory paths have standard abbreviations which are
     defined in asdf_settings.sources. Defining them in settings rather than
     this function facilitates environment-specific deployments (local, ASU,
@@ -156,6 +178,7 @@ def parse_abbreviated_inputs(
     asdf_settings.sources.PATH_ABBREVIATIONS and IOF subdirectory.
     Also returns a correctly formatted seq_id (by prepending 'ZCAM').
     """
+    # TODO: this will return "" if sol is 0, which we may not want
     sol_path = format(int(sol), "0>4") if sol else ""
     # default path root and subdirectory, which can be overridden
     if root_path_abbreviation:
@@ -183,7 +206,14 @@ def parse_abbreviated_inputs(
     return directory, clean_sequence_id(seq_id)
 
 
-def make_rapidlook_thumbnails(thumblooks, size):
+def make_rapidlook_thumbnails(
+    thumblooks: dict[str, Union[matplotlib.figure.Figure, np.ndarray]],
+    size: tuple[int, int]
+) -> dict[str, io.BytesIO]:
+    """
+    Convert a dict of image arrays/Figures into a dict of BytesIO objects --
+    buffers containing thumbnailed versions of those images as binary blobs.
+    """
     aprint("... making thumbnails (if necessary) ...")
     thumbnails = {}
     for name, image in thumblooks.items():
@@ -191,7 +221,16 @@ def make_rapidlook_thumbnails(thumblooks, size):
     return thumbnails
 
 
-def preprocess_scan_path(root_directory, explicit_path):
+# TODO: check if the explicit file functionality here and elsewhere actually
+#  works. It is never actually used.
+def preprocess_scan_path(
+    root_directory: Optional[Union[str, Path]],
+    explicit_path: Optional[Union[str, Path]]
+) -> tuple[Path, Optional[Union[str, Path]]]:
+    """
+    Pick a path to scan based on a supplied root directory, or, optionally,
+    a specific file. Provide useful error messages if they don't exist.
+    """
     if not (root_directory or explicit_path):
         raise ValueError(
             "sorry, I need an explicit or abbreviated path to find files."
@@ -263,9 +302,14 @@ METADATA_DTYPES = {
     "SOLAR_AZIMUTH": "float32",
     "SCLK": "float64",
 }
+"""Predefined data types for some metadata fields loaded from PDS3 labels"""
 
 
-def md5sum(path_or_file, hash_function=md5):
+def md5sum(
+    path_or_file: Union[str, Path, io.BytesIO],
+    hash_function: Callable = md5
+) -> str:
+    """Convenience function for generating checksums from a file or buffer"""
     hasher = hash_function()
     if isinstance(path_or_file, (str, Path)):
         with open(path_or_file, "rb") as file_to_be_hashed:
@@ -278,8 +322,12 @@ def md5sum(path_or_file, hash_function=md5):
     return hasher.hexdigest()
 
 
+# TODO: this won't work properly with a BytesIO or other BufferedReader input,
+#  which leads me to wonder if we're ever actually using that functionality of
+#  md5sum() in this library.
 @cache
 def cached_md5sum(file):
+    """Simply a cached version of md5sum()."""
     return md5sum(file)
 
 

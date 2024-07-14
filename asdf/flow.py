@@ -1,14 +1,18 @@
 """
 top-level handler loop for asdf / fdsa
 """
-import getpass
-import shutil
-import zlib
+from __future__ import annotations
+
+import rich
 from functools import partial
+import getpass
 from operator import contains
 import os
 from pathlib import Path
+import shutil
+from typing import TYPE_CHECKING, Union, Optional
 import warnings
+import zlib
 
 from dustgoggles.func import catch_interaction
 import matplotlib.figure
@@ -23,20 +27,22 @@ from rich.rule import Rule
 
 from asdf.asdf_utils import null_marslab_data_section
 from asdf.chatter import (
-    input_roi_metadata,
-    handle_map_checks,
     collect_dispersed_metadata,
-    save_looks,
-    pretty_plot_bandset,
+    check_mosaic_paths,
+    complain_about_pixmap_counts,
     fdsa_insert,
-    complain_about_pixmap_counts, check_mosaic_paths,
+    handle_map_checks,
+    input_roi_metadata,
+    pretty_plot_bandset,
+    save_looks,
 )
 from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint, ASDFLOG
 from asdf.format import (
-    make_rapidlook_thumbnails,
-    make_asdf_outpath,
-    compile_looks,
     add_image_hashes,
+    compile_looks,
+    make_asdf_outpath,
+    make_rapidlook_thumbnails,
+
 )
 from asdf.network import upload_asdf_analysis, upload_mosaic
 from asdf.pretty import name_prompt
@@ -44,11 +50,18 @@ from asdf.zcam_bandset import ZcamBandSet
 from asdf_settings import process, metadata as metadata_settings, rapidlooks
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS
 
+if TYPE_CHECKING:
+    from PIL.Image import Image
 
-def pick_thumbs(rapids):
+
+def _pickthumbs(
+    rapids: dict[str, Union[Image, matplotlib.figure.Figure]]
+) -> dict[str, Image]:
     """
     keep images that are to be thumbnailed for upload, discard those that are
-    not. waste not memory, want not memory.
+    not (waste not memory, want not memory). In the process, convert any
+    matplotlib Figures that have not already been converted to PIL Images
+    to PIL Images.
     """
     cache = {}
     # this convoluted-looking selector is to avoid getting figures
@@ -65,23 +78,25 @@ def pick_thumbs(rapids):
     return cache
 
 
-
-
-
+# TODO, maybe: function body here is pretty messy and repetitive-looking.
 def _process_mosaic(
-    observation,
-    roi_path,
-    noninteractive,
-    upload,
-    console,
+    observation: pd.DataFrame,
+    roi_path: Optional[str],
+    noninteractive: bool,
+    upload: bool,
+    console: rich.Console,
     # TODO: assess whether this is ever an option
-    save_plain_images,
-    skip_rapidlooks,
-    reuse_mosaic,
-    keep_intermediate,
-    debug,
-    seriously_no_images
+    save_plain_images: bool,
+    skip_rapidlooks: bool,
+    reuse_mosaic: bool,
+    keep_intermediate: bool,
+    debug: bool,
+    seriously_no_images: bool
 ):
+    """
+    Special-case application body for mosaic mode. Should only be called from
+    asdf_body().
+    """
     # TODO: take this out if it's never an option
     save_plain_images = True
     if roi_path is not None:
@@ -262,7 +277,7 @@ def _process_mosaic(
         with ASDF_PROGRESS as prog:
             ASDF_RPH.task_id = prog.add_task("", total=len(mosaic.looks) + 1)
             if upload is True:
-                thumbnail_staging |= pick_thumbs(mosaic.looks)
+                thumbnail_staging |= _pickthumbs(mosaic.looks)
             save_images(outpath=Path(outpath, "browse"), basename=mosaic.name)
             prog.remove_task(ASDF_RPH.task_id)
             mosaic.purge("looks")
@@ -282,28 +297,29 @@ def _process_mosaic(
 
 # TODO: add dry-run options for testing
 def asdf_body(
-    observation,
-    roi_path=None,
-    upload=False,
-    output=None,
-    skip_rapidlooks=False,
-    suffix="",
-    merspect=None,
-    noninteractive=False,
-    debug=False,
-    console=None,
-    mosaic=False,
-    save_plain_images=False,
-    skip_pixmaps=False,
-    skip_errmaps=True,
-    seriously_no_images=False,
-    reuse_mosaic=False,
-    keep_intermediate=False,
-    recreate_from=None,
-):
+    observation: pd.DataFrame,
+    roi_path: Optional[str] = None,
+    upload: bool = False,
+    output: Optional[str] = None,
+    skip_rapidlooks: bool = False,
+    suffix: str = "",
+    merspect: Optional[bool] = None,
+    noninteractive: bool = False,
+    debug: bool = False,
+    console: rich.console.Console = ASDF_CONSOLE,
+    mosaic: bool = False,
+    save_plain_images: bool = False,
+    skip_pixmaps: bool = False,
+    skip_errmaps: bool = True,
+    seriously_no_images: bool = False,
+    reuse_mosaic: bool = False,
+    keep_intermediate: bool = False,
+    recreate_from: Optional[str] = None,
+) -> None:
     """
-    body component of the asdf command line function -- can be called multiple
-    times from asdf_initiate in some cases.
+    Body component of the asdf application. Can be invoked one or more times
+    by an individual CLI execution, depending on settings. fdsa may call it
+    hundreds or thousands of times.
     """
     # do we have an roi file? if so, turn passed string into a Path
     roi_path = Path(roi_path) if roi_path else None
@@ -535,7 +551,7 @@ def asdf_body(
                 total=len(bandset.looks) + 1,
             )
             if upload:
-                thumbnail_staging |= pick_thumbs(bandset.looks)
+                thumbnail_staging |= _pickthumbs(bandset.looks)
             save_images(outpath=Path(outpath, "browse"), basename=bandset.name)
             prog.remove_task(ASDF_RPH.task_id)
         bandset.purge("looks")
@@ -553,7 +569,7 @@ def asdf_body(
             ):
                 bandset.make_context_images(verbose=True)
                 if not (skip_rapidlooks and not upload):
-                    thumbnail_staging |= pick_thumbs(bandset.looks)
+                    thumbnail_staging |= _pickthumbs(bandset.looks)
                 save_images(
                     outpath=Path(outpath, "data"),
                     basename=bandset.name + bandset.suffix,
