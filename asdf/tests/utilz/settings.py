@@ -4,9 +4,5 @@ from pathlib import Path
 
 VARCOLS = ("CREATOR", "FILE_TIMESTAMP", ".*_PATH$")
 
-E2E_INPUT_TEST_PATHS = {
-    "path": "/datascratch/zcam_data/products/1180/iof",
-    "roi_path": "/home/michael/Desktop/asdf/asdf/tests/data/e2e_input_tests/test_0/data/zcam03921.sel"
-}
-
+REF_INPUT_PATH = Path(__file__).parent.parent / "data/reference_inputs"
 ERRDUMP_LOG_PATH = Path(__file__).parent.parent / "logs" / "test_errors.log"
