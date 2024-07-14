@@ -16,17 +16,7 @@ from asdf.tests.utilz.settings import (
 )
 from asdf.tests.utilz.test_utilz import compare_asdf_outputs
 
-# pytest isn't good at attaching to child processes
-asdf_settings.process.THREADS = {
-    k: None for k in asdf_settings.process.THREADS
-}
-
 ASDFLOG.setLevel("ERROR")
-
-# TODO: add a suppress output option to asdf; the way I am using logging to
-#  control console output in asdf messes with pytest's log capturing pretty
-#  badly and makes it a hassle to diagnose errors, and it will be useful for
-#  some other applications as well
 
 
 def stamp():
