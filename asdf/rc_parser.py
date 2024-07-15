@@ -3,6 +3,7 @@ parser for "rc" responsivity-constant files used by the Mastcam-Z photometric
 calibration pipeline
 """
 from pathlib import Path
+from typing import Any
 
 from cytoolz import valfilter
 import pandas as pd
@@ -120,7 +121,7 @@ def fix_rc_roi_index(rc_roi_table, rc_file_format_version):
     return rc_roi_table
 
 
-def extract_roi_table(rc_roi_dict):
+def extract_roi_table(rc_roi_dict) -> pd.DataFrame:
     table = pd.DataFrame.from_dict(rc_roi_dict, orient='index')
     table.index = table.index.str.replace("ROI", "").str.strip()
     table.columns = table.loc['names'].str.upper().str.replace(" ", "_").values
@@ -133,7 +134,7 @@ def extract_roi_table(rc_roi_dict):
     return table.rename(index=names).T
 
 
-def read_rc_file(rc_fn):
+def read_rc_file(rc_fn) -> tuple[pd.DataFrame, dict[str, Any]]:
     with open(rc_fn) as file:
         rcfile = file.read()
     lines = filter(None, map(str.strip, rcfile.split("#")))

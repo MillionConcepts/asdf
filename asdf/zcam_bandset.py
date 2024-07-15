@@ -1,10 +1,15 @@
+"""
+Subclass of marslab.bandset.BandSet, along with helper functions, that
+implements ZCAM and asdf-specific behaviors.
+"""
 from collections.abc import MutableMapping
 import datetime as dt
 from functools import partial
 import os
+from io import BytesIO
 from pathlib import Path
 import shutil
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Union
 import warnings
 
 from dustgoggles.func import zero
@@ -64,11 +69,21 @@ from marslab.parse import site, drive
 from asdf.xyr import make_space_fits, make_spatial_products
 
 
-def sitedrive(path):
+def sitedrive(path: Path) -> tuple[str, str]:
+    """Parse site and drive numbers from a file path"""
     return site(path.name), drive(path.name)
 
 
-def polish_metadata(metadata, creation_time):
+def polish_metadata(
+    metadata: pd.DataFrame, creation_time: str
+) -> pd.DataFrame:
+    """
+    Last-pass fixup function for turning the compact, extended, or summary
+    dataframes of a ZcamBandSet into a nice clean writable format. Inserts
+    a file format, applies any defined column ordering, and drops any
+    duplicate columns.
+    """
+    # TODO: should this not be modifying metadata inplace?
     metadata["FILE_TIMESTAMP"] = creation_time
     dataframe = check_and_drop_duplicate_columns(metadata)
     ordering = construct_field_ordering(
@@ -84,7 +99,12 @@ def polish_metadata(metadata, creation_time):
     )
 
 
-def setup_zcam_bandset_metadata(metadata):
+def setup_zcam_bandset_metadata(metadata: pd.DataFrame) -> pd.DataFrame:
+    """
+    Applies interpretive rules to postprocess a dataframe of metadata skimmed
+    from ZCAM IOF attached headers and/or filenames into a metadata dataframe
+    appropriate for ZcamBandSet.
+    """
     if "FILTER" in metadata.columns:
         metadata["BAND"] = metadata["FILTER"]
         metadata.drop("FILTER", axis=1)
@@ -116,6 +136,12 @@ def setup_zcam_bandset_metadata(metadata):
 
 
 class ZcamBandSet(BandSet):
+    """
+    Subclass of marslab.bandset.BandSet, along with helper functions, that
+    implements ZCAM and asdf-specific behaviors. Intended to be built around
+    a group of IOFs (an 'observation'), but can also pull in information
+    from their associated pixel quality maps and radiometric calibration files.
+    """
     def __init__(self, pointing, rois=None, suffix="", threads=None):
         files = setup_zcam_bandset_metadata(pointing)
         load_method = partial(pdr_load, preserve_constants=[0])
@@ -168,6 +194,13 @@ class ZcamBandSet(BandSet):
         self.xyrs = None
 
     def scrape_rc_files(self):
+        """
+        Scrapes metadata from RC files associated with the bandset's IOFs in
+        order to further populate metadata that will eventually be written
+        into compact and extended-format marslab files, and also to generate
+        secondary metadata objects that will eventually be written into
+        rc-format marslab files..
+        """
         rc_table_map = {}
         rc_metadata = {}
         for ix, row in self.metadata.iterrows():
@@ -196,7 +229,15 @@ class ZcamBandSet(BandSet):
         self.metadata = pd.concat([self.metadata, rc_metadata], axis=1)
 
     @staticmethod
-    def _make_caltarget_table(rc_metadata, rc_table_map):
+    def _make_caltarget_table(
+        rc_metadata: pd.DataFrame, rc_table_map: dict[str, pd.DataFrame]
+    ) -> pd.DataFrame:
+        """
+        A single RC file contains information on intensity at a particular band
+        for many different caltarget elements -- in other words, a single
+        column of a marslab file's filter section. This assembles those data
+        from a group of RC files into a marslab-style table.
+        """
         rc_marslab_chunks = []
         for band, table in rc_table_map.items():
             band_metadata = rc_metadata[band]
@@ -262,7 +303,18 @@ class ZcamBandSet(BandSet):
                 ] = ix
         return True
 
-    def load_rois(self, title=None, outpath=".", save=False):
+    def load_rois(
+        self,
+        title: Optional[str] = None,
+        outpath: Union[str, Path] = ".",
+        save: bool = False
+    ):
+        """
+        Loads ROIs from a marslab ROI FITS file or a .sel file, formatting them
+        in memory as ndarrays and saving a ROI FITS file into the output
+        directory. If the source is a .sel file, also copies it into the output
+        directory.
+        """
         from astropy.io.fits import HDUList
         from marslab.compat.sel_to_roi import is_sel_file
 
@@ -288,7 +340,13 @@ class ZcamBandSet(BandSet):
         roi_fits_fn = save_roi_file(self.rois, Path(outpath, "data"))
         self.local_files.append(roi_fits_fn)
 
-    def associate_metamaps(self, metamaps, code='pix_map'):
+    def associate_metamaps(
+        self, metamaps: dict[str, str], code: str = 'pix_map'
+    ):
+        """
+        Inserts path information for 'metamaps' (like pixmaps or error maps)
+        into the bandset's metadata.
+        """
         pcol = f"{code.replace('_', '').upper()}_PATH"
         if pcol not in self.metadata.columns:
             self.metadata[pcol] = pd.Series(dtype=object)
@@ -297,7 +355,11 @@ class ZcamBandSet(BandSet):
                 self.metadata["PATH"] == path, pcol
             ] = str(metamaps[path])
 
-    def load_metamaps(self, verbose=False, code="pix_map"):
+    def load_metamaps(self, verbose: bool = False, code: str = "pix_map"):
+        """
+        Loads arrays from 'metamaps' (like pixmaps or error maps) into memory,
+        formatting them as appropriate.
+        """
         codestr = code.replace('_','')
         if f"{codestr.upper()}_PATH" not in self.metadata.columns:
             return
@@ -315,31 +377,40 @@ class ZcamBandSet(BandSet):
             # don't open each clear filter three times
             band = band[0:2] if band[0:2] in ("L0", "R0") else band
             data = pdr.open(row[f"{codestr.upper()}_PATH"])
-            if code=="iof_err": # the IOE maps need to be converted to floating point
-                metamap = data.get_scaled('IMAGE',inplace=True,float_dtype=np.dtype('float32'))
+            # the IOE maps need to be converted to floating point
+            if code == "iof_err":
+                metamap = data.get_scaled(
+                    'IMAGE',inplace=True,float_dtype=np.dtype('float32')
+                )
             else:
                 metamap = data.IMAGE
             if len(metamap.shape) == 3:
                 for band_ix, pixel in zip((0, 1, 2), ("R", "G", "B")):
                     getattr(self,f"{codestr}s")[band + pixel] = metamap[band_ix]
             else:
-                getattr(self,f"{codestr}s")[band] = metamap
+                getattr(self, f"{codestr}s")[band] = metamap
 
             if verbose:
                 aprint("loaded " + row[f"{codestr.upper()}_PATH"])
 
-    def count_rois(self):
+    def count_rois(self) -> Union[pd.DataFrame, str]:
+        """
+        Count loaded ROIs on loaded images, producing a dataframe usable as the
+        filter section of a marslab file. Currently returns an empty string if
+        there are no ROIs loaded.
+        """
         if self.rois is None:
+            # TODO: this should probably be an exception
             aprint("No ROI data loaded.")
             return ""
         if isinstance(self.rois, (str, Path)):
             self.load_rois()
         self.counts = count_rois_on_xcam_images(
-            self.rois, # list of roi hdus
-            self.raw, # dict of image masked_arrays
+            self.rois,  # list of roi hdus
+            self.raw,  # dict of image masked_arrays
             "ZCAM",
-            pixel_map_dict=self.pixmaps, # dict of pixel flag arrays
-            error_map_dict=self.ioferrs, # dict of error map arrays
+            pixel_map_dict=self.pixmaps,  # dict of pixel flag arrays
+            error_map_dict=self.ioferrs,  # dict of error map arrays
             bayer_pixel_dict={
                 band: pixel
                 for band, pixel in zip(
@@ -351,6 +422,16 @@ class ZcamBandSet(BandSet):
         return self.counts
 
     def count_pixmaps(self):
+        """
+        Counts loaded ROIs on pixmaps, generating a dataframe whose columns
+        represent unique pixmap values per eye and whose rows represent ROIs.
+        This dataframe is used to mask bad pixels during primary ROI counting,
+        and is also written into the bandset's metadata files.
+
+        Works only if ROIs and pixmaps are both loaded.
+        """
+        # TODO: should this actually raise an exception rather than returning
+        #  an empty string?
         if self.rois is None:
             aprint("No ROI data loaded.")
             return ""
@@ -382,7 +463,14 @@ class ZcamBandSet(BandSet):
         pixdf["COLOR"] = pixdf.index
         self.pixmap_counts = pixdf.reset_index(drop=True)
 
+    # TODO: this whole workflow needs clearer documentation.
     def format_metadata(self):
+        """
+        Performs lots of data manipulation to make summary, compact, and
+        extended metadata frames. Summary frames are used to populate the
+        google sheet; compact and extended frames become the respective marslab
+        files.
+        """
         if self.counts is None:
             self.counts = null_marslab_data_section()
         # "summary" values made from chronologically first image
@@ -421,7 +509,11 @@ class ZcamBandSet(BandSet):
         if self.rc_metadata is not None:
             self._assemble_rc_compact(creation_time)
 
-    def _assemble_rc_compact(self, creation_time):
+    def _assemble_rc_compact(self, creation_time: str):
+        """
+        Formatting function that generates the 'compact' version of the rc
+        metadata. This directly becomes the rc_marslab file.
+        """
         self.rc_compact = drop_excess_stats(self.rc_metadata)
         # convoluted vertical version of horizontal summary procedure
         # above (because this is not from the same kind of source)
@@ -446,7 +538,12 @@ class ZcamBandSet(BandSet):
         self.rc_compact = polish_metadata(self.rc_compact, creation_time)
         self.rc_compact = self.rc_compact.copy()  # defrag
 
-    def _marslab_to_memory(self):
+    def _marslab_to_memory(self) -> list[BytesIO]:
+        """
+        Writes compact, extended, and (if available) rc marslab files as
+        binary blobs into BytesIO objects. This is used to facilitate uploads
+        to s3.
+        """
         buffers = []
         for attr, suf in zip(("compact", "extended"), ("", "_extended")):
             buffers.append(dashwrite(getattr(self, attr)))
@@ -456,7 +553,15 @@ class ZcamBandSet(BandSet):
             buffers.append(None)
         return buffers
 
-    def _marslab_to_disk(self, outpath, verbose):
+    def _marslab_to_disk(
+        self, outpath: Union[str, Path], verbose: bool
+    ) -> tuple[str, str, Optional[str]]:
+        """
+        Writes all generated metadata dataframes as marslab files to disk,
+        in the order: compact, extended, rc. Returns a tuple of stringified
+        paths for the written compact, extended, and rc marslab files; if
+        no rc information was loaded, the last element will be None.
+        """
         datapath = Path(outpath, "data")
         if not datapath.exists():
             os.makedirs(datapath)
@@ -474,6 +579,7 @@ class ZcamBandSet(BandSet):
             pr(f"wrote caltarget marslab file: {files[-1]}")
         else:
             files.append(None)
+        # noinspection PyTypeChecker
         return tuple(files)
 
     def write_marslab_files(self, outpath=".", verbose=False, in_memory=False):
@@ -484,12 +590,17 @@ class ZcamBandSet(BandSet):
     # TODO: so very very sloppy
     @staticmethod
     def chain_cropmask(func):
+        """
+        Applies a crop to a series of images. This is currently used only by
+        ZcamBandSet.draw_context(), which defines a rapidlook inline.
+        """
         def mask_in_chain(image, *args, **kwargs):
             cropped = cropmask(image, rapidlooks.CROP_SETTINGS['crop'])
             return func(cropped, *args, **kwargs)
         return mask_in_chain
 
-    def draw_context(self, edgemaps, eye):
+    def draw_context(self, edgemaps: dict[str, np.ndarray], eye: str):
+        """Renders context images."""
         inst = {
             "name": "context image " + eye,
             "no_band_names": True,
@@ -517,7 +628,13 @@ class ZcamBandSet(BandSet):
             self.looks["context image " + eye], eye_edgemaps, width=0.1
         )
 
-    def draw_eye_pixmaps(self, edgemaps, eye, verbose=False):
+    def draw_eye_pixmaps(
+        self,
+        edgemaps: dict[str, np.ndarray],
+        eye: str,
+        verbose: bool = False
+    ):
+        """Renders per-eye pixmaps."""
         # TODO: consider reorganizing this whole situation
         eye_pixmaps = self.get_pixmap_dict(eye)
         if len(eye_pixmaps) < 1:
@@ -531,7 +648,19 @@ class ZcamBandSet(BandSet):
         for name, pixmap in eye_pixmaps.items():
             self.render_pixmap_context(edgemaps, eye, pixmap, name, verbose)
 
-    def render_pixmap_context(self, edgemaps, eye, pixmap, name, verbose):
+    def render_pixmap_context(
+        self,
+        edgemaps: dict[str, np.ndarray],
+        eye: str,
+        pixmap: np.ndarray,
+        name: str,
+        verbose: bool
+    ):
+        """
+        Renders a specific pixmap context image as a matplotlib figure and
+        places it in this bandset's looks attribute. Draws ROI polygons on the
+        figure if available.
+        """
         # regenerate matplotlib objects from bytes
         background = perfectly_black_rectangular_solid(pixmap.shape)
         context = plt.figure()
@@ -571,19 +700,21 @@ class ZcamBandSet(BandSet):
             aprint(f"generated context pixmap {name}")
 
     @staticmethod
-    def flatten_pixmaps(pixmaps):
+    def flatten_pixmaps(pixmaps: dict[str, np.ndarray]) -> np.ndarray:
         """
-        get 'worst' flag value of pixel across all bands, masking
+        Preprocessing function for 'narrowband' concatenated per-eye pixmaps.
+        Get 'worst' flag value of pixel across all bands, masking
         wrong-element bayer pixels (both because they are frequently off-scale
         due to gain and because they will never be counted and are thus
-        irrelevant)
+        irrelevant).
         """
         # for each x, y position, find the 'worst' flag value of any pixel
         # we used across all bands. note that order doesn't matter.
         pixmap_cube = np.dstack(tuple(pixmaps.values()))
         return np.max(pixmap_cube, axis=2)
 
-    def get_pixmap_dict(self, eye):
+    def get_pixmap_dict(self, eye: str) -> dict[str, np.ndarray]:
+        """Gets all pixmaps associated with a particular eye."""
         eye_pixmaps = {}
         for band, pixmap in keyfilter(
             lambda key: key.startswith(eye[0].upper()), self.pixmaps
@@ -591,7 +722,14 @@ class ZcamBandSet(BandSet):
             eye_pixmaps |= self._pixmap_to_dict(band, pixmap)
         return eye_pixmaps
 
-    def _pixmap_to_dict(self, band, pixmap):
+    def _pixmap_to_dict(
+        self, band: str, pixmap: np.ndarray
+    ) -> dict[str, np.ndarray]:
+        """
+        Generates a dict of pixmaps for a particular band, masking for bayer
+        elements as necessary. For narrowband filters, this dict will only
+        have one item; for bayers, it will have 3.
+        """
         output_pixmaps = {}
         if band in ("L0", "R0"):
             bands = [band + color for color in ("R", "G", "B")]
@@ -613,7 +751,13 @@ class ZcamBandSet(BandSet):
                 output_pixmaps[band] = pixmap
         return output_pixmaps
 
-    def make_context_images(self, verbose=False):
+    def make_context_images(self, verbose: bool = False):
+        """
+        Generate context browse images: RGB images and pixmaps with overlaid
+        ROI boundaries. Will not attempt to generate pixmap context images if
+        there aren't any pixmaps, or to draw ROI boundaries if there are no
+        ROIs.
+        """
         # TODO: automatically try to count ROIs and stuff? maybe?
         # TODO: parallelize now that we're making a million of these?
         if self.rois:
@@ -636,6 +780,10 @@ class ZcamBandSet(BandSet):
                 self.draw_eye_pixmaps(edgemaps, eye, verbose)
 
     def match_navcam(self, roots: Optional[Sequence[Path]] = None):
+        """
+        Caches paths to candidate navcam XYR images (i.e., ones that match the
+        observation's SITE and DRIVE) in this bandset's xyrs attribute.
+        """
         roots = [] if roots is None else roots
         roots.append(Path(self.metadata['PATH'][0]).parents[2])
         nsite = {}
@@ -648,7 +796,11 @@ class ZcamBandSet(BandSet):
         except KeyError:
             return
 
-    def fetch_precached(self, band):
+    def fetch_precached(self, band: str) -> pdr.Metadata:
+        """
+        Utility function that fetches the precached pdr.Metadata object
+        associated with a particular band.
+        """
         return self.precached[
             self.metadata.loc[self.metadata['BAND'] == band, 'PATH'].iloc[0]
         ]
@@ -656,6 +808,10 @@ class ZcamBandSet(BandSet):
     # TODO: choose different reference bands if L1/R1 are not available
     # TODO: feedback about product creation / matching / blah blah blah
     def make_space_fits(self, ref_bands=("L1", "R1"), outpath=".", roots=None):
+        """
+        Makes a spatial FITS file for this observation if appropriate navcam
+        XYR files are available.
+        """
         if self.xyrs is None:
             self.match_navcam(roots)
         if self.xyrs is None:
@@ -669,6 +825,10 @@ class ZcamBandSet(BandSet):
         write_images=True,
         calc_rois=True
     ):
+        """
+        Makes spatial rapidlooks and calculates per-ROI spatial metadata. Must
+        be preceded by a successful execution of ZcamBandSet.make_space_fits().
+        """
         if (self.counts is None) and self.rois and calc_rois:
             self.load("all")
             self.bulk_debayer("all")

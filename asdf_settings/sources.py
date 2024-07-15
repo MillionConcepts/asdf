@@ -23,11 +23,15 @@ DEFAULT_PRODUCT_SUBDIRECTORY = "iof"
 GOOGLE_CLIENT_SECRETS_FILE = glom(
     ASDF_MODULE_PATH, "secrets", "google_client_secrets.json"
 )
+# all of the long alphanumeric codes are google workspace resource ids.
+# they correspond to the long alphanumeric codes in drive.google.com
+# and sheets.google.com URLs.
 GOOGLE_SHEET_ID = "1jpqxmu0kc0W4aMq1uswrOSljeotFCxf_Zl8SxdE4xKQ"
 METADATA_BACKUP_FOLDER_ID = "1-nbgqasqLbfmnn68FE0o1W8gFm-zKPT9"
 GOOGLE_DRIVE_ROOT = "1WuvGtj3DAxH2yDALAmqm-HqkQmI-M-17"
 
 AWS_IAM_SECRETS_FILE = glom(ASDF_MODULE_PATH, "secrets", "s3_iam_secrets.csv")
+# name and region of S3 bucket where we write backups of ROIs and marslab files
 BACKUP_BUCKET = "g4452h324"
 AWS_REGION = "us-east-1"
 OBFUSCATE_THUMBNAIL_NAMES = True
