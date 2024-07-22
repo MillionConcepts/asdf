@@ -1,10 +1,8 @@
-"""
-secondary-level handlers & wrappers for asdf workflow
-"""
+"""secondary-level handlers & wrappers for asdf workflow"""
 from itertools import chain
 import os
 from pathlib import Path
-from typing import Callable, Optional, Literal
+from typing import Callable, Optional, Literal, Union, Mapping
 import warnings
 
 from cytoolz import groupby
@@ -78,8 +76,18 @@ import pretty_plot as pplot
 
 
 def get_scan_results(
-    explicit_path, keep_broadband, keep_caltarget, root_dir, scan_kwargs
-):
+    explicit_path: Optional[Union[str, Path]],
+    keep_broadband: bool,
+    keep_caltarget: bool,
+    root_dir: Optional[Union[str, Path]],
+    scan_kwargs: Mapping
+) -> tuple[dict, dict, dict]:
+    """
+    Handler function used in the find_and_offer_observations() workflow.
+    Scans one or more directories for ZCAM IOF files and attempts to group
+    them into valid 'clusters', recording a variety of failure states and
+    intentional exclusions in the process.
+    """
     with ASDF_PROGRESS_SPIN as prog:
         ASDF_RPH_SPIN.task_id = prog.add_task(" ... scanning files ...")
         style_prog(prog, "green")

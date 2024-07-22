@@ -19,6 +19,7 @@ from asdf.console import aprint
 
 if TYPE_CHECKING:
     from astropy.io.fits.hdu import ImageHDU, HDUList
+    import numpy as np
 
 NULL_PATTERN = re.compile(r"(^|,)( +)?(NaN|nan|None)( +)?(?=,)")
 
@@ -144,7 +145,10 @@ def dir_fs(path: Union[str, Path]) -> OSFS:
 
 
 # TODO: fully deprecate
-def tar_bytes(filename):
+def tar_bytes(filename: Union[str, Path]) -> io.BytesIO:
+    """
+    Load a file and write a tarred and gzipped version of it into a buffer.
+    """
     tarbuffer = io.BytesIO()
     fits_tar = tarfile.open(fileobj=tarbuffer, mode="w:gz")
     fits_tar.add(filename, Path(filename).name)
@@ -153,5 +157,11 @@ def tar_bytes(filename):
     return tarbuffer
 
 
-def cast_to_reference(df, reference):
+def cast_to_reference(
+    df: pd.DataFrame, reference: dict[str, Union[str, np.dtype]]
+) -> pd.DataFrame:
+    """
+    Return a version of `df` with any column whose name matches a key of
+    `reference` typecast to the corresponding value of `reference`.
+    """
     return df.astype(keyfilter(lambda key: key in df.columns, reference))

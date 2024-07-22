@@ -8,7 +8,7 @@ from functools import reduce
 from operator import mul
 from pathlib import Path
 import re
-from typing import Union, Sequence
+from typing import Union, Sequence, Optional
 from urllib.error import URLError
 
 from cytoolz.dicttoolz import valfilter
@@ -19,6 +19,7 @@ from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
 from more_itertools import all_equal
+from pandas.core.groupby import DataFrameGroupBy
 
 from asdf_settings import sources
 from asdf.asdf_utils import dir_fs
@@ -172,14 +173,30 @@ def scan_zcam_files(
     return products
 
 
-# TODO, maybe: cal checks make running asdf on RADs fail...which is
-#  not a major issue, but should probably be addressed.
+# TODO, maybe: cal checks make running asdf on RADs fail. We should probably
+#  decide once and for all whether to fully deprecate the idea of running
+#  asdf directly on RADs.
 def cluster_observations(
-    products,
+    products: pd.DataFrame,
     target_file=None,
     keep_broadband=False,
     keep_caltarget=False,
-):
+) -> tuple[
+    dict[str, pd.DataFrame],
+    tuple[str, ...],
+    tuple[str, ...],
+    dict[str, list[str]]
+]:
+    """
+    Business-end function for clustering ZCAM IOFs into 'observations'.
+    Applies a wide variety of heuristics and integrity checks that handle
+    most standard and nonstandard multispectral sequences and detect/reject
+    most extant and many likely pathological cases.
+
+    For more detail on some of these heuristics and integrity checks, see:
+    * https://docs.google.com/document/d/1l-zljFZJeCoX_aqJ-BlZ_J79I4T3NW7pgcI2Zcd7qNU
+    * https://docs.google.com/document/d/1l8RElG_AhibozjkfOVjSVhbXOXcSEcQWquVcvbwFovI
+    """
     groups = products.groupby(["SOL", "SEQ_ID", "PRODUCT_TYPE", "THUMBNAIL"])
     observations = {}
     parser_warnings = []
@@ -301,7 +318,9 @@ def cluster_observations(
                     f"been chunked correctly."
                 )
             for repoint in partition(2, group["RSM"].unique()):
-                observation = group.loc[group["RSM"].isin(repoint)]
+                observation: pd.DataFrame = group.loc[
+                    group["RSM"].isin(repoint)
+                ]
                 rc_ok, rc_warn = validate_rc_consistency(observation, seq_id)
                 if rc_ok is False:
                     rejects["mismatched_rc"] += observation["PATH"].tolist()
@@ -353,10 +372,18 @@ def cluster_observations(
             hidden_things.append(
                 f"({len(rejects[reason])} file(s) {line} hidden)"
             )
+    # noinspection PyTypeChecker
     return observations, tuple(set(parser_warnings)), hidden_things, rejects
 
 
-def validate_caltarget_sol_consistency(group, seq_id):
+def validate_caltarget_sol_consistency(
+    group: pd.DataFrame, seq_id: str
+) -> tuple[bool, Optional[str]]:
+    """
+    Inline validation function for `find_and_offer_observations()`. Verify
+    that all IOFs in a stemgroup were calibrated using caltarget images taken
+    on the same sol as one another (not necessarily the same sol as the IOFs).
+    """
     parsed_caltarget_fns = group['CALTARGET_FILE'].map(parse_zcam_fn)
     caltarget_ok, caltarget_warning = True, None
     if not all_equal(fn['SOL'] for fn in parsed_caltarget_fns):
@@ -367,7 +394,16 @@ def validate_caltarget_sol_consistency(group, seq_id):
     return caltarget_ok, caltarget_warning
 
 
-def validate_rc_consistency(group, seq_id):
+def validate_rc_consistency(
+    group: pd.DataFrame, seq_id: str
+) -> tuple[bool, Optional[str]]:
+    """
+    Inline validation function for `find_and_offer_observations()`. Verify
+    that all IOFs in a stemgroup were calibrated using RC files produced from
+    the same caltarget sequence. This works alongside
+    validate_caltarget_sol_consistency() to provide an additional layer of
+    calibration integrity verification.
+    """
     parsed_rc_fns = group["RC_FILE"].map(parse_zcam_fn)
     rc_ok, rc_warning = True, None
     for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
@@ -385,6 +421,7 @@ CAL_WARN_BOILERTPLATE = (
     "data deletion, or limited data availability (for instance, the sequence "
     "may not be completely downlinked)."
 )
+
 
 def find_matching_metamap(product_path: str, code="pix_map"):
     # look where we are, look in ../pix_map, look in hardcoded roots --
