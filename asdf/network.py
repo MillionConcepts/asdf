@@ -10,13 +10,12 @@ import json
 import shutil
 import socket
 import time
-import urllib.request
+from urllib.request import urlopen
 from collections.abc import Callable, MutableMapping
-from functools import partial
 from numbers import Number
 from pathlib import Path
 from random import shuffle
-from typing import Any, Union
+from typing import Any
 
 import boto3
 import botocore.config
@@ -26,9 +25,9 @@ import pydrive2.files
 from boto3.exceptions import S3UploadFailedError
 from botocore.exceptions import ClientError
 from cytoolz import merge
-from dustgoggles.func import catch_interaction
 from dustgoggles.pivot import itemize_numpy
-
+from marslab.bandset import BandSet
+from marslab.poolutils import wait_for_it
 # TODO: handling authentication differently in gspread and pydrive
 #  is messy but expedient. it's possible that it will be more stable
 #  and/or performant to merge these through a lower-level oauth call,
@@ -38,6 +37,7 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from urllib3.connection import BaseSSLError
 
+from asdf._types import Waypoints
 from asdf.asdf_utils import obfuscated_name, tar_bytes
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
 from asdf.format import folder_names, cached_md5sum
@@ -58,20 +58,16 @@ from asdf_settings.sources import (
     GOOGLE_SHEET_ID,
     METADATA_BACKUP_FOLDER_ID,
 )
-from marslab.bandset import BandSet
-from marslab.poolutils import wait_for_it
 
 
-def get_public_m20_waypoints():
-    waypoint_server_response = urllib.request.urlopen(
-        PUBLIC_WAYPOINTS_URL, timeout=15
-    )
+def get_public_m20_waypoints() -> Waypoints:
+    """Fetches a list of waypoints from the M20 public waypoint server."""
+    waypoint_server_response = urlopen(PUBLIC_WAYPOINTS_URL, timeout=15)
     return json.loads(waypoint_server_response.read())["features"]
 
 
 def gspread_credentials(credentials=None, service_account_file=None):
     """
-    maybe unnecessary
     """
     if (credentials is None) and (service_account_file is None):
         raise ValueError("credentials or an account file must be provided")

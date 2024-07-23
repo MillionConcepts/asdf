@@ -3,29 +3,29 @@ functions for running around the filesystem and mashing together big messes
 of products
 """
 import os
+import re
 from collections import defaultdict
 from functools import reduce
 from operator import mul
 from pathlib import Path
-import re
-from typing import Union, Sequence, Optional
+from typing import Union, Sequence, Optional, Literal, Callable, Collection, MutableMapping
 from urllib.error import URLError
 
+import numpy as np
+import pandas as pd
 from cytoolz.dicttoolz import valfilter
 from cytoolz.functoolz import curry
 from cytoolz.itertoolz import partition
-from dustgoggles.scrape import cached_ls, cached_exists
-from fs.osfs import OSFS
-import numpy as np
-import pandas as pd
-from more_itertools import all_equal
-from pandas.core.groupby import DataFrameGroupBy
-
-from asdf_settings import sources
-from asdf.asdf_utils import dir_fs
-from dustgoggles.structures import listify
 from dustgoggles.pivot import split_on, pdstr
+from dustgoggles.scrape import cached_ls, cached_exists
+from dustgoggles.structures import listify
+from fs.osfs import OSFS
+from more_itertools import all_equal
+
+from asdf._types import Waypoints
+from asdf.asdf_utils import dir_fs
 from asdf.console import ASDFLOG
+from asdf.labels import cached_aux_skimmer
 from asdf.network import get_public_m20_waypoints
 from asdf.parse import (
     parse_marslab_fn,
@@ -35,7 +35,8 @@ from asdf.parse import (
     looks_like_marslab,
     looks_like_roi,
 )
-from asdf.labels import cached_aux_skimmer
+from asdf_settings import sources
+
 
 # TODO: make all the error-printing statements in this module more consistent
 #  with style in other modules
@@ -423,12 +424,32 @@ CAL_WARN_BOILERTPLATE = (
 )
 
 
-def find_matching_metamap(product_path: str, code="pix_map"):
+METAMAP_TYPES = ("pix_map", "iof_err", "rad_err")
+"""
+Recognized (if not necessarily fully supported) categories of metadata image 
+array product.
+"""
+
+
+# NOTE: all the dead code essentially serves as notes for disambiguation code
+#  in the case that nonstandard directory structures exist.
+def find_matching_metamap(
+    product_path: Union[str, Path], code: Literal[METAMAP_TYPES] = "pix_map"
+) -> tuple[Optional[str], list[str]]:
+    """
+    Find a 'metamap' file that matches an IOF -- a product containing an
+    array whose elements provide metadata for the corresponding elements
+    of the IOF image. Currently, only pix_map is actually supported.
+
+    Returns a tuple whose first element is a Path object for a matching
+    metamap if any were found and None if none were found, and whose second
+    element is a list of warnings about ambiguous cases found in matching.
+    """
     # look where we are, look in ../pix_map, look in hardcoded roots --
     # like the /scratch directories on islamorada; they don't live in /project.
     # or whatever you define locally.
     match_warnings = []
-    if not code in ["pix_map", "iof_err", "rad_err"]:
+    if code not in ["pix_map", "iof_err", "rad_err"]:
         raise TypeError(f"metamap {code} is invalid")
     product_path = Path(product_path)
     product_dir = product_path.parent
@@ -502,7 +523,16 @@ def prune_excessive_pixmap_matches(
     return possible_pixmaps
 
 
-def match_in_dirs(search_dirs, product_path, predicate=None):
+def match_in_dirs(
+    search_dirs: Collection[Union[str, Path]],
+    product_path: Path,
+    predicate: Optional[Callable[[Path], bool]] = None
+) -> list[Path]:
+    """
+    Helper function for find_matching_metamap(). Filters the contents
+    of `search_dirs()` using a provided predicate function while also rejecting
+    the related file itself.
+    """
     possible_matches = []
     for search_dir in search_dirs:
         if not cached_exists(search_dir):
@@ -516,9 +546,16 @@ def match_in_dirs(search_dirs, product_path, predicate=None):
     return possible_matches
 
 
-def find_obs_metamaps(product_paths: Union[list, pd.DataFrame], code="pix_map"):
-    if not code in ["pix_map", "iof_err", "rad_err"]:
-        raise TypeError(f"metamap {code} is invalid")
+def find_obs_metamaps(
+    product_paths: Collection[Union[str, Path]],
+    code: METAMAP_TYPES = "pix_map"
+) -> tuple[dict[str, str], list[str]]:
+    if code not in METAMAP_TYPES:
+        """
+        Handler function for find_matching_metamap(). Attempts to find matching
+        metamaps of the type matching `code` for all files in `product_paths`.
+        """
+        raise TypeError(f"metamap type {code} is invalid")
     all_match_warnings = []
     metamaps = {}
     for path in product_paths:
@@ -530,23 +567,33 @@ def find_obs_metamaps(product_paths: Union[list, pd.DataFrame], code="pix_map"):
     return metamaps, all_match_warnings
 
 
-def matching_waypoints(site, drive, m20_waypoint_dict):
+def matching_waypoints(
+    site: Union[int, str], drive: Union[int, str], waypoints: Waypoints
+) -> Waypoints:
     """
-    I don't think the waypoints are defined more granularly than site and
-    drive.
+    Selects the waypoint or waypoints -- there will _generally_ be only one --
+    associated with a particular site and drive from a list of waypoints
+    produced by parsing GeoJSON fetched from the M20 public waypoint server.
     """
     return [
         feature
-        for feature in m20_waypoint_dict
+        for feature in waypoints
         if (int(feature["properties"]["site"]) == int(site))
         and (int(feature["properties"]["drive"]) == int(drive))
     ]
 
 
-def associate_waypoints(metadata, m20_waypoint_dict):
+def associate_waypoints(
+    metadata: Union[MutableMapping, pd.DataFrame], waypoints: Waypoints
+) -> Union[MutableMapping, pd.DataFrame]:
+    """
+    Parses the site and drive information from a metadata structure produced
+    during scanning, finds the matching feature in a list of waypoints, and
+    adds geospatial information for that feature to the metadata structure.
+    """
     pointing = parse_pointing(metadata)
     matches = matching_waypoints(
-        pointing["SITE"], pointing["DRIVE"], m20_waypoint_dict
+        pointing["SITE"], pointing["DRIVE"], waypoints
     )
     if len(matches) == 1:
         match = matches[0]
@@ -605,6 +652,7 @@ def add_effective_taus(metadata):
         if not os.path.exists(taupath):
             stringified_taus.append(np.nan)
         else:
+            # noinspection PyTypeChecker
             stringified_taus.append(
                 ",".join(
                     pd.read_csv(taupath, header=None).values[0].astype(str)
