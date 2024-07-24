@@ -726,15 +726,16 @@ def is_marslab_empty(marslab_path: Union[str, Path]) -> bool:
 
 def cluster_analyses(
     marslab: pd.DataFrame, roi: pd.DataFrame
-) -> tuple[pd.DataFrame, list[str], list[str], list[str]]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Step of fdsa setup routine that associates ROI files with marslab files
-    by checking their stems and 'emptiness'. Returns a tuple whose elements
-    are a dataframe of matched marslab files and ROI files, a list of 'lonely'
-    marslab files (marslab files that contain ROI information but have no
-    matching ROI file), a list of 'empty' marslab files (marslab files with no
-    ROI information), and a list of 'lonely' ROI files (ROI files with no
-    apparent matching marslab files).
+    by checking their stems and 'emptiness'. Returns a tuple of 4 dataframes,
+    respectively:
+     1. matched marslab files and ROI files
+     2. 'lonely' marslab files (marslab files that contain ROI information but
+        have no matching ROI file)
+     3. 'empty' marslab files (marslab files with no ROI information)
+     4. 'lonely' ROI files (ROI files with no apparent matching marslab files)
     """
     stemmer = pdstr("replace", r"(roi|\.|fits|gz|marslab|csv)", "", regex=True)
     roi_stems = stemmer(roi["PATH"])
