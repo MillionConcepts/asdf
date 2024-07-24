@@ -81,7 +81,7 @@ def get_scan_results(
     keep_caltarget: bool,
     root_dir: Optional[Union[str, Path]],
     scan_kwargs: Mapping
-) -> tuple[dict, dict, dict]:
+) -> Union[tuple[dict, tuple[str, ...], tuple[str, ...]], list]:
     """
     Handler function used in the find_and_offer_observations() workflow.
     Scans one or more directories for ZCAM IOF files and attempts to group
@@ -118,11 +118,24 @@ def find_and_offer_observations(
     keep_caltarget=False,
     mosaic=False,
     **scan_kwargs,
-):
+) -> tuple[
+    Union[pd.DataFrame, tuple[pd.DataFrame, ...], None], Union[bool, None]
+]:
     """
-    process a request for ZCAM files; print the results of the request to
+    Process a request for ZCAM files; print the results of the request to
     console; ask the user to select a observation if there is more than one;
     ask the user to confirm the observation if there is only one.
+
+    Returns a tuple whose elements are:
+    1. If we are in noninteractive-all mode and observations were found, or if
+     multiple observations were found and the user requested that asdf run
+     all of them, a tuple of dataframes; if we are in interactive or regular
+     noninteractive mode, observations were found, and the user did not reject
+     them, a single dataframe; if no observations were found or the user
+     rejected them, None
+    2. A status code that is True if asdf should expect to run multiple
+     observations, False if it should expect to run only one, and None if no
+     usable observations were found or the user rejected them.
     """
     # TODO: pass polite error message rather than not-enough-values traceback
     #  when no results are found in a directory
@@ -158,7 +171,7 @@ def find_and_offer_observations(
         return reject_scan(
             f"Sorry, no usable observations found. {suffix}:confused_face:\n"
         )
-    if noninteractive:
+    if noninteractive is not False:
         if noninteractive == "all":
             aprint(
                 "noninteractive-all mode; processing all observations.",
@@ -181,16 +194,20 @@ def find_and_offer_observations(
         if obs_choice != "a":
             return tuple(results.values())[int(obs_choice) - 1], False
         return tuple(results.values()), True
-    else:
-        if confirm_observation() is not True:
-            return reject_scan(
-                "halting due to user rejection of file list. If "
-                "[italic]asdf[/italic] didn't find what you expected, "
-            )
-        return tuple(results.values())[0], False
+    if confirm_observation() is not True:
+        return reject_scan(
+            "halting due to user rejection of file list. If "
+            "[italic]asdf[/italic] didn't find what you expected, "
+        )
+    return tuple(results.values())[0], False
 
 
-def is_feature_mismatch(metadata, field):
+def is_feature_mismatch(metadata: dict[str, str], field: str) -> bool:
+    """
+    Predicate function for ask_user_about_roi() workflow. Returns True if a
+    particular metadata field is irrelevant to an ROI's assigned feature (e.g.
+    MEMBER for an ROI with FEATURE 'soil')
+    """
     if field not in list(
         chain.from_iterable(FEATURE_EXCLUSIVE_ROI_FIELDS.values())
     ):
