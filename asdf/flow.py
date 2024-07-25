@@ -100,7 +100,7 @@ def _process_mosaic(
     # TODO: take this out if it's never an option
     save_plain_images = True
     if roi_path is not None:
-        raise ValueError("Sorry, ROI counting on mosaic is not supported.")
+        raise ValueError("Sorry, ROI counting on mosaics is not supported.")
     from asdf.mosaic import (
         make_single_band_mosaics,
         preprocess_mosaic_metadata,
@@ -138,7 +138,7 @@ def _process_mosaic(
     # TODO, maybe: add pixmap stuff
     if reuse_mosaic is True:
         mosaic_paths = check_mosaic_paths(bandsets, outpath)
-        # meaningful output for this case provided in check_mosaic_paths
+        # meaningful output for this case is provided in check_mosaic_paths
         if mosaic_paths is None:
             return
         aprint(

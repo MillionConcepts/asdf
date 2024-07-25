@@ -1,4 +1,10 @@
-"""secondary-level handlers & wrappers for asdf workflow"""
+"""
+Secondary-level handlers & wrappers for asdf/fdsa flow. Functions in this
+module are intended primarily for use in interactive sessions or pipelines
+that mock interactive sessions like fdsa. They intentionally print a lot of
+formatted output to the console and require highly preprocessed inputs; they
+are inappropriate for most uses outside the asdf/fdsa flow.
+"""
 from __future__ import annotations
 
 from itertools import chain
@@ -76,6 +82,10 @@ from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
 import pretty_plot as pplot
 
 if TYPE_CHECKING:
+    # noinspection PyProtectedMember
+    from multiprocessing.pool import ApplyResult
+    from matplotlib.figure import Figure
+    from PIL.Image import Image
     from asdf.zcam_bandset import ZcamBandSet
 
 
@@ -669,6 +679,55 @@ def collect_dispersed_metadata(
     return metadata
 
 
+def _write_plain_image(
+    look: Union[Figure, Image],
+    look_name: str,
+    outpath: Union[str, Path],
+    pool: Optional[ProcessPool],
+    basename: str,
+    results: dict[str, ApplyResult]
+) -> str:
+    """
+    Writes a figure or image as a PNG file 'plainly', i.e., with no added
+    caption. Shuold be called only as part of the save_looks() workflow.
+    """
+    filename = construct_filename(look_name, basename)
+    # TODO: make this special case less gross
+    if "mosaic" not in filename:
+        filename = filename.split(".")[0] + "-plain.png"
+    if pool is None:
+        save_plainly(look, filename, outpath)
+        ASDFLOG.info("wrote " + filename)
+    else:
+        results[filename] = pool.apipe(save_plainly, look, filename, outpath)
+    return filename
+
+
+def _write_annotated_image(
+    bandset: ZcamBandSet,
+    look: Union[Figure, Image],
+    look_name: str,
+    outpath: Union[str, Path],
+    pool: Optional[ProcessPool],
+    prefix: str,
+    results: dict[str, ApplyResult]
+) -> str:
+    """
+    Write a Figure or Image to disk as a PNG file with a standardized caption.
+    Should be called only as part of the save_looks() workflow.
+    """
+    annotation, title = construct_title_and_annotation(bandset, look_name)
+    filename = construct_filename(look_name, prefix)
+    if pool is None:
+        annotate_and_save(title, annotation, look, filename, outpath)
+        ASDFLOG.info("wrote " + filename)
+    else:
+        results[filename] = pool.apipe(
+            annotate_and_save, title, annotation, look, filename, outpath
+        )
+    return filename
+
+
 def save_looks(
     bandset: ZcamBandSet,
     outpath: Union[str, Path],
@@ -676,6 +735,12 @@ def save_looks(
     threads: Optional[int] = None,
     plain: bool = False
 ) -> None:
+    """
+    Chatty handler function to save all rapidlooks associated with a bandset
+    as PNG images. Applies various naming rules and, optionally, performs
+    writes in multiple threads. If `plain` is True, saves images with no
+    captions.
+    """
     if basename is None:
         basename = bandset.name
     pool = None
@@ -694,11 +759,11 @@ def save_looks(
         if not os.path.exists(image_path):
             os.makedirs(image_path)
         if plain is True:
-            filename = write_plain_image(
+            filename = _write_plain_image(
                 look, look_name, image_path, pool, basename, results
             )
         else:
-            filename = write_annotated_image(
+            filename = _write_annotated_image(
                 bandset, look, look_name, image_path, pool, basename, results
             )
         bandset.local_files.append(str(Path(image_path, filename)))
@@ -708,45 +773,25 @@ def save_looks(
         wait_for_it(pool, results, ASDFLOG, "wrote ")
 
 
-def write_plain_image(look, look_name, outpath, pool, basename, results):
-    filename = construct_filename(look_name, basename)
-    # TODO: make this special case less gross
-    if "mosaic" not in filename:
-        filename = filename.split(".")[0] + "-plain.png"
-    if pool is None:
-        save_plainly(look, filename, outpath)
-        ASDFLOG.info("wrote " + filename)
-    else:
-        results[filename] = pool.apipe(save_plainly, look, filename, outpath)
-    return filename
-
-
-def write_annotated_image(
-    bandset, look, look_name, outpath, pool, prefix, results
-):
-    annotation, title = construct_title_and_annotation(bandset, look_name)
-    filename = construct_filename(look_name, prefix)
-    if pool is None:
-        annotate_and_save(title, annotation, look, filename, outpath)
-        ASDFLOG.info("wrote " + filename)
-    else:
-        results[filename] = pool.apipe(
-            annotate_and_save, title, annotation, look, filename, outpath
-        )
-    return filename
-
-
-def pretty_plot_bandset(bandset, outpath):
+def pretty_plot_bandset(
+    bandset: ZcamBandSet, outpath: Union[str, Path]
+) -> None:
+    """
+    Preprocesses a bandset's ROI data and metadata and feeds it to pretty-plot,
+    which plots it and saves it to disk as a PNG file.
+    """
     aprint(Rule(" pretty-plotting data "))
     plot_fn = str(
         Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
     )
     from pretty_plot.convert import scale_eyes
 
-    # TODO: cruft?
+    # TODO: what was this?
     # target_name = ""
     # if bandset.compact["NAME"].iloc[0]:
     #     target_name = bandset.compact["NAME"].iloc[0]
+
+    # TODO: this scaling behavior should occut in pretty-plot, not here.
     plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
     for band in DERIVED_CAM_DICT["ZCAM"]["filters"].keys():
         if plot_data[band].isna().any():
@@ -764,7 +809,13 @@ def pretty_plot_bandset(bandset, outpath):
 
 
 # TODO: improve structure
-def fdsa_insert(marslab_data, prototype):
+def fdsa_insert(
+    marslab_data: pd.DataFrame, prototype: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    fdsa-mode version of ask-user-about-ROIs workflow. Propagates metadata
+    loaded from a compact marslab file into a dataframe of counted ROIs.
+    """
     fields_skipped = []
     for field in ROI_METADATA_FIELDS:
         if field not in prototype.columns:
@@ -826,7 +877,8 @@ def fdsa_insert(marslab_data, prototype):
 
 
 # TODO: improve structure
-def complain_about_pixmap_counts(quality_df):
+def complain_about_pixmap_counts(quality_df: pd.DataFrame):
+    """Print information about bad/hot/etc. pixels to console."""
     for _, counts in quality_df.iterrows():
         color = counts["COLOR"]
         for flag in PIXEL_FLAG_NAMES:
@@ -859,8 +911,18 @@ def complain_about_pixmap_counts(quality_df):
             aprint(header.append(roi).append(complaint).append(values))
 
 
-def check_mosaic_paths(bandsets, outpath):
-    """for reuse_mosaics workflow."""
+def check_mosaic_paths(
+    bandsets: list[ZcamBandSet],
+    outpath: Union[str, Path]
+) -> Optional[dict[Literal["L", "R"], Path]]:
+    """
+    Assemble expected names for existing mosaic files, check if they're
+    present, and print an error if they're not. Returns a dict like
+    {'L': l_path, 'R': r_path} if found and None if not (which cues asdf to
+    bail out).
+
+    Intended for reuse_mosaics workflow.
+    """
     from asdf.mosaic import concat_mosaic_fn
 
     mosaic_filenames = {
@@ -881,5 +943,6 @@ def check_mosaic_paths(bandsets, outpath):
                 "mosaic files not available. Please run again without "
                 "this flag or provide the files. Bailing out."
             )
-            return None
+        return
+    # noinspection PyTypeChecker
     return mosaic_paths
