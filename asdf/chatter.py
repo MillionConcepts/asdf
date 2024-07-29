@@ -4,7 +4,7 @@ secondary-level handlers & wrappers for asdf workflow
 from itertools import chain
 import os
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional, Literal
 import warnings
 
 from cytoolz import groupby
@@ -64,7 +64,10 @@ from asdf_settings.metadata import (
     EMPTY_METADATA_FIELDS,
     PIXEL_FLAG_NAMES,
     ROI_METADATA_FIELD_CHOICES,
-    LEGACY_METADATA_FIELDS, FEATURE_SUBTYPES, LEGACY_SUBTYPE_FIELDS,
+    LEGACY_METADATA_FIELDS,
+    LEGACY_SUBTYPE_FIELDS,
+    CONDITIONAL_FIELDS,
+    FEATURE_SUBTYPES
 )
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
 import pretty_plot as pplot
@@ -221,78 +224,92 @@ def ask_user_about_roi(
     :param constants: a dictionary of fields and values that the user
         has asserted are constant across all ROIs.
     """
-    if constants is None:
-        constants = {}
-    metadata_fields = list(ROI_METADATA_FIELDS)
-    roi_metadata = {}
-    for field in metadata_fields:
-        # ignore legacy fields
-        if field in LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS:
+    fields, roi_metadata = _prep_fields(), constants.copy()
+    for field in fields:
+        # ignore legacy fields, constants, etc.
+        if _checkskip(field, roi_metadata) != "ok":
             continue
-        # fill 'empty' fields like notes
-        if field in EMPTY_METADATA_FIELDS:
-            roi_metadata[field] = ""
+        options, is_invalid = _check_field_options(field, roi_metadata)
+        if is_invalid is True:
             continue
-        # don't ask people soil questions about rocks, etc
-        if is_feature_mismatch(roi_metadata, field):
-            roi_metadata[field] = ""
-            continue
-        # if a user has told us a field is the same everywhere, don't bother
-        # them about it
-        if field in constants.keys():
-            roi_metadata[field] = constants[field]
-            continue
-        # sideloaded options for flowdown from within-category choices.
-        # currently used only for FORMATION / MEMBER.
-        # TODO: kind of a hack.
-        options = None
-        if field == "MEMBER":
-            if "FORMATION" not in roi_metadata.keys():
-                continue
-            options = ROI_METADATA_FIELD_CHOICES["MEMBER"].get(
-                roi_metadata["FORMATION"]
-            )
-            if options is None:
-                continue
-        if field == "FEATURE_SUBTYPE":
-            if "FEATURE" not in roi_metadata.keys():
-                continue
-            options = FEATURE_SUBTYPES[roi_metadata["FEATURE"]]
         roi_metadata[field] = ci(
             dispatched_metadata_prompt, field, roi_title, options
         )
     return roi_metadata
 
 
+def _fix_order(order):
+    for k, v in CONDITIONAL_FIELDS.items():
+        if order[k] < order[v]:
+            order[v] = min(order.values()) - 1
+            return False
+    return True
+
+
+def _sort_fields() -> list[str]:
+    order = {f: i for i, f in enumerate(ROI_METADATA_FIELDS)}
+    while _fix_order(order) is False:
+        continue
+    fields = []
+    for v in sorted(order.values()):
+        fields.append(next(k for k in order.keys() if order[k] == v))
+    return fields
+
+
+def _prep_fields() -> list[str]:
+    return _sort_fields()
+
+
+def _checkskip(
+    field: str, roi_metadata: dict
+) -> Literal["skip", "mismatch", "constant", "ok"]:
+    if field in (
+        LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS + EMPTY_METADATA_FIELDS
+    ):
+        return "skip"
+    if is_feature_mismatch(roi_metadata, field):
+        return "mismatch"
+    if field in roi_metadata.keys():
+        return "constant"
+    return "ok"
+
+
+def _check_field_options(
+    field: str, roi_metadata: dict
+) -> tuple[Optional[list[str]], bool]:
+    """find and check validity of options for 'flowdown' metadata categories"""
+    if field == "MEMBER":
+        if "FORMATION" not in roi_metadata.keys():
+            return None, True
+        options = ROI_METADATA_FIELD_CHOICES["MEMBER"].get(
+            roi_metadata["FORMATION"]
+        )
+        if options is None:
+            return None, True
+        return options, False
+    elif field == "FEATURE_SUBTYPE":
+        if "FEATURE" not in roi_metadata.keys():
+            # note that we should only ever hit this condition during the
+            # "do all ROIs have the same value" routine
+            return None, True
+        # also note that FEATURE_SUBTYPE should never get to
+        # this function at all if the previously-specified FEATURE does not
+        # have subtypes; it should have been filtered by _checkskip()
+        return FEATURE_SUBTYPES[roi_metadata['FEATURE']], False
+    return None, False
+
+
 def input_roi_metadata(marslab_data, ci):
-    constants = {}
-    for field in ROI_METADATA_FIELDS:
-        # TODO: this may all be excessively sloppy
-        options = None
-        if field in (
-            EMPTY_METADATA_FIELDS
-            + LEGACY_METADATA_FIELDS
-            + LEGACY_SUBTYPE_FIELDS
-        ):
+    fields, constants = _prep_fields(), {}
+    for field in fields:
+        if (field_disposition := _checkskip(field, constants)) == "skip":
             continue
-        if is_feature_mismatch(constants, field):
+        marslab_data[field] = ""
+        if field_disposition == "mismatch":
             continue
-        if field == "MEMBER":
-            if "FORMATION" not in constants.keys():
-                continue
-            options = ROI_METADATA_FIELD_CHOICES["MEMBER"].get(
-                constants["FORMATION"]
-            )
-            if options is None:
-                continue
-        if field == "FEATURE_SUBTYPE":
-            if "FEATURE" not in constants.keys():
-                continue
-            if field not in (
-                FEATURE_EXCLUSIVE_ROI_FIELDS.get(constants["FEATURE"], [])
-            ):
-                continue
-            options = FEATURE_SUBTYPES[constants["FEATURE"]]
+        options, is_invalid = _check_field_options(field, constants)
+        if is_invalid is True:
+            continue
         constant_query = ci(
             metadata_choice_prompt,
             Text(f"Is the value of {field} the same for all ROIs?"),
@@ -314,6 +331,7 @@ def input_roi_metadata(marslab_data, ci):
         user_provided_metadata = ask_user_about_roi(region, ci, constants)
         for field, value in user_provided_metadata.items():
             if field not in marslab_data.columns:
+                # TODO: why do we initialize this differently here?
                 marslab_data[field] = pd.Series(dtype=object)
             marslab_data.loc[marslab_data["COLOR"] == region, field] = value
     return marslab_data
@@ -321,13 +339,13 @@ def input_roi_metadata(marslab_data, ci):
 
 def handle_map_checks(bandset, code="pix_map"):
     metamaps, match_warnings = find_obs_metamaps(
-        bandset.metadata["PATH"].unique(),code=code,
+        bandset.metadata["PATH"].unique(), code=code,
     )
     if match_warnings:
         for warning in match_warnings:
             aprint("[bold purple]" + warning)
     metamaps = valfilter(lambda x: x is not None, metamaps)
-    codestr = code.replace('_','')
+    codestr = code.replace('_', '')
     if not metamaps:
         aprint(
             f"[bold dark_orange]no matching {codestr}s found; "
@@ -342,7 +360,7 @@ def handle_map_checks(bandset, code="pix_map"):
         return
     aprint(f"... found matching {codestr}s for all images ...")
     bandset.metadata[f"{codestr.upper()}_PATH"] = ""
-    bandset.associate_metamaps(metamaps,code=code)
+    bandset.associate_metamaps(metamaps, code=code)
     bandset.load_metamaps(verbose=True, code=code)
 
 

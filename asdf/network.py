@@ -192,7 +192,7 @@ def backup_data_to_s3(bandset, debug_prefix=""):
     extended_key = (
         f"{s3_prefix}marslab_extended_{bandset.name + bandset.suffix}.csv"
     )
-    marslab, extended, _ = bandset.write_data_files(in_memory=True)
+    marslab, extended, _ = bandset.write_marslab_files(in_memory=True)
     upload_hopper = [(marslab, marslab_key), (extended, extended_key)]
     for fn in bandset.local_files:
         if Path(fn).suffix in (".fits", ".fits.gz", ".sel"):
@@ -435,7 +435,7 @@ def ask_about_dupe_names(
         bandset.metadata["ANALYSIS_NAME"] = suffix
         bandset.suffix = f"-{suffix}"
         bandset.format_metadata()
-        bandset.write_data_files(outpath=Path(data_files[0]).parent)
+        bandset.write_marslab_files(outpath=Path(data_files[0]).parent)
         for file in data_files:
             if "marslab" not in file:
                 # write_data_files handles this for marslab files

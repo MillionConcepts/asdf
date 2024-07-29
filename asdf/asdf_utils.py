@@ -6,7 +6,8 @@ import tarfile
 import random
 import string
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional
+import re
 
 import pandas as pd
 from cytoolz import keyfilter
@@ -14,12 +15,42 @@ from fs.osfs import OSFS
 
 from asdf.console import aprint
 
+NULL_PATTERN = re.compile(r"(^|,)( +)?(NaN|nan|None)( +)?(?=,)")
 
-pd.set_option('future.no_silent_downcasting', True)
 
-
-def dashify(df):
-    return df.replace("", "-").fillna("-")
+def dashwrite(
+    df: pd.DataFrame, target: Optional[str] = None
+) -> Union[io.BytesIO, str]:
+    cols = {}
+    for col, item in df.items():
+        cols[col] = (
+            item
+            .astype(str)
+            .str.replace("nan|NaN|None|none|(^$)", "-", regex=True)
+        )
+    df = pd.DataFrame(cols)
+    # buf = io.StringIO()
+    # df.astype("str").to_csv(buf, index=None)
+    # buf.seek(0)
+    # baselines = buf.read().splitlines()
+    # buf.close()
+    # outlines = [baselines[0]]
+    # for line in baselines[1:]:
+    #     new = NULL_PATTERN.sub(",,", line)
+    #     if new.startswith(','):
+    #         new = f"-,{new[1:]}"
+    #     if new.endswith(','):
+    #         new = f"{new[:-1]},-"
+    #     # TODO: this is is very ugly but the alternative is serious CSV parsing
+    #     while ",," in new:
+    #         new = new.replace(",,", ",-,")
+    #     outlines.append(new.strip(','))
+    # dashified = "\n".join(outlines)
+    target = target if isinstance(target, str) else io.BytesIO()
+    df.to_csv(target, index=None)
+    if not isinstance(target, str):
+        target.seek(0)
+    return target
 
 
 def obfuscated_name():
