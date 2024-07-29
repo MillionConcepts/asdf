@@ -38,7 +38,7 @@ from asdf.format import (
     preprocess_scan_path,
     annotate_and_save,
     save_plainly,
-    construct_filename,
+    construct_browse_filename,
     construct_title_and_annotation,
 )
 from asdf.pretty import (
@@ -691,7 +691,7 @@ def _write_plain_image(
     Writes a figure or image as a PNG file 'plainly', i.e., with no added
     caption. Shuold be called only as part of the save_looks() workflow.
     """
-    filename = construct_filename(look_name, basename)
+    filename = construct_browse_filename(look_name, basename)
     # TODO: make this special case less gross
     if "mosaic" not in filename:
         filename = filename.split(".")[0] + "-plain.png"
@@ -717,7 +717,7 @@ def _write_annotated_image(
     Should be called only as part of the save_looks() workflow.
     """
     annotation, title = construct_title_and_annotation(bandset, look_name)
-    filename = construct_filename(look_name, prefix)
+    filename = construct_browse_filename(look_name, prefix)
     if pool is None:
         annotate_and_save(title, annotation, look, filename, outpath)
         ASDFLOG.info("wrote " + filename)

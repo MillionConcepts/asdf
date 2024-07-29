@@ -389,7 +389,7 @@ def asdf_body(
 
     # where are we locally writing files? by default, directories separated
     # by user, sol, name + rsm.
-    outpath = make_asdf_outpath(output, bandset)
+    outpath = make_asdf_outpath(bandset, output)
     # tell user where we're putting stuff
     aprint(f"[bold green]NOTE: files will be written to {outpath}")
 

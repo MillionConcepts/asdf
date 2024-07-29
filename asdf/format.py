@@ -1,16 +1,23 @@
 """
-formatting and helper functions for other asdf modules.
+Formatting and helper functions for other asdf modules. Unlike asdf.chatter,
+some functions in this module may be usable outside of the primary asdf
+workflow, although they make no special attempt to be useful in this way.
 """
+from __future__ import annotations
+
 from functools import partial, cache
-import io
 import getpass
 from hashlib import md5
+import io
 import os
 from pathlib import Path
 import re
-from typing import Literal, Optional, Union, Callable
+from typing import (
+    Callable, Literal, Mapping, Optional, Sequence, TYPE_CHECKING, Union
+)
 
 from dustgoggles.structures import NestingDict
+from marslab.bandset import BandSet
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.imgutils import absolutely_destroy
 from marslab.imgops.pltutils import dpi_from_image
@@ -19,14 +26,21 @@ from marslab.imgops.render import make_thumbnail, simple_figure
 import matplotlib.figure
 import numpy as np
 import pandas as pd
-from PIL.Image import Image
 
 from asdf.console import ASDF_CONSOLE, aprint
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
 from asdf_settings import rapidlooks, sources
 
 
-def compile_looks():
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+    from marslab.imgops.look import LookInstruction
+    from PIL.Image import Image
+    from asdf.zcam_bandset import ZcamBandSet
+
+
+def compile_looks() -> list[LookInstruction]:
     """
     "Compile" looks at runtime. makes settings.rapidlooks readable while
     avoiding circular imports.
@@ -41,7 +55,13 @@ def compile_looks():
     )
 
 
-def folder_names(bandset, mosaic=False):
+def folder_names(
+    bandset: ZcamBandSet, mosaic: bool = False
+) -> tuple[str, str]:
+    """
+    Make "sol-level" and "obs-level" folder names for a bandset. This is
+    used to help construct asdf's standardized output folder structure.
+    """
     sol_folder_name = str(bandset.metadata["SOL"].iloc[0]).zfill(4)
     obs_folder_name = (
         bandset.metadata["SEQ_ID"].iloc[0].lower()
@@ -54,10 +74,14 @@ def folder_names(bandset, mosaic=False):
     return sol_folder_name, obs_folder_name
 
 
-def make_asdf_outpath(output, bandset):
+def make_asdf_outpath(
+    bandset: ZcamBandSet, output: Optional[Union[str, Path]] = None
+) -> Path:
     """
-    where are we locally writing files? by default, directories separated
-    by user and sol.
+    Picks the root of the directory tree into which a particular execution of
+    the asdf flow will write files. Creates it if it doesn't exist. Uses
+    `output` as this directory if specified; otherwise, selects a conventional
+    path based on username, sol, and observation characteristics.
     """
     if output is None:
         sol_folder_name, obs_folder_name = folder_names(bandset)
@@ -70,7 +94,11 @@ def make_asdf_outpath(output, bandset):
     return outpath
 
 
-def make_bandset_annotation(metadata):
+def make_bandset_annotation(metadata: pd.DataFrame) -> str:
+    """
+    Generate a 'title' for a bandset to use as a component of a rapidlook
+    annotation.
+    """
     line = metadata.iloc[0]
     annotation = ""
     if line["NAME"] != "":
@@ -81,7 +109,12 @@ def make_bandset_annotation(metadata):
     return annotation
 
 
-def save_plainly(look, filename, outpath):
+def save_plainly(
+    look: Union[Figure, Image],
+    filename: Union[str, Path],
+    outpath: Union[str, Path]
+):
+    """Save a rapidlook as a PNG file 'plainly' (without a caption)."""
     if isinstance(look, matplotlib.figure.Figure):
         for ix, axis in enumerate(look.axes):
             if ix > 0:
@@ -98,6 +131,8 @@ def save_plainly(look, filename, outpath):
         look.save(Path(outpath, filename))
 
 
+# TODO: do we ever actually get these in as bare ndarrays? if so, should
+#  save_plainly also handle this?
 def annotate_and_save(
     title: str,
     annotation: str,
@@ -106,8 +141,8 @@ def annotate_and_save(
     outpath: Union[Path, str]
 ) -> Literal[0]:
     """
-    Format standard annotations for a figure and save the annotated figure
-    to disk in a nice compact layout.
+    Format standard annotations for a figure/Image/ndarray and save the
+    annotated figure to disk in a nice compact layout.
     """
     if not isinstance(look, matplotlib.figure.Figure):
         look = simple_figure(look)
@@ -124,7 +159,7 @@ def annotate_and_save(
     return 0
 
 
-def render_figure_labels(ax: matplotlib.axes.Axes, title: str, annot: str):
+def render_figure_labels(ax: Axes, title: str, annot: str):
     """
     Typeset standard title and annotation onto an Axes object. Modifies that
     Axes inplace.
@@ -147,7 +182,7 @@ def render_figure_labels(ax: matplotlib.axes.Axes, title: str, annot: str):
     render(x=a_x, y=a_y, s=annot, fontproperties=rapidlooks.ANNOTATION_FONT)
 
 
-def clean_sequence_id(seq_id: Union[str, int]) -> str:
+def clean_sequence_id(seq_id: Union[str, int]) -> Optional[str]:
     """
     Put a sequence ID in a specific format: 'ZCAM' + 5 integers. This is
     necessary because there are various formats used, including lowercase
@@ -309,7 +344,7 @@ def md5sum(
     path_or_file: Union[str, Path, io.BytesIO],
     hash_function: Callable = md5
 ) -> str:
-    """Convenience function for generating checksums from a file or buffer"""
+    """Generating an md5 checksum for a file or buffer"""
     hasher = hash_function()
     if isinstance(path_or_file, (str, Path)):
         with open(path_or_file, "rb") as file_to_be_hashed:
@@ -326,12 +361,16 @@ def md5sum(
 #  which leads me to wonder if we're ever actually using that functionality of
 #  md5sum() in this library.
 @cache
-def cached_md5sum(file):
-    """Simply a cached version of md5sum()."""
+def cached_md5sum(file: Union[str, Path, io.BytesIO]) -> str:
+    """cached version of md5sum()"""
     return md5sum(file)
 
 
-def add_image_hashes(bandset):
+# TODO: this should probably be using cached_md5sum; check
+def add_image_hashes(bandset: BandSet):
+    """
+    Add md5 checksums for a bandset's source images to its metadata df.
+    """
     paths = bandset.metadata["PATH"].unique()
     md5s = tuple(map(md5sum, paths))
     if "SOURCE_MD5SUM" not in bandset.metadata.columns:
@@ -342,20 +381,20 @@ def add_image_hashes(bandset):
         ] = md5_string
 
 
-def count_rois_on_pixmaps(roi_arrays, roi_names, pixmap_dict):
-    all_counts = NestingDict()
-    for filt, bayer_masked_flag_array in pixmap_dict.items():
-        all_counts[filt] = count_rois_on_pixmap(
-            bayer_masked_flag_array, roi_arrays, roi_names
-        )
-    return all_counts
-
-
-def perfectly_black_rectangular_solid(xy_shape):
+def perfectly_black_rectangular_solid(xy_shape: Sequence[int]) -> np.ndarray:
+    """Produce a perfectly black rectangular solid."""
     return np.zeros((*xy_shape, 3))
 
 
-def count_rois_on_pixmap(bayer_masked_flag_array, roi_arrays, roi_names):
+def count_rois_on_pixmap(
+    bayer_masked_flag_array: np.ndarray,
+    roi_arrays: Sequence[np.ndarray],
+    roi_names: Sequence[str]
+):
+    """
+    Count ROIs on a single pixmap, producing a NestingDict structured like:
+    {roi_name: {pixel_flag_name: pixel_flag_count, ...}, ...}
+    """
     all_counts = NestingDict()
     flag_counts = {}
     for flag_value, flag_name in zip([1, 2, 3, 4, 5], PIXEL_FLAG_NAMES):
@@ -376,7 +415,34 @@ def count_rois_on_pixmap(bayer_masked_flag_array, roi_arrays, roi_names):
     return all_counts
 
 
-def drop_excess_stats(compact):
+def count_rois_on_pixmaps(
+    roi_arrays: Sequence[np.ndarray],
+    roi_names: Sequence[str],
+    pixmap_dict: Mapping[str, np.ndarray]
+) -> NestingDict:
+    """
+    Count ROIs on a dict of (per-filter) pixmaps, returning a NestingDict
+    structured like:
+    {
+      filter_name: {roi_name: {pixel_flag_name: pixel_flag_count, ...}, ...},
+      ...
+    }
+    """
+    all_counts = NestingDict()
+    for filt, bayer_masked_flag_array in pixmap_dict.items():
+        all_counts[filt] = count_rois_on_pixmap(
+            bayer_masked_flag_array, roi_arrays, roi_names
+        )
+    return all_counts
+
+
+def drop_excess_stats(compact: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocessing function for compact marslab file. Drop "extra" per-ROI
+    descriptive statistics -- statistics desired only for the extended file.
+    COMPACT_MARSLAB_STATS in asdf_settings.metadata defines which statistics
+    should be retained.
+    """
     # TODO: garbage placeholder
     filts = list(DERIVED_CAM_DICT["ZCAM"]["filters"])
     for column in compact.columns:
@@ -392,33 +458,45 @@ def drop_excess_stats(compact):
     return compact
 
 
-def rearrange_band_depth_for_filename(text):
-    filts = re.split(r"([L|R]\d[RGB]?)", text, maxsplit=0)
+def rearrange_band_depth_for_filename(look_name: str) -> str:
+    """Formatting function for band depth browse image filenames."""
+    filts = re.split(r"([L|R]\d[RGB]?)", look_name, maxsplit=0)
     return f"{filts[0]}{filts[3]} shoulders {filts[1]} {filts[5]}{filts[6]}"
 
 
-def rearrange_band_depth_for_title(text):
-    filts = re.split(r"([L|R]\d[RGB]?)", text, maxsplit=0)
+def rearrange_band_depth_for_title(look_name: str) -> str:
+    """Formatting function for band depth browse image captions."""
+    filts = re.split(r"([L|R]\d[RGB]?)", look_name, maxsplit=0)
     return f"{filts[0]}{filts[3]}, " f"shoulders at {filts[1]} and {filts[5]}"
 
 
-def insert_wavelengths_into_text(text: str):
-    if "depth" in text:
-        text = rearrange_band_depth_for_title(text)
+def insert_wavelengths_into_text(title: str) -> str:
+    """
+    Formatting function for spectop browse image captions. Insert canonical
+    band centers into text.
+    """
+    if "depth" in title:
+        title = rearrange_band_depth_for_title(title)
     for filt, wavelength in DERIVED_CAM_DICT["ZCAM"]["filters"].items():
-        text = re.sub(filt, filt + " (" + str(wavelength) + "nm)", text)
-    text = re.sub(r"_", r" ", text)
-    return text
+        title = re.sub(filt, filt + " (" + str(wavelength) + "nm)", title)
+    title = re.sub(r"_", r" ", title)
+    return title
 
 
-def remove_stretch_names(look_name):
+def remove_stretch_names(look_name: str) -> str:
+    """
+    Formatting function for browse image captions. Remove names of specific
+    stretches (required for disambiguation of filenames and in-memory objects
+    but not desirable for ordinary-language display)
+    """
     bands_present = re.search(r"([L|R]\d[RGB]?_?)+", look_name)
     if bands_present:
         look_name = look_name[: bands_present.span()[1]]
     return look_name
 
 
-def construct_filename(look_name, basename):
+def construct_browse_filename(look_name: str, basename: str) -> str:
+    """Construct a filename for a browse image."""
     if "band_depth" in look_name:
         look_name = rearrange_band_depth_for_filename(look_name)
     filename = f"{look_name}_{basename}.png"
@@ -433,7 +511,10 @@ def construct_filename(look_name, basename):
 # TODO, maybe: this will fail or behave weirdly if people add band names,
 #  especially spurious ones, to rapidlook names: perhaps people just shouldn't
 #  do that
-def construct_title_and_annotation(bandset, look_name):
+def construct_title_and_annotation(
+    bandset: ZcamBandSet, look_name: str
+) -> tuple[str, str]:
+    """Construct a caption for a browse image."""
     # permit verbatim titles
     if look_name[0] == "'":
         title = look_name.strip("'")
