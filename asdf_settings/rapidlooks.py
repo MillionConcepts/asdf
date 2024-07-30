@@ -1,3 +1,8 @@
+"""
+Full or partial look instructions, along with aggregated information used by
+the look assembler to build groups of related look instructions at runtime.
+"""
+
 # import statements -- don't mess with these
 from copy import deepcopy
 from pathlib import Path

@@ -8,23 +8,24 @@ from functools import reduce
 from operator import mul
 from pathlib import Path
 import re
-from typing import Optional, Sequence, Union
+from typing import Union, Sequence, Optional, Literal, Callable, Collection, MutableMapping, MutableSequence, Any
 from urllib.error import URLError
 
 from cytoolz.dicttoolz import valfilter
 from cytoolz.functoolz import curry
 from cytoolz.itertoolz import partition
+from dustgoggles.pivot import split_on, pdstr
 from dustgoggles.scrape import cached_ls, cached_exists
+from dustgoggles.structures import listify
 from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
 from more_itertools import all_equal
 
-from asdf_settings import sources
+from asdf._types import Waypoints
 from asdf.asdf_utils import dir_fs
-from dustgoggles.structures import listify
-from dustgoggles.pivot import split_on, pdstr
 from asdf.console import ASDFLOG
+from asdf.labels import cached_aux_skimmer
 from asdf.network import get_public_m20_waypoints
 from asdf.parse import (
     parse_marslab_fn,
@@ -34,18 +35,27 @@ from asdf.parse import (
     looks_like_marslab,
     looks_like_roi,
 )
-from asdf.labels import get_pixel_map_heuristic, cached_aux_skimmer
+from asdf_settings import sources
+
 
 # TODO: make all the error-printing statements in this module more consistent
 #  with style in other modules
 
 
 def skim_products(
-    products, field_filters=None, aux_skimmer=cached_aux_skimmer, rsm=None
-):
+    products: pd.DataFrame,
+    field_filters: Optional[dict[str, Any]] = None,
+    aux_skimmer: Callable[[Union[str, Path]], dict] = cached_aux_skimmer,
+    rsm: Optional[Collection[int]] = None
+) -> pd.DataFrame:
+    """
+    Helper function for scan_zcam_files(). Skims all ZCAM files referenced in a
+    dataframe for basic identifying information. Is only expected to work
+    reliably for IOFs and IOEs.
+    """
     # prefilters that don't require dipping into the header,
     #  for speed and stability on networked filesystems
-    if field_filters:
+    if field_filters is not None:
         for field, value in field_filters.items():
             target_values = listify(value)
             if products[field].dtype.char in np.typecodes["AllInteger"]:
@@ -103,14 +113,28 @@ def skim_products(
     )
 
 
-def ls_zcam(root_dir, recursive=False, file_regex=""):
+def ls_zcam(
+    root_dir: Union[str, Path],
+    recursive: bool = False,
+    file_regex: Optional[Union[str, re.Pattern]] = ""
+) -> Optional[pd.DataFrame]:
+    """
+    Simple, fast `ls` for ZCAM products that only examines filenames and does
+    not skim headers. Used in initial steps of several file-grouping routines,
+    including `find_and_offer_observations()`, but is also very useful a la
+    carte in data exploration and corpus validation. If it finds any files
+    that appear to be ZCAM products, returns a dataframe of paths and basic
+    identifying file information; otherwise, returns None.
+
+    Should work on IOFs, RADs, pixmaps, IOEs, EDRs, and rcfiles.
+    """
     if recursive is True:
         scan_fs = OSFS(str(root_dir))
         files = [scan_fs.getsyspath(file) for file in scan_fs.walk.files()]
     else:
         files = [file for file in Path(root_dir).iterdir()]
     ASDFLOG.info(f"... {len(files)} files found in search path ...")
-    if file_regex:
+    if file_regex not in (None, ""):
         matches = tuple(
             filter(curry(re.match, file_regex, flags=re.I), map(str, files))
         )
@@ -132,7 +156,7 @@ def ls_zcam(root_dir, recursive=False, file_regex=""):
         )
         files = matches
     products = tuple(filter(None, map(parse_zcam_fn, files)))
-    if products:
+    if len(products) > 0:
         products = pd.DataFrame(products)
         ASDFLOG.info(
             "... {} / {} have parsable ZCAM filenames ...".format(
@@ -145,13 +169,22 @@ def ls_zcam(root_dir, recursive=False, file_regex=""):
 
 def scan_zcam_files(
     root_dir: Union[str, Path] = "",
-    target_sol: Union[int, str, pd.Series] = None,
-    target_seq_id: Union[str, pd.Series] = None,
-    regex_filter=None,
-    keep_thumbnails=False,
-    recursive=False,
-    rsm=None
-):
+    target_sol: Optional[Union[int, str, pd.Series]] = None,
+    target_seq_id: Optional[Union[str, pd.Series]] = None,
+    regex_filter: Optional[Union[str, re.Pattern]] = None,
+    keep_thumbnails: bool = False,
+    recursive: bool = False,
+    rsm: Optional[Collection[int]] = None
+) -> pd.DataFrame:
+    """
+    Provide extensive identifying information about ZCAM files in a directory
+    or directory tree with optional exclusion filters.. Builds on ls_zcam() by
+    skimming PVL headers as well as simply parsing filenames. Is only expected
+    to work reliably for IOFs and IOEs. Used in setup steps of various file-
+    finding and clustering routines, but is also useful a la carte in data
+    exploration and corpus validation. Returns a dataframe of per-file
+    metadata.
+    """
     products = ls_zcam(root_dir, recursive, regex_filter)
     if products is None:
         raise ValueError(
@@ -163,11 +196,11 @@ def scan_zcam_files(
     field_filters = {}
     if isinstance(target_sol, (pd.Series, np.ndarray)):
         field_filters["SOL"] = target_sol
-    elif target_sol:
+    elif target_sol not in (None, ""):
         field_filters["SOL"] = target_sol
     if isinstance(target_seq_id, (pd.Series, np.ndarray)):
         field_filters["SEQ_ID"] = target_seq_id
-    elif target_seq_id:
+    elif target_seq_id not in (None, ""):
         field_filters["SEQ_ID"] = target_seq_id
     if keep_thumbnails is False:
         field_filters["THUMBNAIL"] = "N"
@@ -180,14 +213,30 @@ def scan_zcam_files(
     return products
 
 
-# TODO, maybe: cal checks make running asdf on RADs fail...which is
-#  not a major issue, but should probably be addressed.
+# TODO, maybe: cal checks make running asdf on RADs fail. We should probably
+#  decide once and for all whether to fully deprecate the idea of running
+#  asdf directly on RADs.
 def cluster_observations(
-    products,
+    products: pd.DataFrame,
     target_file=None,
     keep_broadband=False,
     keep_caltarget=False,
-):
+) -> tuple[
+    dict[str, pd.DataFrame],
+    tuple[str, ...],
+    tuple[str, ...],
+    dict[str, list[str]]
+]:
+    """
+    Business-end function for clustering ZCAM IOFs into 'observations'.
+    Applies a wide variety of heuristics and integrity checks that handle
+    most standard and nonstandard multispectral sequences and detect/reject
+    most extant and many likely pathological cases.
+
+    For more detail on some of these heuristics and integrity checks, see:
+    * https://docs.google.com/document/d/1l-zljFZJeCoX_aqJ-BlZ_J79I4T3NW7pgcI2Zcd7qNU
+    * https://docs.google.com/document/d/1l8RElG_AhibozjkfOVjSVhbXOXcSEcQWquVcvbwFovI
+    """
     groups = products.groupby(["SOL", "SEQ_ID", "PRODUCT_TYPE", "THUMBNAIL"])
     observations = {}
     parser_warnings = []
@@ -239,7 +288,7 @@ def cluster_observations(
                 rate_completion,
                 rate_compression,
                 rate_cal_offset,
-                # rate_rc_version,
+                rate_rc_version,
                 rate_version,
                 rate_creation_time,
             )
@@ -309,7 +358,9 @@ def cluster_observations(
                     f"been chunked correctly."
                 )
             for repoint in partition(2, group["RSM"].unique()):
-                observation = group.loc[group["RSM"].isin(repoint)]
+                observation: pd.DataFrame = group.loc[
+                    group["RSM"].isin(repoint)
+                ]
                 rc_ok, rc_warn = validate_rc_consistency(observation, seq_id)
                 if rc_ok is False:
                     rejects["mismatched_rc"] += observation["PATH"].tolist()
@@ -361,10 +412,18 @@ def cluster_observations(
             hidden_things.append(
                 f"({len(rejects[reason])} file(s) {line} hidden)"
             )
+    # noinspection PyTypeChecker
     return observations, tuple(set(parser_warnings)), hidden_things, rejects
 
 
-def validate_caltarget_sol_consistency(group, seq_id):
+def validate_caltarget_sol_consistency(
+    group: pd.DataFrame, seq_id: str
+) -> tuple[bool, Optional[str]]:
+    """
+    Inline validation function for `find_and_offer_observations()`. Verify
+    that all IOFs in a stemgroup were calibrated using caltarget images taken
+    on the same sol as one another (not necessarily the same sol as the IOFs).
+    """
     parsed_caltarget_fns = group['CALTARGET_FILE'].map(parse_zcam_fn)
     caltarget_ok, caltarget_warning = True, None
     if not all_equal(fn['SOL'] for fn in parsed_caltarget_fns):
@@ -375,11 +434,19 @@ def validate_caltarget_sol_consistency(group, seq_id):
     return caltarget_ok, caltarget_warning
 
 
-def validate_rc_consistency(group, seq_id):
+def validate_rc_consistency(
+    group: pd.DataFrame, seq_id: str
+) -> tuple[bool, Optional[str]]:
+    """
+    Inline validation function for `find_and_offer_observations()`. Verify
+    that all IOFs in a stemgroup were calibrated using RC files produced from
+    the same caltarget sequence. This works alongside
+    validate_caltarget_sol_consistency() to provide an additional layer of
+    calibration integrity verification.
+    """
     parsed_rc_fns = group["RC_FILE"].map(parse_zcam_fn)
     rc_ok, rc_warning = True, None
-    # for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
-    for key in ("SITE", "DRIVE", "SEQ_ID"):
+    for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
         if not all_equal([fn[key] for fn in parsed_rc_fns]):
             rc_warning, rc_ok = (
                 f"warning: could not process some or all pointings of "
@@ -395,12 +462,33 @@ CAL_WARN_BOILERTPLATE = (
     "may not be completely downlinked)."
 )
 
-def find_matching_metamap(product_path: str, code="pix_map"):
+
+METAMAP_TYPES = ("pix_map", "iof_err", "rad_err")
+"""
+Recognized (if not necessarily fully supported) categories of metadata image 
+array product.
+"""
+
+
+# NOTE: all the dead code essentially serves as notes for disambiguation code
+#  in the case that nonstandard directory structures exist.
+def find_matching_metamap(
+    product_path: Union[str, Path], code: Literal[METAMAP_TYPES] = "pix_map"
+) -> tuple[Optional[Path], list[str]]:
+    """
+    Find a 'metamap' file that matches an IOF -- a product containing an
+    array whose elements provide metadata for the corresponding elements
+    of the IOF image. Currently, only pix_map is actually supported.
+
+    Returns a tuple whose first element is a Path object for a matching
+    metamap if any were found and None if none were found, and whose second
+    element is a list of warnings about ambiguous cases found in matching.
+    """
     # look where we are, look in ../pix_map, look in hardcoded roots --
     # like the /scratch directories on islamorada; they don't live in /project.
     # or whatever you define locally.
     match_warnings = []
-    if not code in ["pix_map", "iof_err", "rad_err"]:
+    if code not in ["pix_map", "iof_err", "rad_err"]:
         raise TypeError(f"metamap {code} is invalid")
     product_path = Path(product_path)
     product_dir = product_path.parent
@@ -455,8 +543,18 @@ def find_matching_metamap(product_path: str, code="pix_map"):
 
 # TODO: make this work appropriately with the new selection system.
 def prune_excessive_pixmap_matches(
-    match_warnings, possible_pixmaps, product_path
-):
+    match_warnings: MutableSequence[str],
+    possible_pixmaps: Collection[Path],
+    product_path: Path
+) -> list[Path]:
+    """
+    If there are multiple matching pixmaps for a particular product, pick the
+    one with the highest version number. This is not strictly correct given the
+    matching system adopted in 2022, but there do not seem to be any actually-
+    existing cases in which it leads to issues, because picking the wrong
+    pixmap would require a really pathological case (most would simply lead
+    to name collisions).
+    """
     if len(possible_pixmaps) > 1:
         ok_pixmaps = []
         parsed_fns = list(
@@ -474,7 +572,16 @@ def prune_excessive_pixmap_matches(
     return possible_pixmaps
 
 
-def match_in_dirs(search_dirs, product_path, predicate=None):
+def match_in_dirs(
+    search_dirs: Collection[Union[str, Path]],
+    product_path: Path,
+    predicate: Optional[Callable[[Path], bool]] = None
+) -> list[Path]:
+    """
+    Helper function for find_matching_metamap(). Filters the contents
+    of `search_dirs()` using a provided predicate function while also rejecting
+    the related file itself.
+    """
     possible_matches = []
     for search_dir in search_dirs:
         if not cached_exists(search_dir):
@@ -488,9 +595,16 @@ def match_in_dirs(search_dirs, product_path, predicate=None):
     return possible_matches
 
 
-def find_obs_metamaps(product_paths: Union[list, pd.DataFrame], code="pix_map"):
-    if not code in ["pix_map", "iof_err", "rad_err"]:
-        raise TypeError(f"metamap {code} is invalid")
+def find_obs_metamaps(
+    product_paths: Collection[Union[str, Path]],
+    code: METAMAP_TYPES = "pix_map"
+) -> tuple[dict[str, str], list[str]]:
+    if code not in METAMAP_TYPES:
+        """
+        Handler function for find_matching_metamap(). Attempts to find matching
+        metamaps of the type matching `code` for all files in `product_paths`.
+        """
+        raise TypeError(f"metamap type {code} is invalid")
     all_match_warnings = []
     metamaps = {}
     for path in product_paths:
@@ -502,23 +616,33 @@ def find_obs_metamaps(product_paths: Union[list, pd.DataFrame], code="pix_map"):
     return metamaps, all_match_warnings
 
 
-def matching_waypoints(site, drive, m20_waypoint_dict):
+def matching_waypoints(
+    site: Union[int, str], drive: Union[int, str], waypoints: Waypoints
+) -> Waypoints:
     """
-    I don't think the waypoints are defined more granularly than site and
-    drive.
+    Selects the waypoint or waypoints -- there will _generally_ be only one --
+    associated with a particular site and drive from a list of waypoints
+    produced by parsing GeoJSON fetched from the M20 public waypoint server.
     """
     return [
         feature
-        for feature in m20_waypoint_dict
+        for feature in waypoints
         if (int(feature["properties"]["site"]) == int(site))
         and (int(feature["properties"]["drive"]) == int(drive))
     ]
 
 
-def associate_waypoints(metadata, m20_waypoint_dict):
+def associate_waypoints(
+    metadata: Union[MutableMapping, pd.DataFrame], waypoints: Waypoints
+) -> Union[MutableMapping, pd.DataFrame]:
+    """
+    Parses the site and drive information from a metadata structure produced
+    during scanning, finds the matching feature in a list of waypoints, and
+    adds geospatial information for that feature to the metadata structure.
+    """
     pointing = parse_pointing(metadata)
     matches = matching_waypoints(
-        pointing["SITE"], pointing["DRIVE"], m20_waypoint_dict
+        pointing["SITE"], pointing["DRIVE"], waypoints
     )
     if len(matches) == 1:
         match = matches[0]
@@ -557,7 +681,13 @@ def associate_waypoints(metadata, m20_waypoint_dict):
     return metadata
 
 
-def add_public_waypoints_to_metadata(metadata):
+def add_public_waypoints_to_metadata(
+    metadata: Union[MutableMapping, pd.DataFrame]
+) -> Union[MutableMapping, pd.DataFrame]:
+    """
+    Handler function: add geospatial information from the public waypoints
+    server to `metadata`.
+    """
     try:
         m20_waypoint_dict = get_public_m20_waypoints()
     except (ValueError, URLError, OSError) as e:
@@ -566,7 +696,12 @@ def add_public_waypoints_to_metadata(metadata):
     return associate_waypoints(metadata, m20_waypoint_dict)
 
 
-def add_effective_taus(metadata):
+# TODO: check to what extent this is ever working
+def add_effective_taus(metadata: pd.DataFrame) -> pd.DataFrame:
+    """
+    Search for tau (atmospheric opacity) files and add their contents to
+    `metadata`. In practice, these may not ever be available.
+    """
     if "TAU_ESTIMATE_FILENAME" not in metadata.columns:
         return metadata
     if len(metadata["TAU_ESTIMATE_FILENAME"].dropna()) == 0:
@@ -577,6 +712,7 @@ def add_effective_taus(metadata):
         if not os.path.exists(taupath):
             stringified_taus.append(np.nan)
         else:
+            # noinspection PyTypeChecker
             stringified_taus.append(
                 ",".join(
                     pd.read_csv(taupath, header=None).values[0].astype(str)
@@ -590,10 +726,26 @@ def add_effective_taus(metadata):
 
 
 def is_marslab_empty(marslab_path: Union[str, Path]) -> bool:
+    """
+    Filtering predicate for the fdsa clustering routine. Returns True if a
+    marslab file is 'empty' (i.e., contains no ROIs) and False otherwise.
+    """
     return pd.read_csv(marslab_path)["COLOR"].iloc[0] == "-"
 
 
-def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
+def cluster_analyses(
+    marslab: pd.DataFrame, roi: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Step of fdsa setup routine that associates ROI files with marslab files
+    by checking their stems and 'emptiness'. Returns a tuple of 4 dataframes,
+    respectively:
+     1. matched marslab files and ROI files
+     2. 'lonely' marslab files (marslab files that contain ROI information but
+        have no matching ROI file)
+     3. 'empty' marslab files (marslab files with no ROI information)
+     4. 'lonely' ROI files (ROI files with no apparent matching marslab files)
+    """
     stemmer = pdstr("replace", r"(roi|\.|fits|gz|marslab|csv)", "", regex=True)
     roi_stems = stemmer(roi["PATH"])
     marslab_stems = stemmer(marslab["PATH"])
@@ -636,7 +788,11 @@ def cluster_analyses(marslab: pd.DataFrame, roi: pd.DataFrame):
     return analysis_df, lonely_marslab, empty_marslab, lonely_roi
 
 
-def make_marslab_metadata_df(marslab_fn_list):
+def make_marslab_metadata_df(marslab_fn_list: Sequence[str]) -> pd.DataFrame:
+    """
+    Helper function for fdsa setup routine. Parses a sequence of marslab
+    or ROI filenames and constructs a dataframe of basic identifying metadata.
+    """
     marslab_df = pd.DataFrame(marslab_fn_list, columns=["PATH"])
     marslab_df = pd.concat(
         [
@@ -653,8 +809,18 @@ def make_marslab_metadata_df(marslab_fn_list):
 
 
 def prune_analysis_df(
-    df: pd.DataFrame, sol=None, seq_id=None, file_regex=None, rsm=None
-):
+    df: pd.DataFrame,
+    sol: Optional[Union[int, str]] = None,
+    seq_id: Optional[str] = None,
+    file_regex: Optional[Union[str, re.Pattern]] = None,
+    rsm: Optional[Collection[int]] = None
+) -> pd.DataFrame:
+    """
+    Helper function for fdsa setup routine that applies a series of optional
+    filters to a dataframe of basic identifying information about a set of
+    marslab or ROI files, permitting users to restrict an fdsa run by sol,
+    sequence id, or arbitrary file pattern.
+    """
     if sol not in (None, ""):
         if isinstance(sol, Sequence) and not isinstance(sol, str):
             df = df.loc[df["SOL"].between(*map(int, sol))]
@@ -671,7 +837,16 @@ def prune_analysis_df(
     return df
 
 
-def fetch_analysis_files(path: Union[str, Path]):
+def fetch_analysis_files(
+    path: Union[str, Path]
+) -> tuple[list[str], list[str], list[str]]:
+    """
+    Helper function for fdsa setup routine. Recursively walks through a
+    directory tree and returns a tuple whose elements are a list of paths to
+    files that appear to be compact marslab files, a list of paths to files
+    that appear to be ROI FITS files, and a list of paths to files that don't
+    appear to be either.
+    """
     analysis_fs = dir_fs(path)
     syspath = dir_fs(path).getsyspath
     marslab_files = []
@@ -687,10 +862,17 @@ def fetch_analysis_files(path: Union[str, Path]):
     return marslab_files, roi_files, other_files
 
 
-def compare_roi_colors(analyses: pd.DataFrame):
+def compare_roi_colors(
+    analyses: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    extra soft check to help verfiy that a ROI file corresponds to a compact
-    marslab file
+    Check used in fdsa setup routine to help verify that ROI files match
+    their paired compact marslab files.  Returns a tuple whose elements are a
+    dataframe containing those marslab/ROI pairs whose colors match and a
+    dataframe containing those that do not.
+
+    NOTE: Could fail if someone swapped in inappropriate ROI files that had the
+     same colors/numbers of ROIs.
     """
     from astropy.io import fits
     from isal import igzip
@@ -716,8 +898,19 @@ def find_matching_observations(
     analyses: pd.DataFrame,
     search_dir: str,
     search_regex: str,
-    rsm: Optional[tuple[int]] = None
-):
+    rsm: Optional[Collection[int]] = None
+) -> tuple[dict[str, pd.DataFrame], list[str], list[str]]:
+    """
+    Step of fdsa setup routine that attempts to match each row of a dataframe
+    of marslab/ROI file pairs with a set of IOF files available on the system.
+
+    Returns a tuple whose elements are:
+     1. a dict whose keys are paths to compact marslab files and whose values
+      are cluster dataframes
+     2. A list of warnings about ambiguous matches
+     3. A list of paths to compact marslab files for which no matching
+      observation was found on the system
+    """
     # This does not presently support thumbnails; we may need to collect
     # more metadata
 
@@ -734,9 +927,7 @@ def find_matching_observations(
         target_seq_id=target_seq_ids,
         rsm=rsm
     )
-    parser_warnings = []
-    misses = []
-    reprocess_pairs = {}
+    parser_warnings, misses, reprocess_pairs = [], [], {}
 
     # try to match each analysis with an observation
     # (note: this is a many-to-one relationship)
@@ -773,10 +964,11 @@ def find_matching_observations(
     return reprocess_pairs, parser_warnings, misses
 
 
-def rate_completion(siblings: pd.DataFrame):
+def rate_completion(siblings: pd.DataFrame) -> Optional[pd.Series]:
     """
-    merit criterion for file selection. return the files
-    that are not partials, if any are not partials.
+    Merit criterion for file selection in observation clustering. Return a
+    boolean mask for the files that are not partials, if any are not partials;
+    if all are partials, return None.
     """
     if (siblings["COMPLETION"] == "COMPLETE_CHECKSUM_PASS").any():
         return siblings["COMPLETION"] == "COMPLETE_CHECKSUM_PASS"
@@ -784,18 +976,27 @@ def rate_completion(siblings: pd.DataFrame):
 
 def rate_compression(siblings: pd.DataFrame):
     """
-    merit criterion for file selection. return the files with the best
-    compression type.
+    Merit criterion for file selection in observation clustering. Return a
+    boolean mask for the files with the 'best' compression type: uncompressed
+    is best, MSSS 'lossless' (companded) is second best, JPEG is worst. Does
+    not attempt to distinguish between levels of JPEG compression (sequences
+    are never, in practice, downlinked multiple times at different levels of
+    JPEG compression).
     """
     for compression in ("NONE", "MSSS_LOSSLESS", "JPEG"):
         if (siblings["COMPRESSION"] == compression).any():
             return siblings["COMPRESSION"] == compression
+    raise ValueError(
+        f"Unknown compression types referenced in dataframe: "
+        f"{', '.join(siblings['COMPRESSION'].unique())}"
+    )
 
 
-def rate_cal_offset(siblings: pd.DataFrame):
+def rate_cal_offset(siblings: pd.DataFrame) -> pd.Series:
     """
-    merit criterion for file selection. caltarget observation chronological
-    distance from image time.
+    Merit criterion for file selection in observation clustering. Return a
+    boolean mask for those files whose associated caltarget observations have
+    the highest 'score', based on sol and LTST offsets.
     """
     if "CALTARGET_LTST" not in siblings.columns:
         return pd.Series([True for _ in siblings.index], index=siblings.index)
@@ -812,17 +1013,26 @@ def rate_cal_offset(siblings: pd.DataFrame):
         ]
     )
     cal_chron_score = sol_offset + ltst_offset
+    # noinspection PyTypeChecker
     return cal_chron_score.abs() == cal_chron_score.abs().min()
 
 
-def rate_version(siblings: pd.DataFrame):
+def rate_version(siblings: pd.DataFrame) -> pd.Series:
     """
-    merit criterion for file selection. return files with highest version #s.
+    Merit criterion for file selection in observation clustering. Return a
+    boolean mask for the files with the highest version #s (among all available
+    version #s).
     """
+    # noinspection PyTypeChecker
     return siblings["VERSION"] == siblings["VERSION"].max()
 
 
-def rate_rc_version(siblings: pd.DataFrame):
+def rate_rc_version(siblings: pd.DataFrame) -> pd.Series:
+    """
+    Merit criterion for file selection in observation clustering. Return a
+    boolean mask for the files whose associated RC files have the highest
+    version # (among all available version #s).
+    """
     parsed_rc_fns = siblings["RC_FILE"].map(parse_zcam_fn)
     max_version = max([fn["VERSION"] for fn in parsed_rc_fns])
     return pd.Series(
@@ -835,23 +1045,30 @@ def rate_rc_version(siblings: pd.DataFrame):
     )
 
 
-def rate_creation_time(siblings: pd.DataFrame):
+def rate_creation_time(siblings: pd.DataFrame) -> pd.Series:
     """
-    merit criterion for file selection. return most recently made file.
+    Merit criterion for file selection. Return a boolean mask that is True for
+    the most recently-made file and False otherwise.
     """
+    # noinspection PyTypeChecker
     return (
         siblings["PRODUCT_CREATION_TIME"]
         == siblings["PRODUCT_CREATION_TIME"].max()
     )
 
 
-def detect_ranging_shot(dupes):
-    """are these duplicate filters due to a 3D-supporting ranging shot?"""
+def detect_ranging_shot(dupes) -> bool:
+    """
+    Heuristic for observation clustering. Return True if duplicate filters in
+    a dataframe of images from a single observation appear to be duplicated
+    because they were used in a 3D-supporting ranging shot.
+    """
     return (
         (set(dupes["FILTER"]) == {"L0", "R0"})
         and (len(dupes) == 4)
         and (set(dupes["FILTER"].iloc[0:2]) == {"L0", "R0"})
     )
+
 
 """
 footnote: dead mono ranging shot filtering code

@@ -15,7 +15,7 @@ import shutil
 import socket
 import time
 from typing import Any
-import urllib.request
+from urllib.request import urlopen
 
 import boto3
 from boto3.exceptions import S3UploadFailedError
@@ -23,7 +23,6 @@ import botocore.config
 import gspread
 from botocore.exceptions import ClientError
 from cytoolz import merge
-import dateutil.parser as dtp
 from dustgoggles.pivot import itemize_numpy
 from googleapiclient.errors import Error as GoogleError
 from oauth2client.service_account import ServiceAccountCredentials
@@ -31,7 +30,7 @@ import pandas as pd
 from silencio.gdrive3 import DriveBot
 from urllib3.connection import BaseSSLError
 
-
+from asdf._types import Waypoints
 from asdf.asdf_utils import obfuscated_name, tar_bytes
 from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
 from asdf.format import folder_names, cached_md5sum
@@ -57,16 +56,14 @@ from asdf_settings.sources import (
 from marslab.bandset import BandSet
 
 
-def get_public_m20_waypoints():
-    waypoint_server_response = urllib.request.urlopen(
-        PUBLIC_WAYPOINTS_URL, timeout=15
-    )
+def get_public_m20_waypoints() -> Waypoints:
+    """Fetches a list of waypoints from the M20 public waypoint server."""
+    waypoint_server_response = urlopen(PUBLIC_WAYPOINTS_URL, timeout=15)
     return json.loads(waypoint_server_response.read())["features"]
 
 
 def gspread_credentials(credentials=None, service_account_file=None):
     """
-    maybe unnecessary
     """
     if (credentials is None) and (service_account_file is None):
         raise ValueError("credentials or an account file must be provided")
@@ -286,10 +283,10 @@ def upload_bandset_to_gdrive(
             break
     aprint(f"uploading all files to {sol_folder_name}/{obs_folder_name}")
     dupes, name_dupes, ok_files, checksums = check_duplicates(
-        list(map(str, bandset.local_files)), 
-        drivebot, 
+        list(map(str, bandset.local_files)),
+        drivebot,
         {
-            k: v for k, v in folders.items() 
+            k: v for k, v in folders.items()
             if k in ['data', 'browse', 'pixmap', 'spatial']
         }
     )

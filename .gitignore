@@ -171,3 +171,5 @@ logs/
 /rapid/data/
 /asdf/tests/asdftestlog.txt
 
+/asdf/tests/data/reference_inputs/
+/asdf/tests/data/reference_outputs/

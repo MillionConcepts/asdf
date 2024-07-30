@@ -1,14 +1,24 @@
+"""
+settings backend module. assembles groups of similar looks to reduce excessive
+wordiness in asdf_settings.rapidlooks
+"""
 from collections import defaultdict
 from copy import deepcopy
-from typing import Mapping
+from typing import Mapping, Optional, Collection, Callable
 
+from marslab.imgops.look import LookInstruction
 from marslab.spectops import SPECTOP_NAMES
 
 from .. import rapidlooks
 from ..rapidlooks import CATEGORIES, CROP_SETTINGS, LOOK_GENERATORS
 
 
-def insert_name_elements(look_instruction):
+def insert_name_elements(look_instruction: LookInstruction) -> Optional[str]:
+    """
+    Formats name codes that distinguish members of a group of similar looks --
+    the same spectop for different bands, for instance -- and inserts them
+    into a look instruction.
+    """
     if look_instruction.get("name") is None:
         return
     substitutions = []
@@ -30,9 +40,15 @@ def insert_name_elements(look_instruction):
     return name
 
 
-def make_recolored_bandmap_looks(looks, _, cmap: str):
+def make_recolored_bandmap_looks(
+    bandmap_looks: Collection[LookInstruction], _, cmap: str
+) -> list[LookInstruction]:
+    """
+    Takes a group of bandmap look instructions and generates a group of look
+    instructions that make the same bandmap but with a different colormap.
+    """
     recolored_bandmaps = []
-    for look in looks:
+    for look in bandmap_looks:
         if look["look"] not in SPECTOP_NAMES:
             continue
         recolored_bandmap = deepcopy(look)
@@ -44,7 +60,11 @@ def make_recolored_bandmap_looks(looks, _, cmap: str):
     return recolored_bandmaps
 
 
-def glom_instruction(inst, part):
+# noinspection PyTypedDict
+def glom_instruction(inst: LookInstruction, part: Mapping) -> LookInstruction:
+    """
+    Copies a look instruction and merges a partial look instruction into it.
+     """
     new = defaultdict(dict, deepcopy(inst))
     for k in part.keys():
         if not isinstance(part[k], Mapping):
@@ -69,7 +89,19 @@ def glom_instruction(inst, part):
     return dict(new)
 
 
-def edit_looks(looks, defaults, settings, look_filter):
+def edit_looks(
+    looks: Collection[LookInstruction],
+    defaults: dict,
+    settings: Mapping,
+    look_filter: Callable[[LookInstruction], bool]
+) -> list[LookInstruction]:
+    """
+    Makes a new version of a group of (possibly incomplete) look instructions,
+    building them from `defaults` (which the instructions may overwrite), the
+    instructions themselves, and `settings` (which may overwrite
+    `defaults` | `instructions`). Ignores any looks that do not match the
+    predicate function `look_filter`.
+    """
     new_looks = []
     for look in looks:
         if not look_filter(look):
@@ -81,13 +113,21 @@ def edit_looks(looks, defaults, settings, look_filter):
     return new_looks
 
 
-def make_modified_bandmap_looks(looks, defaults, settings):
+def make_modified_bandmap_looks(
+    looks: Collection[LookInstruction], defaults: dict, settings: dict
+) -> list[LookInstruction]:
+    """
+    Makes edited copies of any 'bandmap' looks in a passed collection of looks.
+    """
     return edit_looks(
         looks, defaults, settings, lambda l: l['look'] in SPECTOP_NAMES
     )
 
 
-def make_modified_stretchy_looks(looks, defaults, settings):
+def make_modified_stretchy_looks(
+    looks: Collection[LookInstruction], defaults: dict, settings: dict
+) -> list[LookInstruction]:
+    """Makes edited copies of any DCS looks in a passed collection of looks."""
     return edit_looks(
         looks, defaults, settings, lambda l: l['look'] == 'dcs'
     )
@@ -98,6 +138,7 @@ GENERATED_LOOK_DISPATCH = {
     "modified_bandmap": make_modified_bandmap_looks,
     "modified_stretchy": make_modified_stretchy_looks
 }
+"""mapping of look instruction group names to aggregated generator functions."""
 
 # assemble explicitly-defined looks from individual definitions
 # + defaults
@@ -130,4 +171,10 @@ for look_inst in RAPIDLOOKS:
     look_inst["name"] = insert_name_elements(look_inst)
 # deepcopy everything to ensure that later mutation
 # does not result in undesirably shared state
-RAPIDLOOKS = [deepcopy(r) for r in sorted(RAPIDLOOKS, key=lambda i: i['name'])]
+RAPIDLOOKS: list[LookInstruction] = [
+    deepcopy(r) for r in sorted(RAPIDLOOKS, key=lambda i: i['name'])
+]
+"""
+Final assembled list of look instructions to be compiled into Look objects 
+during execution of the primary application (see asdf.format.compile_looks).
+"""

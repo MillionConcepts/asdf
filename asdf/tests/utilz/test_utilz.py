@@ -1,31 +1,56 @@
+import random
+
+from string import ascii_letters, digits, printable
+
+from random import choices, randint
+
+from types import NoneType
+
+from operator import eq
+from pathlib import Path
 import re
-import shutil
+from typing import (
+    Collection, Hashable, Literal, NotRequired, Optional, TypedDict, Union
+)
 from unittest.mock import patch
 
 from astropy.io import fits
 from cytoolz import valfilter
-from dustgoggles.func import disjoint, intersection, constant
+from dustgoggles.func import constant, disjoint, intersection, gmap
 from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
-import pandas.api.types
-import rich
 from PIL import Image
+import rich
+import shutil
 
 import asdf.chatter
 import asdf.cli_endpoint
 import asdf.flow
 import asdf.pretty
-from marslab.compat.xcam import numeric_columns
+from asdf.tests.utilz.settings import VARCOLS
 
+# noinspection PyTypedDict
+RELEVANT_TYPECODES = ''.join(
+    {*[np.typecodes[t] for t in ['AllInteger', 'AllFloat']], 'O'}
+)
+RNG = np.random.default_rng()
 RUNTIME_VARIABLE_COLUMNS = re.compile(
     r"(ASDF_VERSION|FILE_TIMESTAMP|CREATOR|.*_PATH)"
 )
 
 
+def _insert_nulls_inplace(
+    series: pd.Series, length: int, null: Union[NoneType, np.nan, Literal['-']]
+) -> None:
+    series.loc[
+        RNG.choice(series.index, RNG.integers(1, min(length, 20)))
+    ] = null
+
+
 def tree(root_path):
     tree_fs = OSFS(str(root_path))
-    return list(tree_fs.walk.files())
+    return list(map(lambda f: f.strip('/'), tree_fs.walk.files()))
 
 
 def record_mismatches(results, absent, novel):
@@ -36,63 +61,103 @@ def record_mismatches(results, absent, novel):
     return results
 
 
-def drop_variable_and_mismatched(df, mismatches) -> pd.DataFrame:
-    variable_columns = [
-        col for col in df.columns if re.match(RUNTIME_VARIABLE_COLUMNS, col)
+def _undash(series):
+    if series.dtype.char != 'O':
+        return series
+    series = series.replace('-', None)
+    try:
+        return series.astype(float)
+    except ValueError:
+        return series
+
+
+class SeriesComparison(TypedDict):
+    ref: pd.Series
+    test: pd.Series
+    ix: pd.Index
+
+
+class CSVComparison(TypedDict):
+    row_count: NotRequired[dict[Literal["ref", "test"], int]]
+    column_count: NotRequired[dict[Literal["ref", "test"], int]]
+    column_names: NotRequired[dict[Literal["new", "missing"], set[Hashable]]]
+    elements: NotRequired[SeriesComparison]
+    issues: NotRequired[
+        list[Literal["row_count", "column_count", "column_names", "elements"]]
     ]
-    mismatched_columns = [col for col in df.columns if col in mismatches]
-    return df.drop(columns=(variable_columns + mismatched_columns))
 
 
-def compare_csv_files(test_path, ref_path, ignore_fields = None):
-    problems = []
-    test_df, ref_df = pd.read_csv(test_path), pd.read_csv(ref_path)
-    if ignore_fields is not None:
-        for field in ignore_fields:
-            test_df = test_df.drop(columns=field, errors='ignore')
-            ref_df = ref_df.drop(columns=field, errors='ignore')
-    ref_df = ref_df.replace('-', float('nan')).dropna(axis=1)
-    test_df = test_df.replace('-', float('nan')).dropna(axis=1)
-    test_mismatches, ref_mismatches = disjoint(test_df.columns, ref_df.columns)
-    # are we missing, or have we added, entire columns?
-    if len(test_mismatches + ref_mismatches):
-        for col in test_mismatches:
-            problems.append(f"{col} found only in test")
-        for col in ref_mismatches:
-            problems.append(f"{col} found only in reference")
-    # don't try to compare columns we know to be absent, or which we expect to
-    # change between runs even if all inputs are the same(e.g., creation time)
-    test_df_pruned = drop_variable_and_mismatched(
-        test_df, test_mismatches
-    ).sort_index(axis=1)
-    ref_df_pruned = drop_variable_and_mismatched(
-        ref_df, ref_mismatches
-    ).sort_index(axis=1)
-    # pandas.api.types.is_numeric_dtype(data[col])
-    numeric = numeric_columns(test_df_pruned)
-    numeric_diff =np.isclose(
-        test_df_pruned[numeric].values,
-        ref_df_pruned[numeric].values
+def compare_series(
+    ref: pd.Series, test: pd.Series, rtol: float = 1e-5, atol: float = 1e-5
+) -> Optional[SeriesComparison]:
+    maxlen = min(len(ref), len(test))
+    rv, tv = map(lambda s: _undash(s.iloc[:maxlen].copy()), (ref, test))
+    if all(map(pd.api.types.is_float_dtype, (rv, tv))):
+        equal = lambda a, b: np.isclose(a, b, rtol, atol)
+    else:
+        equal = eq
+    val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
+    if not val_mismatch.any():
+        return None
+    return {
+        k: s[val_mismatch].values
+        for k, s in zip(('ref', 'test', 'ix'), (rv, tv, val_mismatch.index))
+    }
+
+
+def compare_dfs(
+    ref: pd.DataFrame,
+    test: pd.DataFrame,
+    varcols: Collection[str] = (),
+    key_column: Optional[Hashable] = None,
+    rtol: float = 1e-5,
+    atol: float = 1e-5
+) -> CSVComparison:
+    if key_column is not None:
+        ref = ref.sort_values(by=key_column).reset_index(drop=True)
+        test = test.sort_values(by=key_column).reset_index(drop=True)
+    comparison = {}
+    if len(ref) != len(test):
+        comparison["row_count"] = {"ref": len(ref), "test": len(test)}
+    if len(ref.columns) != len(test.columns):
+        comparison["column_count"] = {
+            "ref": len(ref.columns), "test": len(test.columns)
+        }
+    missing_cols = set(ref.columns).difference(test.columns)
+    new_cols = set(test.columns.difference(ref.columns))
+    if len(missing_cols) + len(new_cols) > 0:
+        comparison["column_names"] = {"new": new_cols, "missing": missing_cols}
+    shared = set(ref.columns).intersection(test.columns)
+    if len(varcols) > 0:
+        varpat = re.compile('|'.join(varcols))
+        shared = {s for s in shared if not re.match(varpat, s)}
+    element_mismatches = valfilter(
+        lambda d: d is not None,
+        {c: compare_series(ref[c], test[c], rtol, atol) for c in shared}
     )
-    numeric_diff = pd.DataFrame(numeric_diff)
-    numeric_diff.columns = numeric
-    non_numeric = [
-        col for col in test_df_pruned.columns
-        if not pandas.api.types.is_numeric_dtype(test_df_pruned[col])
-    ]
-    non_numeric_diff = test_df_pruned[non_numeric] == ref_df_pruned[non_numeric]
-    diff = pd.concat([numeric_diff, non_numeric_diff], axis=1)
-    # remaining columns are completely equal -- quit
-    if diff.all(axis=None):
-        return problems
-    diff = diff.loc[:, ~diff.all(axis=0).values]
-    for col in diff.columns:
-        problems.append(
-            f"mismatched values in {col}: "
-            f"{test_df.loc[~diff[col], col].values}, "
-            f"{ref_df.loc[~diff[col], col].values}"
-        )
-    return problems
+    if len(element_mismatches) > 0:
+        comparison["elements"] = element_mismatches
+    if len(comparison.keys()) > 0:
+        comparison["issues"] = list(comparison.keys())
+    return comparison
+
+
+def compare_csv_files(
+    ref_path: Union[str, Path],
+    test_path: Union[str, Path],
+    varcols: Collection[Hashable] = (),
+    key_column: Optional[Hashable] = None,
+    rtol: float = 1e-5,
+    atol: float = 1e-5
+) -> CSVComparison:
+    # noinspection PyTypeChecker
+    return compare_dfs(
+        *map(pd.read_csv, (ref_path, test_path)),
+        varcols,
+        key_column,
+        rtol,
+        atol
+    )
 
 
 def compare_browse_images(test_path, ref_path):
@@ -108,7 +173,7 @@ def compare_browse_images(test_path, ref_path):
     diff = abs(test_array.astype(np.float32) - ref_array.astype(np.float32))
     if np.mean(diff) > 1.5e-2:
         problems.append(
-            f" images differ on average by {np.mean(diff)}, > 1.5e-2"
+            f"images differ on average by {np.mean(diff)}, > 1.5e-2"
         )
     if diff[diff > 50].size > 500:
         problems.append(f"images have > 500 pixels that differ by > 50")
@@ -130,30 +195,66 @@ def compare_roi_fits(test_path, ref_path):
     return problems
 
 
-def dispatched_asdf_comparison(file, test_fs, ref_fs, ignore_fields=None):
-    test_path, ref_path = (test_fs.getsyspath(file), ref_fs.getsyspath(file))
-    if file.endswith("csv"):
-        return compare_csv_files(test_path, ref_path, ignore_fields)
-    if file.endswith("png"):
+def dispatched_asdf_comparison(
+    file,
+    ref_root: Path,
+    test_root: Path,
+    use_color_as_key_column: bool = True,
+    marslab_rtol: float = 1e-5,
+    marslab_atol: float = 1e-5,
+    varcols: Collection[str] = VARCOLS,
+):
+    test_path, ref_path = test_root / file, ref_root / file
+    if file.suffix == '.csv' and file.name.startswith('marslab'):
+        return compare_csv_files(
+            ref_path,
+            test_path,
+            varcols,
+            "COLOR" if use_color_as_key_column is True else None,
+            marslab_rtol,
+            marslab_atol
+        )
+    if file.suffix == ".png":
         return compare_browse_images(test_path, ref_path)
-    if file.endswith(".fits.gz"):
+    if file.suffixes == [".fits", ".gz"]:
         return compare_roi_fits(test_path, ref_path)
+    # TODO, maybe: write a comparison for these?
+    if file.suffix == '.sel':
+        return []
     return [f"unknown file type"]
 
 
-def compare_asdf_outputs(test_root, ref_root, ignore_fields=None):
-    test, reference = tree(test_root), tree(ref_root)
+def compare_asdf_outputs(
+    ref_root: Path,
+    test_root: Path,
+    use_color_as_key_column: bool = True,
+    marslab_rtol: float = 1e-5,
+    marslab_atol: float = 1e-5,
+    varcols: Collection[str] = VARCOLS,
+    skiptypes: Collection[str] = ()
+):
+    test, reference = gmap(Path, tree(test_root)), gmap(Path, tree(ref_root))
+    if len(skiptypes) > 0:
+        skippy = re.compile('|'.join(skiptypes))
+        test = [t for t in test if not re.match(skippy, t.name)]
+        reference = [r for r in reference if not re.match(skippy, r.name)]
     problems = {}
     novel_files, absent_files = disjoint(test, reference)
     # note files that are completely new or missing
-    if len(novel_files + absent_files):
+    if len(novel_files + absent_files) > 0:
         problems |= record_mismatches(problems, absent_files, novel_files)
     # do comparisons between others
     for file in intersection(test, reference):
-        problems[file] = dispatched_asdf_comparison(
-            file, OSFS(test_root), OSFS(ref_root), ignore_fields
+        problems[str(file)] = dispatched_asdf_comparison(
+            file,
+            ref_root,
+            test_root,
+            use_color_as_key_column,
+            marslab_rtol,
+            marslab_atol,
+            varcols
         )
-    return valfilter(lambda x: x != [], problems)
+    return valfilter(lambda x: x is not None and len(x) > 0, problems)
 
 
 def print_mismatches(absent_files, novel_files):
@@ -244,3 +345,65 @@ def regen_asdf_e2e_case(case):
     # checksum_df.to_csv(
     #     Path(case["temp_path"], case["checksum_path"].name), index=False
     # )
+
+
+def _random_string_series(length: int) -> pd.Series:
+    strings = [
+        ''.join(RNG.choice(tuple(printable), RNG.integers(0, 50)))
+        for _ in range(length)
+    ]
+    return pd.Series(strings)
+
+
+def make_awful_random_dataframe():
+    colnames = [
+        ''.join(RNG.choice(tuple(ascii_letters + digits), 12))
+        for _ in range(randint(3, 50))
+    ]
+    dtype_codes = RNG.choice(tuple(RELEVANT_TYPECODES), len(colnames))
+    length, columns = RNG.integers(1, 3000), {}
+    for colname, code in zip(colnames, dtype_codes):
+        null = np.nan
+        if code in np.typecodes['AllFloat']:
+            columns[colname] = pd.Series(
+                RNG.random(length) * 10.0 ** RNG.integers(-10, 10, length)
+            )
+        elif code in np.typecodes['AllInteger']:
+            columns[colname] = pd.Series(RNG.integers(-10000, 10000, length))
+        elif code == 'O':
+            columns[colname] = _random_string_series(length)
+            # noinspection PyTypeChecker
+            null = RNG.choice([None, '-', np.nan])
+        if code in np.typecodes['AllFloat'] + 'O' and RNG.random() > 0.5:
+            _insert_nulls_inplace(columns[colname], length, null)
+    return pd.DataFrame(columns)
+
+
+def callgen(responses):
+    """creates a generator-like callable"""
+    response_iter = iter(responses)
+
+    def get_next_response(*_, **__):
+        resp = next(response_iter)
+        print(f" ****{resp}**** ")
+        return resp
+
+    return get_next_response
+
+
+# these  are lazy convenience functions for recording console input when
+# generating test cases
+def make_input_tee(fn):
+    def tee_input():
+        result = input()
+        with open(fn, "a") as stream:
+            stream.write(f"{result}\n")
+        return result
+
+    return tee_input
+
+
+def record_console_input(fn='recording.log'):
+    input_patch = patch("rich.console.input", make_input_tee(fn))
+    input_patch.start()
+    return input_patch

@@ -129,17 +129,6 @@ def name_prompt() -> str:
     return Prompt.ask(prompt_text, console=ASDF_CONSOLE)
 
 
-def y_n_prompt(prompt_text, title=None):
-    """generate and perform Y/N prompts"""
-    texts = prompt_text.split("{title}")
-    title = format_roi_title(title)
-    formatted_text = texts[0].append_text(title).append_text(texts[1])
-    value = Confirm.ask(formatted_text, default=False, console=ASDF_CONSOLE)
-    if value is True:
-        return "Y"
-    return "N"
-
-
 def colorize_merspect_roi_name(roi_color_name=None):
     roi_color_hex = MERSPECT_M20_COLOR_MAPPINGS.get(roi_color_name)
     if roi_color_hex is None:

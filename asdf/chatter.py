@@ -1,10 +1,19 @@
 """
-secondary-level handlers & wrappers for asdf workflow
+Secondary-level handlers & wrappers for asdf/fdsa flow. Functions in this
+module are intended primarily for use in interactive sessions or pipelines
+that mock interactive sessions like fdsa. They intentionally print a lot of
+formatted output to the console and require highly preprocessed inputs; they
+are inappropriate for most uses outside the asdf/fdsa flow.
 """
+from __future__ import annotations
+
 from itertools import chain
 import os
 from pathlib import Path
-from typing import Callable, Optional, Literal
+import re
+from typing import (
+    Any, Callable, Optional, Literal, Mapping, TYPE_CHECKING, Union, Collection
+)
 import warnings
 
 from cytoolz import groupby
@@ -29,7 +38,7 @@ from asdf.format import (
     preprocess_scan_path,
     annotate_and_save,
     save_plainly,
-    construct_filename,
+    construct_browse_filename,
     construct_title_and_annotation,
 )
 from asdf.pretty import (
@@ -57,6 +66,7 @@ from asdf.scan import (
     add_effective_taus,
     cluster_observations,
     find_matching_observations,
+    METAMAP_TYPES,
 )
 from asdf_settings.metadata import (
     ROI_METADATA_FIELDS,
@@ -72,14 +82,31 @@ from asdf_settings.metadata import (
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
 import pretty_plot as pplot
 
+if TYPE_CHECKING:
+    # noinspection PyProtectedMember
+    from multiprocessing.pool import ApplyResult
+    from matplotlib.figure import Figure
+    from PIL.Image import Image
+    from asdf.zcam_bandset import ZcamBandSet
+
 
 # TODO: rewrite strings / rich printing in this module with better or at least
 #  more consistent markup
 
 
 def get_scan_results(
-    explicit_path, keep_broadband, keep_caltarget, root_dir, scan_kwargs
-):
+    explicit_path: Optional[Union[str, Path]],
+    keep_broadband: bool,
+    keep_caltarget: bool,
+    root_dir: Optional[Union[str, Path]],
+    scan_kwargs: Mapping
+) -> Union[tuple[dict, tuple[str, ...], tuple[str, ...]], list]:
+    """
+    Handler function used in the find_and_offer_observations() workflow.
+    Scans one or more directories for ZCAM IOF files and attempts to group
+    them into valid 'clusters', recording a variety of failure states and
+    intentional exclusions in the process.
+    """
     with ASDF_PROGRESS_SPIN as prog:
         ASDF_RPH_SPIN.task_id = prog.add_task(" ... scanning files ...")
         style_prog(prog, "green")
@@ -123,11 +150,24 @@ def find_and_offer_observations(
     keep_caltarget=False,
     mosaic=False,
     **scan_kwargs,
-):
+) -> tuple[
+    Union[pd.DataFrame, tuple[pd.DataFrame, ...], None], Union[bool, None]
+]:
     """
-    process a request for ZCAM files; print the results of the request to
+    Process a request for ZCAM files; print the results of the request to
     console; ask the user to select a observation if there is more than one;
     ask the user to confirm the observation if there is only one.
+
+    Returns a tuple whose elements are:
+    1. If we are in noninteractive-all mode and observations were found, or if
+     multiple observations were found and the user requested that asdf run
+     all of them, a tuple of dataframes; if we are in interactive or regular
+     noninteractive mode, observations were found, and the user did not reject
+     them, a single dataframe; if no observations were found or the user
+     rejected them, None
+    2. A status code that is True if asdf should expect to run multiple
+     observations, False if it should expect to run only one, and None if no
+     usable observations were found or the user rejected them.
     """
     if (rsm := scan_kwargs.get('rsm')) is not None:
         scan_kwargs['rsm'] = format_rsm_option(rsm)
@@ -165,7 +205,7 @@ def find_and_offer_observations(
         return reject_scan(
             f"Sorry, no usable observations found. {suffix}:confused_face:\n"
         )
-    if noninteractive:
+    if noninteractive is not False:
         if noninteractive == "all":
             aprint(
                 "noninteractive-all mode; processing all observations.",
@@ -188,16 +228,20 @@ def find_and_offer_observations(
         if obs_choice != "a":
             return tuple(results.values())[int(obs_choice) - 1], False
         return tuple(results.values()), True
-    else:
-        if not confirm_observation():
-            return reject_scan(
-                "halting due to user rejection of file list. If "
-                "[italic]asdf[/italic] didn't find what you expected, "
-            )
-        return tuple(results.values())[0], False
+    if confirm_observation() is not True:
+        return reject_scan(
+            "halting due to user rejection of file list. If "
+            "[italic]asdf[/italic] didn't find what you expected, "
+        )
+    return tuple(results.values())[0], False
 
 
-def is_feature_mismatch(metadata, field):
+def is_feature_mismatch(metadata: dict[str, str], field: str) -> bool:
+    """
+    Predicate function for ask_user_about_roi() workflow. Returns True if a
+    particular metadata field is irrelevant to an ROI's assigned feature (e.g.
+    MEMBER for an ROI with FEATURE 'soil')
+    """
     if field not in list(
         chain.from_iterable(FEATURE_EXCLUSIVE_ROI_FIELDS.values())
     ):
@@ -224,7 +268,7 @@ def ask_user_about_roi(
     :param constants: a dictionary of fields and values that the user
         has asserted are constant across all ROIs.
     """
-    fields, roi_metadata = _prep_fields(), constants.copy()
+    fields, roi_metadata = _sort_fields(), constants.copy()
     for field in fields:
         # ignore legacy fields, constants, etc.
         if _checkskip(field, roi_metadata) != "ok":
@@ -238,7 +282,14 @@ def ask_user_about_roi(
     return roi_metadata
 
 
-def _fix_order(order):
+def _fix_order(order: dict[str, int]) -> bool:
+    """
+    Helper function for ROI metadata field-sorting algorithm. Swaps the first
+    pair of fields it finds that are out of required ask order (e.g.,
+    FEATURE_SUBTYPE before
+    FEATURE), then returns False. If it finds no fields out of order, returns
+    True, meaning the sort is done.
+    """
     for k, v in CONDITIONAL_FIELDS.items():
         if order[k] < order[v]:
             order[v] = min(order.values()) - 1
@@ -247,6 +298,11 @@ def _fix_order(order):
 
 
 def _sort_fields() -> list[str]:
+    """
+    Sorts ROI metadata fields we ask users about, ensuring we will always ask
+    about them in the right order (e.g., we must ask about FEATURE before
+    FEATURE_SUBTYPE). Returns a list of sorted fields.
+    """
     order = {f: i for i, f in enumerate(ROI_METADATA_FIELDS)}
     while _fix_order(order) is False:
         continue
@@ -256,13 +312,19 @@ def _sort_fields() -> list[str]:
     return fields
 
 
-def _prep_fields() -> list[str]:
-    return _sort_fields()
-
-
 def _checkskip(
     field: str, roi_metadata: dict
 ) -> Literal["skip", "mismatch", "constant", "ok"]:
+    """
+    Helper function for ROI question-asking workflow. Returns "skip" if a field
+    is legacy (meaning that it should be propagated into the metadata but not
+    further considered); "mismatch" if a field is inapplicable to the
+    established FEATURE of an ROI (e.g. SOIL_LOCATION for an ROI with FEATURE
+    "rock"), "constant" if a user has said a field is the same for all ROIs,
+    meaning that it must be considered in the remainder of the question-asking
+    workflow but the user should not be prompted about it, and "ok" if the
+    user should be prompted about the field.
+    """
     if field in (
         LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS + EMPTY_METADATA_FIELDS
     ):
@@ -275,9 +337,12 @@ def _checkskip(
 
 
 def _check_field_options(
-    field: str, roi_metadata: dict
+    field: str, roi_metadata: dict[str, str]
 ) -> tuple[Optional[list[str]], bool]:
-    """find and check validity of options for 'flowdown' metadata categories"""
+    """
+    Get valid options for per-ROI metadata fields depending on the
+    preestablished values of other per-ROI metadata fields.
+    """
     if field == "MEMBER":
         if "FORMATION" not in roi_metadata.keys():
             return None, True
@@ -299,8 +364,14 @@ def _check_field_options(
     return None, False
 
 
-def input_roi_metadata(marslab_data, ci):
-    fields, constants = _prep_fields(), {}
+def input_roi_metadata(
+    marslab_data: pd.DataFrame, ci: Callable[[Callable, Any, ...], str]
+) -> pd.DataFrame:
+    """
+    Handler function that prompts a user for per-ROI metadata and inserts it
+    into a dataframe of ROI counts.
+    """
+    fields, constants = _sort_fields(), {}
     for field in fields:
         if (field_disposition := _checkskip(field, constants)) == "skip":
             continue
@@ -337,7 +408,15 @@ def input_roi_metadata(marslab_data, ci):
     return marslab_data
 
 
-def handle_map_checks(bandset, code="pix_map"):
+def handle_map_checks(
+    bandset: ZcamBandSet, code: Literal[METAMAP_TYPES] = "pix_map"
+):
+    """
+    Finds 'metamaps' of a particular type that match an observation loaded into
+    a bandset (in the current pipeline, only pixmaps are fully supported)
+    and loads them metamaps into that bandset. Prints various attractive status
+    messages while doing so.
+    """
     metamaps, match_warnings = find_obs_metamaps(
         bandset.metadata["PATH"].unique(), code=code,
     )
@@ -365,8 +444,26 @@ def handle_map_checks(bandset, code="pix_map"):
 
 
 def loudly_ingest_analyses(
-    path, sol=None, seq_id=None, file_regex=None, do_empties=True, rsm=None
-):
+    path: Union[str, Path],
+    sol: Optional[Union[str, int]] = None,
+    seq_id: Optional[str] = None,
+    file_regex: Optional[Union[str, re.Pattern]] = None,
+    do_empties: Literal[True, False, "only"] = True,
+    rsm: Optional[Union[int, Collection[int]]] = None
+) -> Optional[pd.DataFrame]:
+    """
+    Chatty handler function for fdsa setup. Searches recursively under `path`
+    for ROI FITS files and compact marslab files, optionally filtering them
+    by sol, sequence id, or arbitrary filename regex, then attempts to match
+    them to one another. Prints attractive messages about successful and
+    failed matches while doing so. If `do_empties` is False, filters compact
+    marslab files that contain no ROIs. If `do_empties` is "only", filters
+    compact marslab files that _do_ contain ROIs.
+
+    Returns a dataframe of "analyses" (information about matched compact
+    marslab / ROI pairs, along with empty compact marslabs if do_empties is
+    True or "only").
+    """
     ASDF_CONSOLE.style = "FDSA"
     if not cached_exists(path):
         aprint("[hot_pink bold]sorry, {} does not exist.".format(str(path)))
@@ -487,17 +584,25 @@ def loudly_ingest_analyses(
 
 
 def setup_reprocess(
-    marslab_path=".",
-    image_path=".",
-    sol=None,
-    seq_id=None,
-    marslab_regex=None,
-    image_regex=None,
-    do_empties=True,
-    rsm=None
-):
-    if rsm is not None:
-        rsm = format_rsm_option(rsm)
+    marslab_path: Union[str, Path] = ".",
+    image_path: Union[str, Path] = ".",
+    sol: Optional[Union[str, int]] = None,
+    seq_id: Optional[str] = None,
+    marslab_regex: Optional[Union[str, re.Pattern]] = None,
+    image_regex: Optional[Union[str, re.Pattern]] = None,
+    do_empties: Literal[True, False, "only"] = True,
+    rsm: Optional[Union[int, Collection[int]]] = None
+) -> Union[tuple[dict[str, pd.DataFrame], pd.DataFrame], tuple[None, None]]:
+    """
+    Chatty handler function for top-level fdsa setup. Searches under
+    `marslab_path` for compact marslab files and ROI files, then attempts to
+    match them to one another, forming 'analyses'. Then, searches under
+    `image_path` for IOFs and attempts to cluster them into observations that
+    match each analysis. If at all successful, returns a dict matching compact
+    marslab file paths to observation dataframes and a dataframe containing
+    all unfiltered analyses. If not, returns (None, None). Prints various
+    attractive status messages during operation.
+    """
     analyses = loudly_ingest_analyses(
         marslab_path, sol, seq_id, marslab_regex, do_empties, rsm
     )
@@ -530,7 +635,7 @@ def setup_reprocess(
                 analyses.loc[analyses["MARSLAB"].isin(misses)].index
             )
     if len(reprocess_pairs) == 0:
-        sorry_analysis()
+        return sorry_analysis(), None
     aprint(
         f"[bold white]found {len(reprocess_pairs)} observation-metadata "
         f"pair(s) for reprocessing.\n"
@@ -550,15 +655,19 @@ def setup_reprocess(
     return reprocess_pairs, analyses
 
 
-def sorry_analysis():
+def sorry_analysis() -> None:
+    """Prints an analysis-finding failure message."""
     aprint(
         "[bold red]sorry, no usable analyses found for recreation."
         " :confused_face:"
     )
-    return None
 
 
-def reject_scan(msg):
+def reject_scan(msg: str) -> tuple[None, None]:
+    """
+    Prints a user-rejected-results failure message and returns a tuple of
+    (None, None) to match expected signatures.
+    """
     aprint(
         f"[red bold]{msg}Try copying the specific files you want to work "
         f"with into a separate directory and running [italic]asdf[/italic] on "
@@ -569,10 +678,14 @@ def reject_scan(msg):
     return None, None
 
 
-def collect_dispersed_metadata(metadata, silent=False):
+def collect_dispersed_metadata(
+    metadata: pd.DataFrame, silent: bool = False
+) -> pd.DataFrame:
     """
-    handler function for asdf.cli that runs around to several distinct
-    sources asking them for additional info prior to ROI evaluation
+    Helper function for primary asdf workflow. Runs around to external sources
+    asking them for additional info prior to ROI evaluation and adds them to a
+    dataframe of metadata about an observation. At present this is mostly only
+    for geospatial data from the waypoints server.
     """
     if USE_PUBLIC_WAYPOINTS:
         if not silent:
@@ -586,9 +699,68 @@ def collect_dispersed_metadata(metadata, silent=False):
     return metadata
 
 
-def save_looks(bandset, outpath, basename=None, threads=None, plain=False):
-    # TODO: decide if this and annotate_and_save_rapidlook() should live on
-    #  zcambandset -- this is not urgent.
+def _write_plain_image(
+    look: Union[Figure, Image],
+    look_name: str,
+    outpath: Union[str, Path],
+    pool: Optional[ProcessPool],
+    basename: str,
+    results: dict[str, ApplyResult]
+) -> str:
+    """
+    Writes a figure or image as a PNG file 'plainly', i.e., with no added
+    caption. Shuold be called only as part of the save_looks() workflow.
+    """
+    filename = construct_browse_filename(look_name, basename)
+    # TODO: make this special case less gross
+    if "mosaic" not in filename:
+        filename = filename.split(".")[0] + "-plain.png"
+    if pool is None:
+        save_plainly(look, filename, outpath)
+        ASDFLOG.info("wrote " + filename)
+    else:
+        results[filename] = pool.apipe(save_plainly, look, filename, outpath)
+    return filename
+
+
+def _write_annotated_image(
+    bandset: ZcamBandSet,
+    look: Union[Figure, Image],
+    look_name: str,
+    outpath: Union[str, Path],
+    pool: Optional[ProcessPool],
+    prefix: str,
+    results: dict[str, ApplyResult]
+) -> str:
+    """
+    Write a Figure or Image to disk as a PNG file with a standardized caption.
+    Should be called only as part of the save_looks() workflow.
+    """
+    annotation, title = construct_title_and_annotation(bandset, look_name)
+    filename = construct_browse_filename(look_name, prefix)
+    if pool is None:
+        annotate_and_save(title, annotation, look, filename, outpath)
+        ASDFLOG.info("wrote " + filename)
+    else:
+        results[filename] = pool.apipe(
+            annotate_and_save, title, annotation, look, filename, outpath
+        )
+    return filename
+
+
+def save_looks(
+    bandset: ZcamBandSet,
+    outpath: Union[str, Path],
+    basename: Optional[str] = None,
+    threads: Optional[int] = None,
+    plain: bool = False
+) -> None:
+    """
+    Chatty handler function to save all rapidlooks associated with a bandset
+    as PNG images. Applies various naming rules and, optionally, performs
+    writes in multiple threads. If `plain` is True, saves images with no
+    captions.
+    """
     if basename is None:
         basename = bandset.name
     pool = None
@@ -607,11 +779,11 @@ def save_looks(bandset, outpath, basename=None, threads=None, plain=False):
         if not os.path.exists(image_path):
             os.makedirs(image_path)
         if plain is True:
-            filename = write_plain_image(
+            filename = _write_plain_image(
                 look, look_name, image_path, pool, basename, results
             )
         else:
-            filename = write_annotated_image(
+            filename = _write_annotated_image(
                 bandset, look, look_name, image_path, pool, basename, results
             )
         bandset.local_files.append(str(Path(image_path, filename)))
@@ -621,45 +793,25 @@ def save_looks(bandset, outpath, basename=None, threads=None, plain=False):
         wait_for_it(pool, results, ASDFLOG, "wrote ")
 
 
-def write_plain_image(look, look_name, outpath, pool, basename, results):
-    filename = construct_filename(look_name, basename)
-    # TODO: make this special case less gross
-    if "mosaic" not in filename:
-        filename = filename.split(".")[0] + "-plain.png"
-    if pool is None:
-        save_plainly(look, filename, outpath)
-        ASDFLOG.info("wrote " + filename)
-    else:
-        results[filename] = pool.apipe(save_plainly, look, filename, outpath)
-    return filename
-
-
-def write_annotated_image(
-    bandset, look, look_name, outpath, pool, prefix, results
-):
-    annotation, title = construct_title_and_annotation(bandset, look_name)
-    filename = construct_filename(look_name, prefix)
-    if pool is None:
-        annotate_and_save(title, annotation, look, filename, outpath)
-        ASDFLOG.info("wrote " + filename)
-    else:
-        results[filename] = pool.apipe(
-            annotate_and_save, title, annotation, look, filename, outpath
-        )
-    return filename
-
-
-def pretty_plot_bandset(bandset, outpath):
+def pretty_plot_bandset(
+    bandset: ZcamBandSet, outpath: Union[str, Path]
+) -> None:
+    """
+    Preprocesses a bandset's ROI data and metadata and feeds it to pretty-plot,
+    which plots it and saves it to disk as a PNG file.
+    """
     aprint(Rule(" pretty-plotting data "))
     plot_fn = str(
         Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
     )
     from pretty_plot.convert import scale_eyes
 
-    # TODO: cruft?
+    # TODO: what was this?
     # target_name = ""
     # if bandset.compact["NAME"].iloc[0]:
     #     target_name = bandset.compact["NAME"].iloc[0]
+
+    # TODO: this scaling behavior should occut in pretty-plot, not here.
     plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
     for band in DERIVED_CAM_DICT["ZCAM"]["filters"].keys():
         if plot_data[band].isna().any():
@@ -677,7 +829,13 @@ def pretty_plot_bandset(bandset, outpath):
 
 
 # TODO: improve structure
-def fdsa_insert(marslab_data, prototype):
+def fdsa_insert(
+    marslab_data: pd.DataFrame, prototype: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    fdsa-mode version of ask-user-about-ROIs workflow. Propagates metadata
+    loaded from a compact marslab file into a dataframe of counted ROIs.
+    """
     fields_skipped = []
     for field in ROI_METADATA_FIELDS:
         if field not in prototype.columns:
@@ -741,7 +899,8 @@ def fdsa_insert(marslab_data, prototype):
 
 
 # TODO: improve structure
-def complain_about_pixmap_counts(quality_df):
+def complain_about_pixmap_counts(quality_df: pd.DataFrame):
+    """Print information about bad/hot/etc. pixels to console."""
     for _, counts in quality_df.iterrows():
         color = counts["COLOR"]
         for flag in PIXEL_FLAG_NAMES:
@@ -774,8 +933,18 @@ def complain_about_pixmap_counts(quality_df):
             aprint(header.append(roi).append(complaint).append(values))
 
 
-def check_mosaic_paths(bandsets, outpath):
-    """for reuse_mosaics workflow."""
+def check_mosaic_paths(
+    bandsets: list[ZcamBandSet],
+    outpath: Union[str, Path]
+) -> Optional[dict[Literal["L", "R"], Path]]:
+    """
+    Assemble expected names for existing mosaic files, check if they're
+    present, and print an error if they're not. Returns a dict like
+    {'L': l_path, 'R': r_path} if found and None if not (which cues asdf to
+    bail out).
+
+    Intended for reuse_mosaics workflow.
+    """
     from asdf.mosaic import concat_mosaic_fn
 
     mosaic_filenames = {
@@ -796,5 +965,6 @@ def check_mosaic_paths(bandsets, outpath):
                 "mosaic files not available. Please run again without "
                 "this flag or provide the files. Bailing out."
             )
-            return None
+        return
+    # noinspection PyTypeChecker
     return mosaic_paths
