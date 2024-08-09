@@ -11,12 +11,12 @@ LOCATION_TABLE = {
     101: "Octavia E. Butler Landing",
     99999: "Green Zone Campaign",
 }
-# these are always generated blank and intended to be populated manually when
-# needed. we don't actually ask the user about them. they will, however,
-# repopulate from saved files using fdsa.
+# these are intended to be populated manually when needed. we don't actually
+# ask the user about autogenerate them. fdsa will, however, propagate them.
+# TODO: this may be completely legacy at this point; checl.
 EMPTY_METADATA_FIELDS = ["NOTES"]
 
-# we don't ask users about these, or even generate them, but do repopulate
+# these are old fields that should never be used in new files. we do repopulate
 # them during FDSA runs.
 LEGACY_METADATA_FIELDS = [
     "SOIL_COLOR",
