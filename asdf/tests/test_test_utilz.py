@@ -43,7 +43,7 @@ def test_compare_browse_images():
         alpha_squirrel.convert('RGBA').save(testpaths['alpha'])
         del alpha_squirrel, lil_squirrel, blue_squirrel, base_squirrel
         comps = {
-            case: compare_browse_images(ref_path, testpaths[case])
+            case: compare_browse_images(testpaths[case], ref_path)
             for case in test_cases
         }
         for case, comp in comps.items():

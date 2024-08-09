@@ -4,6 +4,8 @@ from contextlib import redirect_stdout
 
 import datetime as dt
 import json
+from pathlib import Path
+
 import pytest
 import shutil
 
@@ -33,22 +35,35 @@ def test_e2e(case):
         with redirect_stdout(stdout_buffer):
             generate_e2e_outputs(**case)
         issues = compare_asdf_outputs(
-            TEST_OUTPUT_DIR / case['name'], REF_OUTPUT_DIR / case['name']
+            REF_OUTPUT_DIR / case['name'], TEST_OUTPUT_DIR / case['name']
         )
         if len(issues) > 0:
             raise ValueError("outputs do not match, see test dumps")
     finally:
-        if (TEST_OUTPUT_DIR / case['name']).exists():
-            shutil.rmtree(TEST_OUTPUT_DIR / case['name'])
         if len(issues) > 0:
-            ERRDUMP_LOG_PATH.mkdir(exist_ok=True)
-            err_json_file = ERRDUMP_LOG_PATH / f"{case['name']}.json"
+            if (errdir := (ERRDUMP_LOG_PATH / case['name'])).exists():
+                shutil.rmtree(errdir)
+            errdir.mkdir(parents=True)
+            if (TEST_OUTPUT_DIR / case['name']).exists():
+                for fpath in map(Path, issues.keys()):
+                    shutil.copy(
+                        TEST_OUTPUT_DIR / case['name'] / fpath,
+                        errdir / f"{fpath.stem}_test{fpath.suffix}"
+                    )
+                    shutil.copy(
+                        REF_OUTPUT_DIR / case['name'] / fpath,
+                        errdir / f"{fpath.stem}_ref{fpath.suffix}"
+                    )
+            err_json_file = errdir / f"{case['name']}.json"
             with err_json_file.open("w") as stream:
                 stream.write(
-                    json.dumps(issues | {'timestamp': stamp()}), indent=4
+                    json.dumps(issues | {'timestamp': stamp()}, indent=4)
                 )
             if stdout_buffer.tell() > 0:
-                console_dump_file = ERRDUMP_LOG_PATH / f"{case['name']}.dump"
+                console_dump_file = errdir / f"{case['name']}.dump"
                 stdout_buffer.seek(0)
                 with console_dump_file.open("w") as stream:
                     stream.write(stdout_buffer.read())
+
+        if (TEST_OUTPUT_DIR / case['name']).exists():
+            shutil.rmtree(TEST_OUTPUT_DIR / case['name'])
