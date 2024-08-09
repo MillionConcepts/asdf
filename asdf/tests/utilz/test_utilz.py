@@ -1,3 +1,4 @@
+from more_itertools import all_equal
 from operator import eq
 from pathlib import Path
 from random import randint
@@ -5,7 +6,7 @@ from string import ascii_letters, digits, printable
 import re
 from types import NoneType
 from typing import (
-    Collection, Hashable, Literal, NotRequired, Optional, TypedDict, Union
+    Collection, Hashable, Literal, NotRequired, Optional, TypedDict, Union, Sequence
 )
 from unittest.mock import patch
 
@@ -15,6 +16,7 @@ from dustgoggles.func import constant, disjoint, intersection, gmap
 from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
+import pdr
 from PIL import Image
 import rich
 import shutil
@@ -82,16 +84,31 @@ class CSVComparison(TypedDict):
     ]
 
 
+def compare_nested_float_series(rv, tv):
+    rv, tv = np.vstack(rv.values), np.vstack(tv.values)
+    close = np.isclose(rv, tv, equal_nan=True)
+    return np.nonzero(close.all(axis=1))[0]
+
+
 def compare_series(
     ref: pd.Series, test: pd.Series, rtol: float = 1e-5, atol: float = 1e-5
 ) -> Optional[SeriesComparison]:
+    # TODO, maybe: doesn't handle nested float sequences of variable length
+    #  (currently we shouldn't have any, though)
     maxlen = min(len(ref), len(test))
     rv, tv = map(lambda s: _undash(s.iloc[:maxlen].copy()), (ref, test))
-    if all(map(pd.api.types.is_float_dtype, (rv, tv))):
-        equal = lambda a, b: np.isclose(a, b, rtol, atol)
+    if (
+        isinstance(rv.iloc[0], Sequence)
+        and isinstance(rv.iloc[0], float)
+        and all_equal(rv.map(len))
+    ):
+        val_mismatch = compare_nested_float_series(rv, tv)
     else:
-        equal = eq
-    val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
+        if all(map(pd.api.types.is_float_dtype, (rv, tv))):
+            equal = lambda a, b: np.isclose(a, b, rtol, atol)
+        else:
+            equal = eq
+        val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
     if not val_mismatch.any():
         return None
     return {
@@ -190,6 +207,22 @@ def compare_roi_fits(ref_path, test_path):
     return problems
 
 
+def compare_space_fits(ref_path, test_path):
+    problems = []
+    test_fits, ref_fits = pdr.read(test_path), pdr.read(ref_path)
+    if test_fits.keys() != ref_fits.keys():
+        problems.append("files have mismatched hdulists")
+        return problems
+    for k in test_fits.keys():
+        if test_fits.metablock_(k) != ref_fits.metablock_(k):
+            problems.append(f"{k} headers mismatched")
+        if (k == "PRIMARY") or ("HEADER" in k):
+            continue
+        if not np.allclose(test_fits[k], ref_fits[k]):
+            problems.append(f"{k} data mismatched")
+    return problems
+
+
 def dispatched_asdf_comparison(
     file,
     ref_root: Path,
@@ -211,12 +244,18 @@ def dispatched_asdf_comparison(
         )
     if file.suffix == ".png":
         return compare_browse_images(ref_path, test_path)
-    if file.suffixes == [".fits", ".gz"]:
-        return compare_roi_fits(ref_path, test_path)
+    if ".fits" in file.suffixes:
+        if file.name.startswith("roi"):
+            return compare_roi_fits(ref_path, test_path)
+        if file.name.startswith("space"):
+            return compare_space_fits(ref_path, test_path)
+        return [f"unknown file type ({ref_path.name}"]
+    if file.stem.endswith("naveval"):
+        return compare_csv_files(ref_path, test_path)
     # TODO, maybe: write a comparison for these?
     if file.suffix == '.sel':
         return []
-    return [f"unknown file type"]
+    return [f"unknown file type ({ref_path.name})"]
 
 
 def compare_asdf_outputs(

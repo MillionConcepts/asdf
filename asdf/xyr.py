@@ -871,7 +871,7 @@ def make_spatial_products(
             maps = read_space_fits(
                 Path(outpath, f"data/space_{ref_band[0]}_{bandset.name}.fits")
             )
-            ASDFLOG.info("loaded spatial FITS file")
+            ASDFLOG.info(f"loaded spatial FITS file referenced to {ref_band}")
         except FileNotFoundError:
             # TODO, maybe: check the other eye anyway? This would be
             #  especially important in a case with only right-eye data,
