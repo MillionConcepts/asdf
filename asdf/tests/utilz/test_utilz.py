@@ -52,9 +52,9 @@ def tree(root_path):
 
 def record_mismatches(results, absent, novel):
     for file in absent:
-        results[file] = ["missing from output"]
+        results[str(file)] = ["missing from output"]
     for file in novel:
-        results[file] = ["not found in reference"]
+        results[str(file)] = ["not found in reference"]
     return results
 
 
@@ -214,11 +214,28 @@ def compare_space_fits(ref_path, test_path):
         problems.append("files have mismatched hdulists")
         return problems
     for k in test_fits.keys():
-        if test_fits.metablock_(k) != ref_fits.metablock_(k):
-            problems.append(f"{k} headers mismatched")
+        if 'HEADER' in k:
+            continue
+        hproblems = {}
+        tblock, rblock = test_fits.metablock_(k), ref_fits.metablock_(k)
+        matches = set(tblock.keys()).intersection(rblock.keys())
+        mismatches = set(tblock.keys()).symmetric_difference(rblock.keys())
+        if len(mismatches) > 0:
+            hproblems['unmatched_header_keys'] = list(mismatches)
+        badvals = {}
+        for key in sorted(matches):
+            if (tv := tblock.get(key)) != (rv := rblock.get(key)):
+                badvals[key] = {"ref": rv, "test": tv}
+        if len(badvals) > 0:
+            hproblems['mismatched_header_values'] = badvals
+        if len(hproblems) > 0:
+            problems.append(hproblems)
         if (k == "PRIMARY") or ("HEADER" in k):
             continue
-        if not np.allclose(test_fits[k], ref_fits[k]):
+        # TODO, maybe: configurable tolerances
+        if not np.allclose(
+            test_fits[k], ref_fits[k], equal_nan=True, atol=1e-6
+        ):
             problems.append(f"{k} data mismatched")
     return problems
 

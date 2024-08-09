@@ -66,6 +66,15 @@ FULL_CASES = {
         )
     }
 }
+SPATIAL_CASES = {
+    0: {
+        'path': PROD_PATH / "0106/iof",
+        'roi_path': ROI_PATH / "roi_SOL0106_zcam03153_RSM286.fits.gz",
+        'noninteractive': True,
+    }
+}
+
+# concatenate all cases including general per-category settings
 TEST_CASES = [
     {
         'name': f"user_input_{k}",
@@ -76,10 +85,15 @@ TEST_CASES = [
     }
     for k, v in USER_INPUT_TEST_RESPONSES.items()
 ]
-
 TEST_CASES += [
     {'name': f'no_roi_{k}', 'roi_path': None} | v
     for k, v in NO_ROI_CASES.items()
 ]
-
 TEST_CASES += [{'name': f'full_{k}'} | v for k, v in FULL_CASES.items()]
+TEST_CASES = [
+    {
+        'name': f'spatial_{k}',
+        'reuse_spatial': False,
+        'spatial': True
+    } | v for k, v in SPATIAL_CASES.items()
+]

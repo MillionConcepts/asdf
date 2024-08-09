@@ -40,12 +40,21 @@ def test_e2e(case):
         if len(issues) > 0:
             raise ValueError("outputs do not match, see test dumps")
     finally:
+        if (errdir := (E2E_FAILURE_DIR / case['name'])).exists():
+            shutil.rmtree(errdir)
         if len(issues) > 0:
-            if (errdir := (E2E_FAILURE_DIR / case['name'])).exists():
-                shutil.rmtree(errdir)
             errdir.mkdir(parents=True)
+            err_json_file = errdir / f"{case['name']}.json"
+            with err_json_file.open("w") as stream:
+                stream.write(
+                    json.dumps(issues | {'timestamp': stamp()}, indent=4)
+                )
             if (TEST_OUTPUT_DIR / case['name']).exists():
                 for fpath in map(Path, issues.keys()):
+                    tpath = TEST_OUTPUT_DIR / case['name'] / fpath
+                    rpath = REF_OUTPUT_DIR / case['name'] / fpath
+                    if not (tpath.exists() and rpath.exists()):
+                        continue
                     shutil.copy(
                         TEST_OUTPUT_DIR / case['name'] / fpath,
                         errdir / f"{fpath.stem}_test{fpath.suffix}"
@@ -54,16 +63,10 @@ def test_e2e(case):
                         REF_OUTPUT_DIR / case['name'] / fpath,
                         errdir / f"{fpath.stem}_ref{fpath.suffix}"
                     )
-            err_json_file = errdir / f"{case['name']}.json"
-            with err_json_file.open("w") as stream:
-                stream.write(
-                    json.dumps(issues | {'timestamp': stamp()}, indent=4)
-                )
             if stdout_buffer.tell() > 0:
                 console_dump_file = errdir / f"{case['name']}.dump"
                 stdout_buffer.seek(0)
                 with console_dump_file.open("w") as stream:
                     stream.write(stdout_buffer.read())
-
         if (TEST_OUTPUT_DIR / case['name']).exists():
             shutil.rmtree(TEST_OUTPUT_DIR / case['name'])
