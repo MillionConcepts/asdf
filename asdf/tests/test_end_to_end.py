@@ -13,7 +13,7 @@ from asdf.console import ASDFLOG
 from asdf.tests.e2e_cases import TEST_CASES
 from asdf.tests.utilz.e2e_utilz import generate_e2e_outputs
 from asdf.tests.utilz.settings import (
-    ERRDUMP_LOG_PATH, REF_OUTPUT_DIR, TEST_OUTPUT_DIR
+    E2E_FAILURE_DIR, REF_OUTPUT_DIR, TEST_OUTPUT_DIR
 )
 from asdf.tests.utilz.test_utilz import compare_asdf_outputs
 
@@ -29,7 +29,7 @@ def stamp():
 )
 def test_e2e(case):
     issues, stdout_buffer = (), StringIO()
-    err_json_file = ERRDUMP_LOG_PATH / f"{case['name']}.json"
+    err_json_file = E2E_FAILURE_DIR / f"{case['name']}.json"
     err_json_file.unlink(missing_ok=True)
     try:
         with redirect_stdout(stdout_buffer):
@@ -41,7 +41,7 @@ def test_e2e(case):
             raise ValueError("outputs do not match, see test dumps")
     finally:
         if len(issues) > 0:
-            if (errdir := (ERRDUMP_LOG_PATH / case['name'])).exists():
+            if (errdir := (E2E_FAILURE_DIR / case['name'])).exists():
                 shutil.rmtree(errdir)
             errdir.mkdir(parents=True)
             if (TEST_OUTPUT_DIR / case['name']).exists():
