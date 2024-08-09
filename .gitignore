@@ -160,7 +160,7 @@ vendor/
 logs/
 
 # test data
-/asdf/tests/data/
+/asdf/tests/data/**
 !/asdf/tests/data/README.md
 
 # scratch space etc.
