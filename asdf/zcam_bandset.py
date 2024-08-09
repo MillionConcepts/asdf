@@ -811,7 +811,9 @@ class ZcamBandSet(BandSet):
         for eye in ("L", "R"):
             try:
                 for band in iter(preference_order):
-                    if f"{eye}{band}" in self.raw.keys():
+                    if self.metadata["FILTER"].str.contains(
+                        f"{eye}{band}"
+                    ).any():
                         ref_bands.append(f"{eye}{band}")
                         break
             except StopIteration:
