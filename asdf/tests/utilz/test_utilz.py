@@ -1,14 +1,9 @@
-import random
-
-from string import ascii_letters, digits, printable
-
-from random import choices, randint
-
-from types import NoneType
-
 from operator import eq
 from pathlib import Path
+from random import randint
+from string import ascii_letters, digits, printable
 import re
+from types import NoneType
 from typing import (
     Collection, Hashable, Literal, NotRequired, Optional, TypedDict, Union
 )
@@ -44,7 +39,7 @@ def _insert_nulls_inplace(
     series: pd.Series, length: int, null: Union[NoneType, np.nan, Literal['-']]
 ) -> None:
     series.loc[
-        RNG.choice(series.index, RNG.integers(1, min(length, 20)))
+        RNG.choice(series.index, RNG.integers(1, min(length - 1, 20)))
     ] = null
 
 
@@ -80,7 +75,7 @@ class SeriesComparison(TypedDict):
 class CSVComparison(TypedDict):
     row_count: NotRequired[dict[Literal["ref", "test"], int]]
     column_count: NotRequired[dict[Literal["ref", "test"], int]]
-    column_names: NotRequired[dict[Literal["new", "missing"], set[Hashable]]]
+    column_names: NotRequired[dict[Literal["new", "missing"], list[Hashable]]]
     elements: NotRequired[SeriesComparison]
     issues: NotRequired[
         list[Literal["row_count", "column_count", "column_names", "elements"]]
@@ -123,11 +118,11 @@ def compare_dfs(
         comparison["column_count"] = {
             "ref": len(ref.columns), "test": len(test.columns)
         }
-    missing_cols = set(ref.columns).difference(test.columns)
-    new_cols = set(test.columns.difference(ref.columns))
+    missing_cols = list(set(ref.columns).difference(test.columns))
+    new_cols = list(set(test.columns.difference(ref.columns)))
     if len(missing_cols) + len(new_cols) > 0:
         comparison["column_names"] = {"new": new_cols, "missing": missing_cols}
-    shared = set(ref.columns).intersection(test.columns)
+    shared = list(set(ref.columns).intersection(test.columns))
     if len(varcols) > 0:
         varpat = re.compile('|'.join(varcols))
         shared = {s for s in shared if not re.match(varpat, s)}
@@ -160,7 +155,7 @@ def compare_csv_files(
     )
 
 
-def compare_browse_images(test_path, ref_path):
+def compare_browse_images(ref_path, test_path):
     problems = []
     test_image, ref_image = (Image.open(test_path), Image.open(ref_path))
     if not (test_image.getbands() == ref_image.getbands()):
@@ -180,7 +175,7 @@ def compare_browse_images(test_path, ref_path):
     return problems
 
 
-def compare_roi_fits(test_path, ref_path):
+def compare_roi_fits(ref_path, test_path):
     # TODO, maybe: make all of this a little more verbose
     problems = []
     test_fits, ref_fits = fits.open(test_path), fits.open(ref_path)
@@ -204,7 +199,7 @@ def dispatched_asdf_comparison(
     marslab_atol: float = 1e-5,
     varcols: Collection[str] = VARCOLS,
 ):
-    test_path, ref_path = test_root / file, ref_root / file
+    ref_path, test_path = ref_root / file, test_root / file
     if file.suffix == '.csv' and file.name.startswith('marslab'):
         return compare_csv_files(
             ref_path,
@@ -215,9 +210,9 @@ def dispatched_asdf_comparison(
             marslab_atol
         )
     if file.suffix == ".png":
-        return compare_browse_images(test_path, ref_path)
+        return compare_browse_images(ref_path, test_path)
     if file.suffixes == [".fits", ".gz"]:
-        return compare_roi_fits(test_path, ref_path)
+        return compare_roi_fits(ref_path, test_path)
     # TODO, maybe: write a comparison for these?
     if file.suffix == '.sel':
         return []
@@ -332,7 +327,7 @@ def regen_asdf_e2e_case(case):
     if not case["reference_output_path"].exists():
         return
     problems = compare_asdf_outputs(
-        case["temp_output_path"], case["reference_output_path"]
+        case["reference_output_path"], case["temp_output_path"]
     )
     if len(problems):
         for file, file_problems in problems.items():
