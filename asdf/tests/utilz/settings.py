@@ -1,10 +1,15 @@
 from pathlib import Path
 
 
-VARCOLS = ("CREATOR", "FILE_TIMESTAMP", ".*_PATH$")
+MARSLAB_VARCOLS = ("CREATOR", "FILE_TIMESTAMP", ".*_PATH$")
 """
-regex patterns for marslab fields we intend to be different on different 
-executions
+Regex patterns for marslab file columns we expect to differ between asdf runs.
+"""
+
+SPACE_VARKEYS = ("ZDITHER0",)
+"""
+Regex patterns for spatial FITS header keywords we expect to differ between
+asdf runs. 
 """
 
 # system paths for various sorts of test files

@@ -1,3 +1,5 @@
+from functools import partial
+
 from more_itertools import all_equal
 from operator import eq
 from pathlib import Path
@@ -25,7 +27,9 @@ import asdf.chatter
 import asdf.cli_endpoint
 import asdf.flow
 import asdf.pretty
-from asdf.tests.utilz.settings import VARCOLS
+from asdf.tests.utilz.settings import MARSLAB_VARCOLS, SPACE_VARKEYS
+
+from marslab.imgops.imgutils import ravel_valid
 
 # noinspection PyTypedDict
 RELEVANT_TYPECODES = ''.join(
@@ -105,7 +109,9 @@ def compare_series(
         val_mismatch = compare_nested_float_series(rv, tv)
     else:
         if all(map(pd.api.types.is_float_dtype, (rv, tv))):
-            equal = lambda a, b: np.isclose(a, b, rtol, atol)
+            # note that equal_nan kwarg to isclose() does not work reliably
+            # with all forms of pandas null
+            equal = partial(np.isclose, rtol=rtol, atol=atol)
         else:
             equal = eq
         val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
@@ -183,6 +189,7 @@ def compare_browse_images(ref_path, test_path):
         problems.append("images are different sizes")
         return problems
     diff = abs(test_array.astype(np.float32) - ref_array.astype(np.float32))
+    # TODO, maybe: make these thresholds configurable
     if np.mean(diff) > 1.5e-2:
         problems.append(
             f"images differ on average by {np.mean(diff)}, > 1.5e-2"
@@ -202,41 +209,57 @@ def compare_roi_fits(ref_path, test_path):
     for test_hdu, ref_hdu in zip(test_fits, ref_fits):
         if test_hdu.header != ref_hdu.header:
             problems.append(f"{test_hdu.name} headers mismatched")
+        # these are 0/1-valued uint8 arrays, so should be identical
+        # noinspection PyUnresolvedReferences
         if not (test_hdu.data == ref_hdu.data).all():
             problems.append(f"{test_hdu.name} data mismatched")
     return problems
 
 
-def compare_space_fits(ref_path, test_path):
+def compare_space_fits(ref_path, test_path, varkeys=SPACE_VARKEYS):
     problems = []
-    test_fits, ref_fits = pdr.read(test_path), pdr.read(ref_path)
-    if test_fits.keys() != ref_fits.keys():
+    ref, test = pdr.read(ref_path), pdr.read(test_path)
+    if ref.keys() != test.keys():
         problems.append("files have mismatched hdulists")
         return problems
-    for k in test_fits.keys():
+    for k in ref.keys():
         if 'HEADER' in k:
             continue
         hproblems = {}
-        tblock, rblock = test_fits.metablock_(k), ref_fits.metablock_(k)
-        matches = set(tblock.keys()).intersection(rblock.keys())
-        mismatches = set(tblock.keys()).symmetric_difference(rblock.keys())
-        if len(mismatches) > 0:
-            hproblems['unmatched_header_keys'] = list(mismatches)
+        tblock, rblock = ref.metablock_(k), test.metablock_(k)
+        shared = set(tblock.keys()).intersection(rblock.keys())
+        if varkeys is not None:
+            varpat = re.compile('|'.join(varkeys))
+            shared = {s for s in shared if not re.match(varpat, s)}
+        distinct = set(tblock.keys()).symmetric_difference(rblock.keys())
+        if len(distinct) > 0:
+            hproblems['header_keys'] = list(distinct)
         badvals = {}
-        for key in sorted(matches):
+        for key in sorted(shared):
             if (tv := tblock.get(key)) != (rv := rblock.get(key)):
                 badvals[key] = {"ref": rv, "test": tv}
         if len(badvals) > 0:
-            hproblems['mismatched_header_values'] = badvals
+            hproblems['header_values'] = badvals
         if len(hproblems) > 0:
             problems.append(hproblems)
         if (k == "PRIMARY") or ("HEADER" in k):
             continue
         # TODO, maybe: configurable tolerances
-        if not np.allclose(
-            test_fits[k], ref_fits[k], equal_nan=True, atol=1e-6
-        ):
-            problems.append(f"{k} data mismatched")
+        # NOTE: these are RICE-compressed files, so we expect the offsets to be
+        #  above floating-point error here, but still far under the resolution
+        #  of the data -- 1 mm absolute tolerance, a hundredth of a percent
+        #  relative tolerance.
+        mismask = ~np.isclose(
+            ref[k], test[k], equal_nan=True, atol=1e-4, rtol=1e-4
+        )
+        if not mismask.any():
+            continue
+        # convert to Python floats because json.dumps() fails on numpy scalars
+        hproblems["data"] = {
+            "max_offset": float(abs(ref[k][mismask] - test[k][mismask]).max()),
+            "ref_ptp": float(np.ptp(ravel_valid(test[k]))),
+            "test_ptp": float(np.ptp(ravel_valid(ref[k])))
+        }
     return problems
 
 
@@ -247,7 +270,7 @@ def dispatched_asdf_comparison(
     use_color_as_key_column: bool = True,
     marslab_rtol: float = 1e-5,
     marslab_atol: float = 1e-5,
-    varcols: Collection[str] = VARCOLS,
+    varcols: Collection[str] = MARSLAB_VARCOLS,
 ):
     ref_path, test_path = ref_root / file, test_root / file
     if file.suffix == '.csv' and file.name.startswith('marslab'):
@@ -281,7 +304,7 @@ def compare_asdf_outputs(
     use_color_as_key_column: bool = True,
     marslab_rtol: float = 1e-5,
     marslab_atol: float = 1e-5,
-    varcols: Collection[str] = VARCOLS,
+    varcols: Collection[str] = MARSLAB_VARCOLS,
     skiptypes: Collection[str] = ()
 ):
     test, reference = gmap(Path, tree(test_root)), gmap(Path, tree(ref_root))
@@ -385,17 +408,12 @@ def regen_asdf_e2e_case(case):
     problems = compare_asdf_outputs(
         case["reference_output_path"], case["temp_output_path"]
     )
-    if len(problems):
-        for file, file_problems in problems.items():
-            rich.print(f"[bold red] {file}:\n")
-            for file_problem in file_problems:
-                rich.print(f"[italic] {file_problem}")
-    # checksums = make_test_checksums(case, "temp_path")
-    #
-    # checksum_df = pd.DataFrame(checksums, columns=["file", "md5"])
-    # checksum_df.to_csv(
-    #     Path(case["temp_path"], case["checksum_path"].name), index=False
-    # )
+    if len(problems) == 0:
+        return
+    for file, file_problems in problems.items():
+        rich.print(f"[bold red] {file}:\n")
+        for file_problem in file_problems:
+            rich.print(f"[italic] {file_problem}")
 
 
 def _random_string_series(length: int) -> pd.Series:
@@ -442,8 +460,9 @@ def callgen(responses):
     return get_next_response
 
 
-# these  are lazy convenience functions for recording console input when
+# lazy convenience functions for recording console input when
 # generating test cases
+
 def make_input_tee(fn):
     def tee_input():
         result = input()
