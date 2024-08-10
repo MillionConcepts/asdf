@@ -142,6 +142,7 @@ output/
 
 # images
 *.png
+!squirrel.png
 *.fits
 *.IMG
 
@@ -160,9 +161,9 @@ vendor/
 logs/
 
 # test data
-/asdf/tests/data/**
-/asdf/tests/temp/**
-!/asdf/tests/data/README.md
+/asdf/tests/data/ref*
+/asdf/tests/data/*.gz
+/asdf/tests/temp/*
 
 # scratch space etc.
 /rapid/data/
