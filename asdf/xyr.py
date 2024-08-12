@@ -327,7 +327,7 @@ def map_spatial_products(
         nav_evals, mapped = [], None
         for r in results:
             neval, nmap = r.get()
-            nav_evals.append(neval)
+            nav_evals += neval
             if mapped is None:
                 mapped = nmap
             else:
