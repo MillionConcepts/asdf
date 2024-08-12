@@ -6,7 +6,7 @@ MARSLAB_VARCOLS = ("CREATOR", "FILE_TIMESTAMP", ".*_PATH$")
 Regex patterns for marslab file columns we expect to differ between asdf runs.
 """
 
-NAVEVAL_VARVOLS = (".*_fn",)
+NAVEVAL_VARCOLS = (".*_fn",)
 """
 Regex patterns for naveval file columns we expect to differ between asdf 
 runs.

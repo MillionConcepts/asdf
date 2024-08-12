@@ -90,10 +90,10 @@ TEST_CASES += [
     for k, v in NO_ROI_CASES.items()
 ]
 TEST_CASES += [{'name': f'full_{k}'} | v for k, v in FULL_CASES.items()]
-TEST_CASES = [
+TEST_CASES += [
     {
         'name': f'spatial_{k}',
         'reuse_spatial': False,
-        'spatial': True
+        'spatial': True,
     } | v for k, v in SPATIAL_CASES.items()
 ]

@@ -949,10 +949,24 @@ def write_spatial_images(bandset, eye, maps, outpath, ref_band, xyzm):
         bandset.local_files.append(str(fn))
 
 
+def _explode_nav_evals(nav_evals):
+    exploded = []
+    for e in nav_evals:
+        rec = {}
+        for k, v in e.items():
+            if not isinstance(v, np.ndarray):
+                rec[k] = v
+                continue
+            for i, coord in enumerate(('x', 'y', 'z')):
+                rec[f"{k}_{coord}"] = v[i]
+        exploded.append(rec)
+    return exploded
+
+
 def write_nav_evals(nav_evals, bs, outpath):
     outpath.mkdir(parents=True, exist_ok=True)
     fn = outpath / f"{bs.name}_naveval.csv"
-    pd.DataFrame(nav_evals).to_csv(fn, index=False)
+    pd.DataFrame(_explode_nav_evals(nav_evals)).to_csv(fn, index=False)
     return fn
 
 

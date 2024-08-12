@@ -27,7 +27,7 @@ import asdf.chatter
 import asdf.cli_endpoint
 import asdf.flow
 import asdf.pretty
-from asdf.tests.utilz.settings import MARSLAB_VARCOLS, SPACE_VARKEYS
+from asdf.tests.utilz.settings import MARSLAB_VARCOLS, SPACE_VARKEYS, NAVEVAL_VARCOLS
 
 from marslab.imgops.imgutils import ravel_valid
 
@@ -97,24 +97,15 @@ def compare_nested_float_series(rv, tv):
 def compare_series(
     ref: pd.Series, test: pd.Series, rtol: float = 1e-5, atol: float = 1e-5
 ) -> Optional[SeriesComparison]:
-    # TODO, maybe: doesn't handle nested float sequences of variable length
-    #  (currently we shouldn't have any, though)
     maxlen = min(len(ref), len(test))
     rv, tv = map(lambda s: _undash(s.iloc[:maxlen].copy()), (ref, test))
-    if (
-        isinstance(rv.iloc[0], Sequence)
-        and isinstance(rv.iloc[0], float)
-        and all_equal(rv.map(len))
-    ):
-        val_mismatch = compare_nested_float_series(rv, tv)
+    if all(map(pd.api.types.is_float_dtype, (rv, tv))):
+        # note that equal_nan kwarg to isclose() does not work reliably
+        # with all forms of pandas null
+        equal = partial(np.isclose, rtol=rtol, atol=atol)
     else:
-        if all(map(pd.api.types.is_float_dtype, (rv, tv))):
-            # note that equal_nan kwarg to isclose() does not work reliably
-            # with all forms of pandas null
-            equal = partial(np.isclose, rtol=rtol, atol=atol)
-        else:
-            equal = eq
-        val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
+        equal = eq
+    val_mismatch = ~(equal(rv, tv)) & ~(pd.isnull(rv) & pd.isnull(tv))
     if not val_mismatch.any():
         return None
     return {
@@ -277,7 +268,7 @@ def dispatched_asdf_comparison(
         return compare_csv_files(
             ref_path,
             test_path,
-            varcols,
+            MARSLAB_VARCOLS,
             "COLOR" if use_color_as_key_column is True else None,
             marslab_rtol,
             marslab_atol
@@ -291,7 +282,7 @@ def dispatched_asdf_comparison(
             return compare_space_fits(ref_path, test_path)
         return [f"unknown file type ({ref_path.name}"]
     if file.stem.endswith("naveval"):
-        return compare_csv_files(ref_path, test_path)
+        return compare_csv_files(ref_path, test_path, NAVEVAL_VARCOLS)
     # TODO, maybe: write a comparison for these?
     if file.suffix == '.sel':
         return []
@@ -304,7 +295,6 @@ def compare_asdf_outputs(
     use_color_as_key_column: bool = True,
     marslab_rtol: float = 1e-5,
     marslab_atol: float = 1e-5,
-    varcols: Collection[str] = MARSLAB_VARCOLS,
     skiptypes: Collection[str] = ()
 ):
     test, reference = gmap(Path, tree(test_root)), gmap(Path, tree(ref_root))
@@ -326,7 +316,6 @@ def compare_asdf_outputs(
             use_color_as_key_column,
             marslab_rtol,
             marslab_atol,
-            varcols
         )
     return valfilter(lambda x: x is not None and len(x) > 0, problems)
 
