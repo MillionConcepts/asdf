@@ -6,6 +6,12 @@ MARSLAB_VARCOLS = ("CREATOR", "FILE_TIMESTAMP", ".*_PATH$")
 Regex patterns for marslab file columns we expect to differ between asdf runs.
 """
 
+NAVEVAL_VARVOLS = (".*_fn",)
+"""
+Regex patterns for naveval file columns we expect to differ between asdf 
+runs.
+"""
+
 SPACE_VARKEYS = ("ZDITHER0",)
 """
 Regex patterns for spatial FITS header keywords we expect to differ between
