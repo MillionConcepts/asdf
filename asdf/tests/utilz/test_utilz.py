@@ -1,6 +1,5 @@
 from functools import partial
 
-from more_itertools import all_equal
 from operator import eq
 from pathlib import Path
 from random import randint
@@ -8,7 +7,14 @@ from string import ascii_letters, digits, printable
 import re
 from types import NoneType
 from typing import (
-    Collection, Hashable, Literal, NotRequired, Optional, TypedDict, Union, Sequence
+    Callable,
+    Collection,
+    Hashable,
+    Literal,
+    NotRequired,
+    Optional,
+    TypedDict,
+    Union
 )
 from unittest.mock import patch
 
@@ -73,9 +79,9 @@ def _undash(series):
 
 
 class SeriesComparison(TypedDict):
-    ref: pd.Series
-    test: pd.Series
-    ix: pd.Index
+    ref: list
+    test: list
+    ix: list
 
 
 class CSVComparison(TypedDict):
@@ -109,7 +115,7 @@ def compare_series(
     if not val_mismatch.any():
         return None
     return {
-        k: s[val_mismatch].values
+        k: s[val_mismatch].tolist()
         for k, s in zip(('ref', 'test', 'ix'), (rv, tv, val_mismatch.index))
     }
 
@@ -118,13 +124,10 @@ def compare_dfs(
     ref: pd.DataFrame,
     test: pd.DataFrame,
     varcols: Collection[str] = (),
-    key_column: Optional[Hashable] = None,
+    key: Optional[Union[Callable, Hashable]] = None,
     rtol: float = 1e-5,
     atol: float = 1e-5
 ) -> CSVComparison:
-    if key_column is not None:
-        ref = ref.sort_values(by=key_column).reset_index(drop=True)
-        test = test.sort_values(by=key_column).reset_index(drop=True)
     comparison = {}
     if len(ref) != len(test):
         comparison["row_count"] = {"ref": len(ref), "test": len(test)}
@@ -140,6 +143,15 @@ def compare_dfs(
     if len(varcols) > 0:
         varpat = re.compile('|'.join(varcols))
         shared = {s for s in shared if not re.match(varpat, s)}
+    if key is not None:
+        if callable(key):
+            ref = ref.loc[np.argsort(key(ref))].reset_index(drop=True)
+            test = test.loc[np.argsort(key(test))].reset_index(drop=True)
+        elif isinstance(key, Hashable):
+            ref = ref.sort_values(by=key).reset_index(drop=True)
+            test = test.sort_values(by=key).reset_index(drop=True)
+        else:
+            raise TypeError(f"Bad sort key of type ({type(key)})")
     element_mismatches = valfilter(
         lambda d: d is not None,
         {c: compare_series(ref[c], test[c], rtol, atol) for c in shared}
@@ -155,7 +167,7 @@ def compare_csv_files(
     ref_path: Union[str, Path],
     test_path: Union[str, Path],
     varcols: Collection[Hashable] = (),
-    key_column: Optional[Hashable] = None,
+    key: Optional[Union[Callable, Hashable]] = None,
     rtol: float = 1e-5,
     atol: float = 1e-5
 ) -> CSVComparison:
@@ -163,7 +175,7 @@ def compare_csv_files(
     return compare_dfs(
         *map(pd.read_csv, (ref_path, test_path)),
         varcols,
-        key_column,
+        key,
         rtol,
         atol
     )
@@ -261,7 +273,6 @@ def dispatched_asdf_comparison(
     use_color_as_key_column: bool = True,
     marslab_rtol: float = 1e-5,
     marslab_atol: float = 1e-5,
-    varcols: Collection[str] = MARSLAB_VARCOLS,
 ):
     ref_path, test_path = ref_root / file, test_root / file
     if file.suffix == '.csv' and file.name.startswith('marslab'):
@@ -282,7 +293,12 @@ def dispatched_asdf_comparison(
             return compare_space_fits(ref_path, test_path)
         return [f"unknown file type ({ref_path.name}"]
     if file.stem.endswith("naveval"):
-        return compare_csv_files(ref_path, test_path, NAVEVAL_VARCOLS)
+        return compare_csv_files(
+            ref_path,
+            test_path,
+            NAVEVAL_VARCOLS,
+            key=lambda df: df['xyr_fn'].map(lambda p: Path(p).name)
+        )
     # TODO, maybe: write a comparison for these?
     if file.suffix == '.sel':
         return []
