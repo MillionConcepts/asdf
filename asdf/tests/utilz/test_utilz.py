@@ -33,7 +33,7 @@ import asdf.chatter
 import asdf.cli_endpoint
 import asdf.flow
 import asdf.pretty
-from asdf.tests.utilz.settings import MARSLAB_VARCOLS, SPACE_VARKEYS, NAVEVAL_VARCOLS
+from asdf.tests.utilz.settings import MARSLAB_VARCOLS, SPACE_VARKEYS, NAVEVAL_VARCOLS, ALWAYS_SKIP_FILES
 
 from marslab.imgops.imgutils import ravel_valid
 
@@ -314,10 +314,9 @@ def compare_asdf_outputs(
     skiptypes: Collection[str] = ()
 ):
     test, reference = gmap(Path, tree(test_root)), gmap(Path, tree(ref_root))
-    if len(skiptypes) > 0:
-        skippy = re.compile('|'.join(skiptypes))
-        test = [t for t in test if not re.match(skippy, t.name)]
-        reference = [r for r in reference if not re.match(skippy, r.name)]
+    skippy = re.compile('|'.join(ALWAYS_SKIP_FILES + skiptypes))
+    test = [t for t in test if not re.match(skippy, t.name)]
+    reference = [r for r in reference if not re.match(skippy, r.name)]
     problems = {}
     novel_files, absent_files = disjoint(test, reference)
     # note files that are completely new or missing
