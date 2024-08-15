@@ -1,21 +1,18 @@
 """
-functions that basically instantiate ideas about physical relations, i.e.,
-photometry as such, not just logical operations on pixels
+functions that instantiate ideas about physical relations, i.e., photometry as
+such, not just logical operations on pixels
 """
 
 import numpy as np
 
 
-def add_derived_illumination_geometry(metadata):
+def calculate_phase_angle(
+    emission_angle, emission_azimuth, incidence_angle, incidence_azimuth
+):
     """
-    derive canonical incidence, emission, and phase angles from other metadata
-    fields. see Shepherd et al. 2008, Rice et al. 2020, Rice 2021 (p.comm.)
+    Calculate phase angle from emission and incidence angle (magnitude) and
+    azimuth.
     """
-    incidence_angle = 90 - metadata["SOLAR_ELEVATION"]
-    emission_angle = metadata["INSTRUMENT_ELEVATION"] + 90
-
-    incidence_azimuth = metadata["SOLAR_AZIMUTH"]
-    emission_azimuth = metadata["INSTRUMENT_AZIMUTH"] + 180
     # angle between the projection of the incidence vector and the emission
     # vector on the surface
     delta_phi = abs(
@@ -28,6 +25,21 @@ def add_derived_illumination_geometry(metadata):
         theta_e
     ) * np.cos(delta_phi)
     phase_angle = np.degrees(np.arccos(cos_phase))
+    return phase_angle
+
+
+def add_derived_illumination_geometry(metadata):
+    """
+    derive canonical incidence, emission, and phase angles from other metadata
+    fields. see Shepherd et al. 2008, Rice et al. 2020, Rice 2021 (p.comm.)
+    """
+    incidence_angle = 90 - metadata["SOLAR_ELEVATION"]
+    emission_angle = metadata["INSTRUMENT_ELEVATION"] + 90
+    incidence_azimuth = metadata["SOLAR_AZIMUTH"]
+    emission_azimuth = metadata["INSTRUMENT_AZIMUTH"] + 180
+    phase_angle = calculate_phase_angle(
+        emission_angle, emission_azimuth, incidence_angle, incidence_azimuth
+    )
     for field, variable in zip(
         [
             "INCIDENCE_ANGLE",

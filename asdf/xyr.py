@@ -1,6 +1,6 @@
 import warnings
 from collections import defaultdict
-from functools import partial, reduce
+from functools import partial
 from itertools import product
 from multiprocessing import Pool
 from pathlib import Path
@@ -33,6 +33,29 @@ from marslab.imgops.render import colormapped_plot
 
 # i love dividing by zero
 warnings.simplefilter("ignore", category=RuntimeWarning)
+
+
+def cart2sph(
+    x0,
+    y0,
+    z0,
+    unit: Literal['degrees', 'radians', 'deg', 'rad'] = 'degrees',
+):
+    from operator import or_
+    from functools import reduce
+    from dustgoggles.func import is_it
+    radius = np.sqrt(x0 ** 2 + y0 ** 2 + z0 ** 2)
+    longitude = np.arctan2(y0, x0) % (np.pi * 2)
+    latitude = np.arcsin(z0 / np.sqrt(x0 ** 2 + y0 ** 2 + z0 ** 2))
+    if unit in {"degrees", "deg"}:
+        latitude = np.degrees(latitude)
+        longitude = np.degrees(longitude)
+    if reduce(
+        or_, map(is_it(pd.DataFrame, np.ndarray, pd.Series), [x0, y0, z0])
+    ):
+        return pd.DataFrame({"lat": latitude, "lon": longitude, "r": radius})
+    return latitude, longitude, radius
+
 
 
 def open_attached(path):
@@ -155,19 +178,23 @@ def calc_sun_vector(img_data):
 
 
 def calc_surf_norm_vectors(uvw):
-    return np.einsum("ijk,ij->ijk", uvw, 1 / np.linalg.norm(uvw, axis=2))
+    return hat(uvw)
+
+
+def hat(vecs):
+    return np.einsum(
+        "ijk, ij->ijk",
+        vecs,
+        1 / np.linalg.norm(vecs, axis=-1)
+    )
 
 
 def calc_rover_vectors(xyz, cahvore):
-    rover_vectors = xyz - cahvore["C"]
-    return np.einsum("ijk, ij->ijk", rover_vectors, 1 / np.linalg.norm(rover_vectors, axis=-1))
+    return hat(xyz - cahvore["C"])
 
 
 def make_incidence_map(sun_vector, surf_norm_vectors):
-    deflection = np.dot(
-        surf_norm_vectors,
-        sun_vector * -1,
-    )
+    deflection = np.dot(surf_norm_vectors, sun_vector * -1)
     # restrict to 0-90 range
     # (direction is not important + we assume the sun is above the horizon)
     return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
@@ -178,9 +205,11 @@ def make_emission_map(surf_norm_vectors, rover_vectors):
     return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
 
 
-def make_phase_map(sun_vector, rover_vectors):
-    cos_phase = np.dot(rover_vectors, sun_vector)
-    return np.degrees(np.arccos(cos_phase))
+def make_phase_map(sun_vector, rover_vectors, surf_norm_vectors):
+    sun_surface = hat(surf_norm_vectors - sun_vector)
+    surface_rover = hat(surf_norm_vectors - rover_vectors)
+    deflection = (surface_rover * sun_surface).sum(axis=2)
+    return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
 
 
 def make_rangemap(xyz, origin=(0, 0, 0)):
@@ -509,7 +538,9 @@ def make_spatial_maps(coords, iof_data, cahvore):
         axes.append('incidence')
         maps["emission"] = make_emission_map(surf_norm_vectors, rover_vectors)
         axes.append('emission')
-        maps["phase"] = make_phase_map(sun_vector, rover_vectors)
+        maps["phase"] = make_phase_map(
+            sun_vector, rover_vectors, surf_norm_vectors
+        )
         axes.append('phase')
         del uvw
     # interpolate coordinate mesh per axis
