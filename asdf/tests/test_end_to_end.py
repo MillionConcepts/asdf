@@ -1,13 +1,13 @@
-from io import StringIO
-
 from contextlib import redirect_stdout
-
 import datetime as dt
+from io import StringIO
 import json
 from pathlib import Path
-
-import pytest
 import shutil
+from warnings import catch_warnings
+
+from marslab.tests.utilz.div0 import divide_by_zero
+import pytest
 
 from asdf.console import ASDFLOG
 from asdf.tests.e2e_cases import TEST_CASES
@@ -32,7 +32,8 @@ def test_e2e(case):
     err_json_file = E2E_FAILURE_DIR / f"{case['name']}.json"
     err_json_file.unlink(missing_ok=True)
     try:
-        with redirect_stdout(stdout_buffer):
+        with (redirect_stdout(stdout_buffer), catch_warnings()):
+            divide_by_zero()
             generate_e2e_outputs(**case)
         issues = compare_asdf_outputs(
             REF_OUTPUT_DIR / case['name'], TEST_OUTPUT_DIR / case['name']
