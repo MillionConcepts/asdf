@@ -48,7 +48,7 @@ def asdf_initiate(
     :param output: output path; default is "output/$username/$sol"
     :param abbreviate: pass abbreviated version of iof location:
         sol, seq_id, (optional) root root_dir code, (optional)
-        product type. root_dir defaults to "proj" and product type to "iof".
+        product type. root_dir defaults to "scratch" and product type to "iof".
         examples: (1) 36,03107,scratch,iof (2) 36,03107
     :param skip_rapidlooks: don't write default rapidlooks
     :param suffix: add suffix for this analysis/group of ROIs to data,
