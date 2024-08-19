@@ -44,7 +44,7 @@ def rearrange_args(
     params = dict(signature(func).parameters)
     beginning, middle, end = [args[0]], [], []
     position = 0
-    while position < len(args):
+    while position + 1 < len(args):
         position += 1
         arg = args[position]
         if not arg.startswith('-'):
@@ -69,6 +69,7 @@ def rearrange_args(
 # tell Fire to handle command line call
 if __name__ == "__main__":
     import asdf.cli_endpoint
+
     if not any("help" in a for a in sys.argv):
         sys.argv = rearrange_args(
             asdf.cli_endpoint.asdf_initiate,
