@@ -1,13 +1,13 @@
 import datetime as dt
 from pathlib import Path
 import re
-from typing import Optional, Literal
+from typing import Literal, Optional
 
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
 
 def asdf_initiate(
-    path,
+    path: str,
     roi_path: Optional[str] = None,
     *,
     output: Optional[str] = None,
@@ -19,7 +19,7 @@ def asdf_initiate(
     noninteractive_all: bool = False,
     debug: bool = False,
     keep_broadband: bool = False,
-    keep_caltarget: bool  = False,
+    keep_caltarget: bool = False,
     keep_thumbnails: bool = False,
     mosaic: bool = False,
     merspect: Optional[str] = None,
@@ -45,41 +45,45 @@ def asdf_initiate(
     :param roi_path: path to a SEL or Marslab ROI file containing ROIs
         corresponding to these images (optional)
     :param upload: upload metadata to google drive
-    :param output: output path; default is "output/$username/$sol"
-    :param abbreviate: pass abbreviated version of iof location:
+    :param output: (also -o) output path; default is "output/$username/$sol"
+    :param abbreviate: (also -a) pass abbreviated version of iof location:
         sol, seq_id, (optional) root root_dir code, (optional)
         product type. root_dir defaults to "scratch" and product type to "iof".
         examples: (1) 36,03107,scratch,iof (2) 36,03107
-    :param skip_rapidlooks: don't write default rapidlooks
-    :param suffix: add suffix for this analysis/group of ROIs to data,
+    :param skip_rapidlooks: (also -r) don't write default rapidlooks
+    :param suffix: (also -s) add suffix for this analysis/group of ROIs to data,
         metadata, and context image outputs (e.g. "rocks" or "soils")
-    :param merspect: take data from passed merspect file
-    :param noninteractive: run automatically; collect nothing from user
-    :param noninteractive_all: run automatically on all detected sequences;
-        collect nothing from user
-    :param debug: turn debug mode on
-    :param keep_broadband: include frames from broadband-only sequences in
-        searches
-    :param keep_caltarget: include frames from apparent caltarget observations
-        in searches
-    :param recursive: search all directories under the chosen path
-    :param pathdump: dump paths and quit after producing file list
-    :param keep_thumbnails: include thumbnails in searches
-    :param mosaic: run in mosaic creation mode
+    :param merspect: (also -mer) take data from passed merspect file
+    :param noninteractive: (also -n) run automatically; collect nothing from
+        user
+    :param noninteractive_all: (also -na) run automatically on all detected
+        sequences; collect nothing from user
+    :param debug: (also -d) turn debug mode on
+    :param keep_broadband: (also -kb) include frames from broadband-only
+        sequences in searches
+    :param keep_caltarget: (also -kc) include frames from apparent caltarget
+        observations in searches
+    :param recursive: (also -v) search all directories under the chosen path
+    :param pathdump: (also -pd) dump paths and quit after producing file list
+    :param keep_thumbnails: (also -kt) include thumbnails in searches
+    :param mosaic: (also -m) run in mosaic creation mode
     :param save_plain_images: save images without labels or borders
-    :param image_regex: only consider images matching this regular expression
+    :param image_regex: (also -ir) only consider images matching this regular
+        expression
     :param config: use the asdf_settings module at the specified path rather
         than the default asdf_settings
-    :param skip_pixmaps: don't look for and process pixel flag maps
-    :param skip_errmaps: don't look for and process error maps
-    :param seriously_no_images: don't generate images. ever. really.
-    :param reuse_mosaic: reuse existing intermediate mosaic products if
-        present?
-    :param keep_intermediate: keep intermediate mosaic files after completion?
+    :param skip_pixmaps: (also -sp) don't look for and process pixel flag maps
+    :param skip_errmaps: (also -se) don't look for and process error maps
+    :param seriously_no_images: (also -sn) don't generate images. ever. really.
+    :param reuse_mosaic: (also -rm) reuse existing intermediate mosaic products
+        if present? (relevant only in mosaic creation mode)
+    :param keep_intermediate: (also -ki) keep intermediate mosaic files after
+        completion? (relevant only in mosaic creation mode)
     :param rsm: restrict to specific RSMs? (comma-separated list of numbers)
-    :param spatial: try to make spatial products?
+    :param spatial: (also -xyz) try to make spatial products?
     :param reuse_spatial: if matching spatial FITS files exist in the output
         path, reuse them rather than trying to regenerate them from scratch?
+        (relevant only when making spatial products)
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
@@ -95,6 +99,7 @@ def asdf_initiate(
 
             # TODO: Accept separators other than commas and robustify against
             #  white space.
+            path = str(path).strip("()")
             directory, seq_id = parse_abbreviated_inputs(*path.split(","))
             explicit_path = None
         else:  # use the path provided, willy-nilly
