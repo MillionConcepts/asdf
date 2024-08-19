@@ -13,8 +13,8 @@ META_ROOTS = ["/scratch/cal_wg/flight/products/"]
 
 # resolvers for asdf -a
 PATH_ABBREVIATIONS = {
-    "proj": "/project/m2020/mastcamz/surface/flight/products",
     "scratch": "/scratch/cal_wg/flight/products/",
+    "proj": "/project/m2020/mastcamz/surface/flight/products",
 }
 DEFAULT_PRODUCT_SUBDIRECTORY = "iof"
 
