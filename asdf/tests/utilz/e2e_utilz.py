@@ -6,9 +6,6 @@ from unittest.mock import patch
 
 import rich
 
-import asdf
-import asdf.cli_endpoint
-from asdf.tests.e2e_cases import TEST_CASES
 from asdf.tests.utilz.test_utilz import callgen
 from asdf.tests.utilz.settings import (
     REF_OUTPUT_DIR, TEST_OUTPUT_DIR, REGEN_OUTPUT_DIR
@@ -31,6 +28,15 @@ def generate_e2e_outputs(
     output_root=TEST_OUTPUT_DIR,
     **kwargs
 ):
+    from asdf_settings import sources
+    
+    # necessary for running tests in deployment environment --
+    # intentionally-missing inputs will be findable, 
+    # metamaps may have changed, etc.
+    setattr(sources, "META_ROOTS", [])
+
+    import asdf.cli_endpoint
+
     input_patch = _start_input_patch(responses, name, obs_ix)
     try:
         asdf.cli_endpoint.asdf_initiate(
@@ -43,6 +49,8 @@ def generate_e2e_outputs(
 def regenerate_test_outputs(
     which: Union[Literal["all", "missing"], Sequence[int], re.Pattern] = "all"
 ):
+    from asdf.tests.e2e_cases import TEST_CASES
+
     if isinstance(which, re.Pattern):
         cases = [c for c in TEST_CASES if which.match(c['name'])]
     elif isinstance(which, Sequence) and isinstance(which[0], int):
