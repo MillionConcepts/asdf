@@ -12,6 +12,8 @@ dependencies:
   - git
   - google-api-python-client
   - gspread
+# if you are on OSX, comment out the next line because there is no matching conda package
+# mosaicking will not be available to you
   - hugin
   - ipython
   - jupyter
