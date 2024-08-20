@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-MARSLAB_VARCOLS = ("CREATOR", "FILE_TIMESTAMP", ".*_PATH$")
+MARSLAB_VARCOLS = ("CREATOR", "FILE_TIMESTAMP", ".*_PATH$", "ASDF_VERSION")
 """
 Regex patterns for marslab file columns we expect to differ between asdf runs.
 """
