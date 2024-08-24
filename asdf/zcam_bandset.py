@@ -849,7 +849,7 @@ class ZcamBandSet(BandSet):
             self.load("all")
             self.bulk_debayer("all")
             self.count_rois()
-            self.format_metadata()
+        self.format_metadata()
         dims = make_spatial_products(
             self, outpath, self._spatial_ref_bands(), write_images, calc_rois
         )
