@@ -315,7 +315,7 @@ def asdf_body(
     reuse_mosaic: bool = False,
     keep_intermediate: bool = False,
     spatial: bool = False,
-    reuse_spatial: bool = True,
+    regenerate_spatial: bool = False,
     recreate_from: Optional[str] = None,
 ) -> None:
     """
@@ -483,7 +483,7 @@ def asdf_body(
     if spatial is True:
         aprint(Rule(" processing spatial input products "))
         can_make_spatial = True
-        if not (reuse_spatial and bandset.has_space_fits(outpath)):
+        if regenerate_spatial or not bandset.has_space_fits(outpath):
             try:
                 bandset.make_space_fits(outpath=outpath)
             except FileNotFoundError:

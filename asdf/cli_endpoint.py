@@ -35,7 +35,7 @@ def asdf_initiate(
     keep_intermediate: bool = False,
     rsm: Optional[tuple[int]] = None,
     spatial: bool = False,
-    reuse_spatial: bool = True,
+    regenerate_spatial: bool = False,
 ):
     """
     processes and archives everything
@@ -81,8 +81,8 @@ def asdf_initiate(
         completion? (relevant only in mosaic creation mode)
     :param rsm: restrict to specific RSMs? (comma-separated list of numbers)
     :param spatial: (also -xyz) try to make spatial products?
-    :param reuse_spatial: if matching spatial FITS files exist in the output
-        path, reuse them rather than trying to regenerate them from scratch?
+    :param regenerate_spatial: if matching spatial FITS files exist in the output
+        path, regenerate them from scratch them rather than reusing them?
         (relevant only when making spatial products)
     """
     # do expensive imports, set up logs, prepend custom settings directory to
@@ -143,7 +143,7 @@ def asdf_initiate(
         reuse_mosaic,
         keep_intermediate,
         spatial,
-        reuse_spatial
+        regenerate_spatial
     )
     from asdf.flow import asdf_body
 
@@ -221,7 +221,7 @@ def fdsa_initiate(
     seriously_no_images: bool = False,
     rsm: Optional[tuple[int]] = None,
     spatial: bool = False,
-    reuse_spatial: bool = True,
+    regenerate_spatial: bool = False,
     power_through_errors: bool = False
 ):
     """reprocesses and archives everything"""
@@ -290,7 +290,7 @@ def fdsa_initiate(
                 skip_pixmaps=skip_pixmaps,
                 seriously_no_images=seriously_no_images,
                 spatial=spatial,
-                reuse_spatial=reuse_spatial
+                regenerate_spatial=regenerate_spatial
             )
             console.style = "FDSA"
             ASDFLOG.info(f"successfully processed {marslab_fn} with {roi_fn}")

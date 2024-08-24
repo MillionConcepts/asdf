@@ -10,14 +10,14 @@ import fire
 ARG_ABBREVIATIONS = {
     "o": "output",
     "a": "abbreviate",
-    "r": "skip_rapidlooks",
+    "r": "skip-rapidlooks",
     "s": "suffix",
     "n": "noninteractive",
-    "na": "noninteractive_all",
+    "na": "noninteractive-all",
     "d": "debug",
-    "kb": "keep_broadband",
-    "kg": "keep_caltarget",
-    "kt": "keep_thumbnails",
+    "kb": "keep-broadband",
+    "kg": "keep-caltarget",
+    "kt": "keep-thumbnails",
     "m": "mosaic",
     "mer": "merspect",
     "v": "recursive",
@@ -25,7 +25,7 @@ ARG_ABBREVIATIONS = {
     "ir": "image_regex",
     "sp": "skip_pixmaps",
     "se": "skip_errmaps",
-    "sn": "seriously_no_images",
+    "sn": "seriously-no-images",
     "rm": "reuse_mosaic",
     "ki": "keep_intermediate",
     "xyz": "spatial"
@@ -41,7 +41,10 @@ def rearrange_args(
     Rearrange args for Fire, permitting flags both before and after
     positional arguments.
     """
-    params = dict(signature(func).parameters)
+    params = {
+        k.replace('_', '-'): v for k, v in
+        dict(signature(func).parameters).items()
+    }
     beginning, middle, end = [args[0]], [], []
     position = 0
     while position + 1 < len(args):
