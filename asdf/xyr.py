@@ -700,7 +700,7 @@ def compute_roi_dims(
             if photfield in maps.keys():
                 rec[
                     photfield[0].upper()
-                ] = maps[photfield][roi_coords].sum().astype(np.float32)
+                ] = maps[photfield][roi_coords].mean().astype(np.float32)
         recs.append(rec)
     return recs
 
