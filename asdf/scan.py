@@ -285,6 +285,7 @@ def cluster_observations(
         ok_indices = []
         for stem, siblings in stem_groups:
             merit_criteria = (
+                rate_software_version,
                 rate_completion,
                 rate_compression,
                 rate_cal_offset,
@@ -379,6 +380,7 @@ def cluster_observations(
             "bb",
             "cal",
             "frame",
+            "software_version",
             "completion",
             "compression",
             "cal_offset",
@@ -395,6 +397,7 @@ def cluster_observations(
             "from broadband-only sequences",
             "from caltarget observations",
             "with off-size subframes",
+            "calibrated with older software versions",
             "with partial completion status",
             "worse compression types",
             "with less chronologically appropriate caltarget observations",
@@ -962,6 +965,15 @@ def find_matching_observations(
             )
         reprocess_pairs[analysis["MARSLAB"]] = list(matches.values())[0]
     return reprocess_pairs, parser_warnings, misses
+
+
+def rate_software_version(siblings: pd.DataFrame) -> Optional[pd.Series]:
+    if len(siblings["SOFTWARE_VERSION_ID"].unique()) == 1:
+        return None
+    return siblings.loc[
+        siblings["SOFTWARE_VERSION_ID"]
+        == siblings["SOFTWARE_VERSION_ID"].max()
+    ]
 
 
 def rate_completion(siblings: pd.DataFrame) -> Optional[pd.Series]:

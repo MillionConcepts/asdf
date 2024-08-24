@@ -112,7 +112,8 @@ SKIMMER_REGEX = {
     "CALTARGET_FILE": r"(?<=CALTARGET_FILE ).*?\n?.*?(Z.*?IMG)",
     "RC_FILE": r"(?<=RC_FILE ).*?\n?.*?(rc_.*?txt)",
     "CALTARGET_LTST": r"(?<=CALTARGET_LTST ).*?([\d\.]+)",
-    "SPICE_FILE_NAME": r'SPICE_FILE_NAME.*"(.*)"'
+    "SPICE_FILE_NAME": r'SPICE_FILE_NAME.*"(.*)"',
+    "SOFTWARE_VERSION_ID": r".*SOFTWARE_VERSION_ID.*?(V.*\d)"
 }
 
 

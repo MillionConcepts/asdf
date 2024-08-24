@@ -245,7 +245,7 @@ mafic_map = {
 mmap_unmasked = deepcopy(mafic_map)
 for channel in ("red", "green", "blue"):
     del mmap_unmasked["params"][channel]["mask"]
-mmap_unmasked['name'] = "'mafic bandmap: R0R/R1 BD910 R1/R5 um'"
+mmap_unmasked['name'] = "'mafic bandmap R0R/R1 BD910 R1/R5 um'"
 RGB_BANDMAP = [mafic_map, mmap_unmasked]
 
 
