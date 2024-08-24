@@ -146,6 +146,9 @@ def pix_reference(thing):
             mp.color_filter,
             mp.sequence,
             mp.thumbnail,
+            # TODO: the tertiary timestamp may serve at least some of the
+            #  purpose of a version check
+            mp.tertiary_timestamp
             # TODO: version check appears too harsh at the moment but some
             #  kind of stricter association rule needs to be made
             #  mp.version,
