@@ -335,6 +335,13 @@ def confirm_fdsa_data():
     )
 
 
+def confirm_fdsa_warnings():
+    return Confirm.ask(
+        "Continue?",
+        default="Y",
+        console=ASDF_CONSOLE
+    )
+
 # TODO: this smells bad
 def tw(text):
     return Text(text, style="bold dark_orange")

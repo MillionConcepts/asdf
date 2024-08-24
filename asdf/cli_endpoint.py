@@ -250,7 +250,7 @@ def fdsa_initiate(
         do_empties=do_empties,
         rsm=rsm
     )
-    if reprocess_pairs is None:
+    if analyses is None:
         return
     for ix, item in enumerate(reprocess_pairs.items()):
         analysis = analyses.iloc[ix]

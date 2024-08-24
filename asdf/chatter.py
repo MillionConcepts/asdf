@@ -52,7 +52,7 @@ from asdf.pretty import (
     offer_observation_choice,
     tw,
     confirm_fdsa_metadata,
-    confirm_fdsa_data,
+    confirm_fdsa_data, confirm_fdsa_warnings,
 )
 from asdf.scan import (
     scan_zcam_files,
@@ -583,6 +583,14 @@ def loudly_ingest_analyses(
     return analyses.reset_index(drop=True)
 
 
+FDSA_HALT_BOILERPLATE = (
+    "\nHalting at user request. If you didn't see the products you wanted, "
+    "check to make sure they're actually in the file system; if they are, try "
+    "using different search parameters or copying the image files "
+    "of interest into separate directories."
+)
+
+
 def setup_reprocess(
     marslab_path: Union[str, Path] = ".",
     image_path: Union[str, Path] = ".",
@@ -628,6 +636,9 @@ def setup_reprocess(
     if parser_warnings:
         for pw in parser_warnings:
             aprint(pw, style="purple bold")
+            if not confirm_fdsa_warnings():
+                aprint(FDSA_HALT_BOILERPLATE, style="deep_pink2 italic")
+                return None, None
     if misses:
         for miss_path in misses:
             aprint(f"[slate_blue1]no matching observations for {miss_path}")
@@ -652,6 +663,7 @@ def setup_reprocess(
             "of interest into separate directories.",
             style="deep_pink2 italic",
         )
+        return None, None
     return reprocess_pairs, analyses
 
 
