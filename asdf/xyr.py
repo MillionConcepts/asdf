@@ -26,36 +26,13 @@ from scipy.spatial import QhullError
 from asdf.console import aprint, ASDFLOG
 from asdf_settings.process import THREADS
 from asdf_settings.rapidlooks import FONT_PATH
-from marslab.geom import transform_angle, sph2cart
+from marslab.geom import cart2sph, sph2cart, transform_angle
 from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.pltutils import despine, remove_ticks, dpi_from_image
 from marslab.imgops.render import colormapped_plot
 
 # i love dividing by zero
 warnings.simplefilter("ignore", category=RuntimeWarning)
-
-
-def cart2sph(
-    x0,
-    y0,
-    z0,
-    unit: Literal['degrees', 'radians', 'deg', 'rad'] = 'degrees',
-):
-    from operator import or_
-    from functools import reduce
-    from dustgoggles.func import is_it
-    radius = np.sqrt(x0 ** 2 + y0 ** 2 + z0 ** 2)
-    longitude = np.arctan2(y0, x0) % (np.pi * 2)
-    latitude = np.arcsin(z0 / np.sqrt(x0 ** 2 + y0 ** 2 + z0 ** 2))
-    if unit in {"degrees", "deg"}:
-        latitude = np.degrees(latitude)
-        longitude = np.degrees(longitude)
-    if reduce(
-        or_, map(is_it(pd.DataFrame, np.ndarray, pd.Series), [x0, y0, z0])
-    ):
-        return pd.DataFrame({"lat": latitude, "lon": longitude, "r": radius})
-    return latitude, longitude, radius
-
 
 
 def open_attached(path):
@@ -177,10 +154,6 @@ def calc_sun_vector(img_data):
     return sun_vector
 
 
-def calc_surf_norm_vectors(uvw):
-    return hat(uvw)
-
-
 def hat(vecs):
     return np.einsum(
         "ijk, ij->ijk",
@@ -194,22 +167,40 @@ def calc_rover_vectors(xyz, cahvore):
 
 
 def make_incidence_map(sun_vector, surf_norm_vectors):
-    deflection = np.dot(surf_norm_vectors, sun_vector * -1)
+    idot = np.dot(surf_norm_vectors, sun_vector * -1)
     # restrict to 0-90 range
     # (direction is not important + we assume the sun is above the horizon)
-    return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
+    return 90 - np.abs(np.degrees(np.arccos(idot)) - 90)
 
 
 def make_emission_map(surf_norm_vectors, rover_vectors):
-    deflection = (surf_norm_vectors * rover_vectors).sum(axis=2)
-    return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
+    edot = (surf_norm_vectors * rover_vectors).sum(axis=2)
+    return 90 - np.abs(np.degrees(np.arccos(edot)) - 90)
 
 
 def make_phase_map(sun_vector, rover_vectors, surf_norm_vectors):
-    sun_surface = hat(surf_norm_vectors - sun_vector)
-    surface_rover = hat(surf_norm_vectors - rover_vectors)
-    deflection = (surface_rover * sun_surface).sum(axis=2)
-    return 90 - np.abs(np.degrees(np.arccos(deflection)) - 90)
+    # TODO, maybe: expedient but redundant
+    incidence = make_incidence_map(sun_vector, surf_norm_vectors)
+    emission = make_emission_map(surf_norm_vectors, rover_vectors)
+    _, incidence_azimuth, _ = sph2cart(*sun_vector)
+    _, emission_azimuth, _ = cart2sph(
+        rover_vectors[:, :, 0] - surf_norm_vectors[:, :, 0],
+        rover_vectors[:, :, 1] - surf_norm_vectors[:, :, 1],
+        # TODO: why do we have to flip it here
+        #  if it's already positive down?
+        #  is the CAHVOR "C" in reflected coordinates or something?
+        -rover_vectors[:, :, 2] - surf_norm_vectors[:, :, 2]
+    )
+    emission_azimuth += 180  # convention -- clockwiseness probably?
+    delta_phi = abs(
+        np.radians(incidence_azimuth) - np.radians(emission_azimuth)
+    ).squeeze()
+    theta_i, theta_e = map(np.radians, (incidence, emission))  # for neatness
+    cos_phase = (
+        np.cos(theta_i) * np.cos(theta_e)
+        + np.sin(theta_i) * np.sin(theta_e) * np.cos(delta_phi)
+    )
+    return np.degrees(np.arccos(cos_phase))
 
 
 def make_rangemap(xyz, origin=(0, 0, 0)):
@@ -533,7 +524,7 @@ def make_spatial_maps(coords, iof_data, cahvore):
         rover_vectors = calc_rover_vectors(
             np.dstack([maps["x"], maps["y"], maps["z"]]), cahvore
         )
-        surf_norm_vectors = calc_surf_norm_vectors(uvw)
+        surf_norm_vectors = hat(uvw)
         maps["incidence"] = make_incidence_map(sun_vector, surf_norm_vectors)
         axes.append('incidence')
         maps["emission"] = make_emission_map(surf_norm_vectors, rover_vectors)
