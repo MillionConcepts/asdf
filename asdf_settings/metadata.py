@@ -6,11 +6,6 @@ these literals should generally be safe; removing them may not be.
 # don't change this
 from itertools import chain
 
-# lookup table for location by sol -- number is final sol of location
-LOCATION_TABLE = {
-    101: "Octavia E. Butler Landing",
-    99999: "Green Zone Campaign",
-}
 # these are intended to be populated manually when needed. we don't actually
 # ask the user about autogenerate them. fdsa will, however, propagate them.
 # TODO: this may be completely legacy at this point; checl.
@@ -114,7 +109,9 @@ FEATURE_SUBTYPES = {
 ROI_METADATA_FIELD_CHOICES = {
     "FEATURE": ["rock", "soil", "pebble", "hardware"],
     "FLOAT": ["float", "in-place", "unclear"],
-    "FORMATION": ["Maaz", "Seitah", "delta", "margin unit", "Neretva Vallis"],
+    "FORMATION": [
+        "Maaz", "Seitah", "delta", "margin unit", "Neretva Vallis", "Crater Rim"
+    ],
     "MEMBER": {
         "Maaz": ["Chal", "Nataani", "Rochette", "Artuby", "Roubion"],
         "Seitah": ["Content", "Bastide", "Issole"],
@@ -169,7 +166,6 @@ COMPACT_ZCAM_MARSLAB_FIELDS = (
     # TODO: determine if this moves somewhere else or if we always
     #  automatically populate caltarget element
     "CALTARGET_ELEMENT",
-    "LOCATION",
     "ZOOM",
     "L_S",
     "SOLAR_ELEVATION",

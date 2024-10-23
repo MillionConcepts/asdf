@@ -501,12 +501,6 @@ def asdf_body(
     aprint(Rule(" writing data files "))
     if we_do_not_have_rois:
         aprint("[dark_orange]No ROI file passed; using null values for data.")
-    # add location from lookup table and sol
-    marslab_data["LOCATION"] = "Unknown"
-    for last_sol, location_name in metadata_settings.LOCATION_TABLE.items():
-        if last_sol > int(bandset.metadata["SOL"].iloc[0]):
-            marslab_data["LOCATION"] = location_name
-            break
     bandset.counts = marslab_data
     # glom all the data and metadata together into our three output formats
     bandset.format_metadata()
