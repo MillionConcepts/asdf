@@ -182,7 +182,7 @@ def make_phase_map(sun_vector, rover_vectors, surf_norm_vectors):
     # TODO, maybe: expedient but redundant
     incidence = make_incidence_map(sun_vector, surf_norm_vectors)
     emission = make_emission_map(surf_norm_vectors, rover_vectors)
-    _, incidence_azimuth, _ = sph2cart(*sun_vector)
+    _, incidence_azimuth, _ = cart2sph(*sun_vector)
     _, emission_azimuth, _ = cart2sph(
         rover_vectors[:, :, 0] - surf_norm_vectors[:, :, 0],
         rover_vectors[:, :, 1] - surf_norm_vectors[:, :, 1],
