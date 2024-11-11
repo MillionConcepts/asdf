@@ -35,10 +35,6 @@ from marslab.imgops.render import colormapped_plot
 warnings.simplefilter("ignore", category=RuntimeWarning)
 
 
-def open_attached(path):
-    return pdr.open(path, label_fn=path, skip_existence_check=True)
-
-
 def derive_cahvore_properties(cahvore):
     for ax in ("H", "V"):
         cahvore[f"{ax}_image"] = (
@@ -290,9 +286,9 @@ def check_xyrs(xyrs, iof_datas, cutoffs):
             # it's slightly lazy-looking to reload but we're not actually
             # reading the IOFs here, only the metadata, so it's much easier
             # and faster than serializing the Data object
-            iof_datas[k] = open_attached(v)
+            iof_datas[k] = pdr.fastread(v)
     for xyr_file in xyrs:
-        xyr = open_attached(xyr_file)
+        xyr = pdr.fastread(xyr_file)
         nxyz = np.moveaxis(xyr.get_scaled("IMAGE"), 0, 2)
         aprint(f"loaded {xyr_file.name}")
         if not nxyz.any():
