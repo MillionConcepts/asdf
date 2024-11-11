@@ -818,11 +818,6 @@ def pretty_plot_bandset(
     )
     from pretty_plot.convert import scale_eyes
 
-    # TODO: what was this?
-    # target_name = ""
-    # if bandset.compact["NAME"].iloc[0]:
-    #     target_name = bandset.compact["NAME"].iloc[0]
-
     # TODO: this scaling behavior should occut in pretty-plot, not here.
     plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
     for band in DERIVED_CAM_DICT["ZCAM"]["filters"].keys():
