@@ -10,7 +10,6 @@ from dustgoggles.scrape import (
     cached_label_loader, make_scraper, scrape_subframe
 )
 
-from asdf.parse import parse_zcam_fn
 from asdf_settings.metadata import IOF_METADATA_FIELDS
 
 
