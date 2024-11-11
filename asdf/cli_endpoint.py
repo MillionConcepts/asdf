@@ -310,4 +310,3 @@ def fdsa_initiate(
                 stream.write(message)
             if power_through_errors is False:
                 raise
-

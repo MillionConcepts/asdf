@@ -556,9 +556,7 @@ def make_mosaic_map(eye, mosaic):
     for name, center in zip(locs['BAND'], centers):
         rsm = name.split("_")[0]
         ax.text(
-            *reversed(center),
-            f"{rsm}{eye}",
-            fontproperties=TITLE_FONT
+            *reversed(center), f"{rsm}{eye}", fontproperties=TITLE_FONT
         )
     return fig
 
