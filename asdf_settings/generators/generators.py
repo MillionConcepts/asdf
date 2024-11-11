@@ -94,8 +94,4 @@ def smoother(array, sigma):
     return split_filter(curry(gaussian_filter), axis=0)(array, sigma=sigma)
 
 
-def glom(*paths):
-    return str(Path(*paths))
-
-
 ASDF_MODULE_PATH = Path(sys.modules.get("asdf").__file__).parent

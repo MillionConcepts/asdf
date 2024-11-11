@@ -17,14 +17,13 @@ from marslab.imgops.imgutils import (
 )
 from marslab.imgops.masking import threshold_mask, skymask
 from marslab.imgops.render import colormapped_plot, simple_figure
-from .generators import glom
 
 # font settings for annotations on rapidlooks -- bear in mind that the
 # images are rendered at 275 dpi, so the sizes may be smaller than you
 # expect they should be
 WORKING_DIRECTORY = Path(__file__).parent
-FONT_PATH = glom(WORKING_DIRECTORY.parent, "static/fonts")
-TITILLIUM = glom(FONT_PATH, "TitilliumWeb-Light.ttf")
+FONT_PATH = WORKING_DIRECTORY.parent / "static/fonts"
+TITILLIUM = FONT_PATH / "TitilliumWeb-Light.ttf"
 TITLE_FONT = mplf.FontProperties(fname=TITILLIUM, size=11.2)
 ANNOTATION_FONT = mplf.FontProperties(fname=TITILLIUM, size=8.8)
 TICK_FONT = mplf.FontProperties(fname=TITILLIUM, size=6)

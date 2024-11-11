@@ -1,11 +1,3 @@
-"""
-This file contains settings for what metadata we both collect and write out.
-adding items to these literals should generally be safe; removing them may not
-be. This file is shipped partly 'unpopulated', and is intended to be
-overridden by values in asdf_settings.user_metadata to reflect the current
-analytic practices of a particular user/team.
-"""
-
 # don't change this
 from itertools import chain
 
@@ -13,16 +5,22 @@ from itertools import chain
 # ask the user about autogenerate them. fdsa will, however, propagate them.
 EMPTY_METADATA_FIELDS = ["NOTES"]
 
-# these are old fields that should never be used in new files. we do
-# propagate them during FDSA runs.
-LEGACY_METADATA_FIELDS = []
+# these are old fields that should never be used in new files. we do repopulate
+# them during FDSA runs.
+LEGACY_METADATA_FIELDS = [
+    "SOIL_COLOR",
+    "LANDFORM TYPE",
+    "WORKSPACE",
+    "TARGET",
+    "MORPHOLOGY"
+]
 
+# TODO: this can be removed shortly
 # treat these fields as "FEATURE_SUBTYPE" during fdsa
-LEGACY_SUBTYPE_FIELDS = []
+LEGACY_SUBTYPE_FIELDS = ["ROCK_SURFACE", "SOIL_LOCATION"]
 
 # fields relevant only to specific feature types. users will only be queried
 # about these fields if they have set FEATURE = the key of the list.
-# the di
 FEATURE_EXCLUSIVE_ROI_FIELDS = {
     # similarly, for the special MEMBER selection behavior to work, FORMATION
     # needs to come before MEMBER in this list.
@@ -77,16 +75,47 @@ ROI_METADATA_FIELD_PROMPTS = {
     "DISTANCE": "What {field} category do / does {title} ROI(s) fall into?",
 }
 
-# dictionary like 'feature name': ('value1', 'value2', ...)
-FEATURE_SUBTYPES = {}
+FEATURE_SUBTYPES = {
+    "soil": (
+        "undisturbed regolith",
+        "on rock",
+        "wheel track compressed",
+        "wheel track disturbed",
+        "disturbed surface (not wheel track)",
+        "bedform crest/slope",
+        "on hardware",
+    ),
+    "rock": (
+        "bright natural surface",
+        "dark natural surface",
+        "thick dust",
+        "LIBS-cleared surface",
+        "gDRT-cleared surface",
+        "abraded surface",
+        "coating (not dust)",
+        "clast/inclusion",
+        "tailings",
+        "wheel scuffed surface",
+    )
+}
 
-# options, if any, for value choices for other fields. Dictionary like:
-# 'field name': ('value1', 'value2', ...);
-# or, for the special 'flowdown' value 'MEMBER',
-# 'field name': {'formation name 1': ('member1', 'member2', ...)}
-ROI_METADATA_FIELD_CHOICES = {}
+# restrictions, if any, on value choices for these fields.
+ROI_METADATA_FIELD_CHOICES = {
+    "FEATURE": ["rock", "soil", "pebble", "hardware"],
+    "FLOAT": ["float", "in-place", "unclear"],
+    "FORMATION": [
+        "Maaz", "Seitah", "delta", "margin unit", "Neretva Vallis", "Crater Rim"
+    ],
+    "MEMBER": {
+        "Maaz": ["Chal", "Nataani", "Rochette", "Artuby", "Roubion"],
+        "Seitah": ["Content", "Bastide", "Issole"],
+    },
+    "GRAIN_SIZE": [
+        "fine (grains not resolvable)", "coarse (grains resolvable)", "mixed",
+    ],
+    "DISTANCE": ["nearfield", "midfield", "farfield"],
+}
 
-# columns we care about in radiometric calibration (.rc) files
 RC_METADATA_COLUMNS = (
     "CALTARGET_FILE",
     "SOL",

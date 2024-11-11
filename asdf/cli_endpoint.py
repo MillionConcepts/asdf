@@ -90,7 +90,7 @@ def asdf_initiate(
     console = ASDF_CONSOLE  # rich.Console object following the asdf styleguide
     with console.status(".. initializing ...", spinner="star"):
         initialize_loggers()
-        insert_settings_module_path(config)
+        set_up_settings_module(config)
         # find all associated files and ask the user about them
         if noninteractive_all:  # run all sequences without user input
             noninteractive = "all"
@@ -170,10 +170,24 @@ def perform_path_dump(dump_paths, is_multiple, observation):
                 file.write(path + "\n")
 
 
-def insert_settings_module_path(config):
+def set_up_settings_module(config):
+    from importlib import import_module
+
     if config is not None:
         import sys
         sys.path.insert(0, str(config))
+    # noinspection PyUnresolvedReferences
+    import asdf_settings
+    from asdf._patcher import monkeypatch_literals
+
+    for n in ("metadata", "sources"):
+        try:
+            umod, mod = [
+                import_module(f"asdf_settings.{p}{n}") for p in ("user_", "")
+            ]
+            monkeypatch_literals(source=umod, target=mod)
+        except ImportError:
+            pass
 
 
 def initialize_loggers():
@@ -233,7 +247,7 @@ def fdsa_initiate(
         "[deep_pink2 on black].. gnizilaitini ...", spinner="betaWave"
     ):
         initialize_loggers()
-        insert_settings_module_path(config)
+        set_up_settings_module(config)
         from asdf.flow import asdf_body
     from rich.rule import Rule
 
