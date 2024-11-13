@@ -396,7 +396,7 @@ def count_rois_on_pixmap(
     """
     all_counts = NestingDict()
     flag_counts = {}
-    for flag_value, flag_name in [1, 2, 3, 4, 5], metadata.PIXEL_FLAG_NAMES:
+    for flag_value, flag_name in [1, 2, 3, 4, 5], meta.PIXEL_FLAG_NAMES:
         # don't bother counting absent flags
         if flag_value not in bayer_masked_flag_array:
             flag_counts[flag_name] = {
@@ -447,14 +447,14 @@ def drop_excess_stats(compact: pd.DataFrame) -> pd.DataFrame:
     for column in compact.columns:
         if column.startswith("LEFT") or column.startswith("RIGHT"):
             if not any(
-                f"_{s}" in column for s in metadata.COMPACT_MARSLAB_STATS
+                f"_{s}" in column for s in meta.COMPACT_MARSLAB_STATS
             ):
                 compact = compact.drop(column, axis=1)
         if "_" not in column:
             continue
         if (
             column.split("_")[0] in filts
-            and column.split("_")[1] not in metadata.COMPACT_MARSLAB_STATS
+            and column.split("_")[1] not in meta.COMPACT_MARSLAB_STATS
         ):
             compact = compact.drop(column, axis=1)
     return compact

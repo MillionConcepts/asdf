@@ -2,7 +2,7 @@
 This file contains settings for what metadata we both collect and write out.
 adding items to these literals should generally be safe; removing them may not
 be. This file is shipped partly 'unpopulated', and is intended to be
-overridden by values in asdf_settings.user_metadata to reflect the current
+overridden by values in asdf_settings.user_meta to reflect the current
 analytic practices of a particular user/team.
 """
 

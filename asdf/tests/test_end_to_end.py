@@ -1,24 +1,22 @@
-from contextlib import redirect_stdout
 import datetime as dt
-from io import StringIO
-from importlib import import_module, reload
 import json
-from pathlib import Path
-import shutil
-import sys
-from warnings import catch_warnings
-
-from asdf._patcher import monkeypatch_literals
-from marslab.tests.utilz.div0 import divide_by_zero
 import pytest
+import shutil
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
+from warnings import catch_warnings
 
 from asdf.console import ASDFLOG
 from asdf.tests.e2e_cases import TEST_CASES
-from asdf.tests.utilz.e2e_utilz import generate_e2e_outputs
+from asdf.tests.utilz.e2e_utilz import (
+    generate_e2e_outputs, _prep_public_e2e_test, _prep_private_e2e_test
+)
 from asdf.tests.utilz.settings import (
     E2E_FAILURE_DIR, REF_OUTPUT_DIR, TEST_OUTPUT_DIR
 )
 from asdf.tests.utilz.test_utilz import compare_asdf_outputs
+from marslab.tests.utilz.div0 import divide_by_zero
 
 ASDFLOG.setLevel("ERROR")
 
@@ -69,8 +67,8 @@ def _e2e_test_inner(case):
                 stdout_buffer.seek(0)
                 with console_dump_file.open("w") as stream:
                     stream.write(stdout_buffer.read())
-        # if (TEST_OUTPUT_DIR / case['name']).exists():
-        #     shutil.rmtree(TEST_OUTPUT_DIR / case['name'])
+        if (TEST_OUTPUT_DIR / case['name']).exists():
+            shutil.rmtree(TEST_OUTPUT_DIR / case['name'])
 
 
 @pytest.mark.public
@@ -78,16 +76,8 @@ def _e2e_test_inner(case):
     "case", TEST_CASES, ids=[c['name'] for c in TEST_CASES]
 )
 def test_e2e_public(case):
-    import asdf_settings.meta
-    # noinspection PyUnresolvedReferences
-    import asdf
-
     case['name'] = f'{case["name"]}_public'
-    monkeypatch_literals(
-        asdf_settings.metadata,
-        import_module(".dummy_metadata", package="asdf.tests")
-    )
-
+    _prep_public_e2e_test()
     _e2e_test_inner(case)
 
 
@@ -96,18 +86,6 @@ def test_e2e_public(case):
     "case", TEST_CASES, ids=[c['name'] for c in TEST_CASES]
 )
 def test_e2e_private(case):
-    import asdf_settings.meta
-    reload(asdf_settings.meta)
-
     case['name'] = f'{case["name"]}_private'
-    try:
-        # noinspection PyUnresolvedReferences
-        import asdf_settings.user_meta
-
-        monkeypatch_literals(
-            asdf_settings.user_meta, asdf_settings.meta
-        )
-    except ImportError:
-        pass
-
+    _prep_private_e2e_test()
     _e2e_test_inner(case)
