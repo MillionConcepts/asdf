@@ -1,11 +1,11 @@
 from asdf.tests.utilz.settings import REF_INPUT_DIR
 
-PROD_PATH = REF_INPUT_DIR / "products"
+PROD_PATH = REF_INPUT_DIR / "public"
 ROI_PATH = REF_INPUT_DIR / "rois"
 
 # tests for a bunch of different user responses on the same inputs
 USER_INPUT_PRODUCT_PATH = PROD_PATH / "0886/iof"
-USER_INPUT_ROI_FILE = ROI_PATH / "zcam03921.sel"
+USER_INPUT_ROI_FILE = ROI_PATH / "zcam03333.sel"
 USER_INPUT_TEST_RESPONSES = {
     # answer 1 to everything
     0: ('1',) * 14,
@@ -50,14 +50,14 @@ FULL_CASES = {
     0: {
         'path': PROD_PATH / "0782/iof",
         'roi_path': (
-            ROI_PATH / "roi_SOL0782_zcam03635_RSM1114-regolith.fits.gz"
+            ROI_PATH / "roi_SOL0444_zcam03444_RSM4444-things.fits.gz"
         ),
         'obs_ix': 1,
         'responses': (2, 1, 1, 1, "\n", 1, 4, 2, 2, 1, 1, 1, 1, 2, 2, 2, 1)
     },
     1: {
         'path': PROD_PATH / "0383/iof",
-        'roi_path': ROI_PATH / 'roi_SOL0383_zcam03336_RSM98.fits.gz',
+        'roi_path': ROI_PATH / 'roi_SOL0333_zcam03333_RSM33.fits.gz',
         'obs_ix': 2,
         'responses': (
             1, 2, 1, 1, 1, 3, 1, 2, 2, "good regolith", "bad regolith",
@@ -69,7 +69,7 @@ FULL_CASES = {
 SPATIAL_CASES = {
     0: {
         'path': PROD_PATH / "0106/iof",
-        'roi_path': ROI_PATH / "roi_SOL0106_zcam03153_RSM286.fits.gz",
+        'roi_path': ROI_PATH / "roi_SOL0222_zcam03222_RSM222.fits.gz",
         'noninteractive': True,
     }
 }

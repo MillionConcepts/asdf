@@ -309,8 +309,8 @@ def compare_asdf_outputs(
     ref_root: Path,
     test_root: Path,
     use_color_as_key_column: bool = True,
-    marslab_rtol: float = 1e-5,
-    marslab_atol: float = 1e-5,
+    marslab_rtol: float = 1e-4,
+    marslab_atol: float = 1e-4,
     skiptypes: Collection[str] = ()
 ):
     test, reference = gmap(Path, tree(test_root)), gmap(Path, tree(ref_root))

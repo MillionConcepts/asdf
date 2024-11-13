@@ -14,7 +14,7 @@ def find_literals(module: ModuleType) -> list[str]:
     return members
 
 
-def monkeypatch_literals(source: ModuleType,target: ModuleType) -> None:
+def monkeypatch_literals(source: ModuleType, target: ModuleType) -> None:
     source_literals = find_literals(source)
     target_literals = find_literals(target)
     for attrname in set(source_literals).intersection(target_literals):

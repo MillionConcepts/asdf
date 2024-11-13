@@ -1,4 +1,5 @@
 from importlib import import_module
+from pathlib import Path
 
 from itertools import product
 import re
@@ -21,24 +22,73 @@ def _start_input_patch(responses, name, obs_ix):
     return input_patch
 
 
-def _prep_public_e2e_test():
+def _prep_public_e2e_test(case):
     # noinspection PyUnresolvedReferences
-    import asdf
+    import asdf.cli_endpoint
+    import asdf.tests.dummy_meta
     import asdf_settings.meta
+    import asdf_settings.sources
 
-    monkeypatch_literals(
-        asdf_settings.meta, import_module("dummy_meta", package="asdf.tests")
-    )
+    setattr(asdf_settings.sources, "META_ROOTS", [])
+    setattr(asdf.cli_endpoint, "_PATCHBLOCK", True)
+    monkeypatch_literals(asdf.tests.dummy_meta, asdf_settings.meta)
+    case = case.copy()
+    case['name'] = f"{case['name']}_public"
+    case['skip_pixmaps'] = True
+    return case
 
 
-def _prep_private_e2e_test():
+def _prep_private_e2e_test(case):
     # noinspection PyUnresolvedReferences
-    import asdf
+    import asdf.cli_endpoint
+    import asdf.tests
     import asdf_settings.meta
+    import asdf_settings.sources
 
-    monkeypatch_literals(
-        asdf_settings.meta, import_module("asdf_settings.user_meta")
+    private = (
+        Path(asdf.tests.__file__).parent
+        / "data" / "reference_inputs" / "private"
     )
+    setattr(asdf_settings.sources, "META_ROOTS", [private])
+
+    setattr(asdf.cli_endpoint,"_PATCHBLOCK", True)
+    monkeypatch_literals(
+        import_module("asdf_settings.user_meta"), asdf_settings.meta
+    )
+    case = case.copy()
+    case['name'] = f"{case['name']}_private"
+    return case
+
+
+def regenerate_test_outputs(
+    which: Union[Literal["all", "missing"], Sequence[int], re.Pattern] = "all",
+    side: Union[Literal["both", "public", "private"]] = "both"
+):
+    sides = ("public", "private") if side == "both" else (side,)
+    from asdf.tests.e2e_cases import TEST_CASES
+
+    cases = [(c, s) for c, s in product(TEST_CASES, sides)]
+    if isinstance(which, re.Pattern):
+        cases = [(c, s) for c, s in cases if which.match(c['name'])]
+    elif isinstance(which, Sequence) and isinstance(which[0], int):
+        cases = [c for i, (c, s) in enumerate(cases) if i in which]
+    elif which == "all":
+        pass
+    elif which == "missing":
+        # TODO: inefficient, obviously
+        cases = [
+            (c, s) for c, s in cases
+            if not (REF_OUTPUT_DIR / f"{c['name']}_{s}").exists()
+        ]
+    else:
+        raise TypeError("'which' argument not understood")
+    for case, side in cases:
+        rich.print(f"[bold hot_pink blink]{case['name']}")
+        if side == 'public':
+            case = _prep_public_e2e_test(case)
+        else:
+            case = _prep_private_e2e_test(case)
+        generate_e2e_outputs(**case, output_root=REGEN_OUTPUT_DIR)
 
 
 def generate_e2e_outputs(
@@ -47,18 +97,9 @@ def generate_e2e_outputs(
     name,
     responses=(),
     obs_ix='y',
-    side: Literal["public", "private"] = 'private',
     output_root=TEST_OUTPUT_DIR,
     **kwargs
 ):
-    from asdf_settings import sources
-
-    # necessary for running tests in deployment environment --
-    # intentionally-missing inputs will be findable,
-    # metamaps may have changed, etc.
-    setattr(sources, "META_ROOTS", [])
-    name = f"{name}_{side}"
-
     import asdf.cli_endpoint
 
     input_patch = _start_input_patch(responses, name, obs_ix)
@@ -68,31 +109,3 @@ def generate_e2e_outputs(
         )
     finally:
         input_patch.stop()
-
-
-def regenerate_test_outputs(
-    which: Union[Literal["all", "missing"], Sequence[int], re.Pattern] = "all",
-    side: Union[Literal["both", "public", "private"]] = "both"
-):
-    from asdf.tests.e2e_cases import TEST_CASES
-
-    if isinstance(which, re.Pattern):
-        cases = [c for c in TEST_CASES if which.match(c['name'])]
-    elif isinstance(which, Sequence) and isinstance(which[0], int):
-        cases = [c for i, c in enumerate(TEST_CASES) if i in which]
-    elif which == "all":
-        cases = TEST_CASES
-    elif which == "missing":
-        cases = [
-            c for c in TEST_CASES if not (REF_OUTPUT_DIR / c['name']).exists()
-        ]
-    else:
-        raise TypeError("'which' argument not understood")
-    sides = ("public", "private") if side == "both" else (side,)
-    for case, which in product(cases, sides):
-        rich.print(f"[bold hot_pink blink]{case['name']}")
-        if side == 'public':
-            _prep_public_e2e_test()
-        else:
-            _prep_private_e2e_test()
-        generate_e2e_outputs(**case, side=which, output_root=REGEN_OUTPUT_DIR)

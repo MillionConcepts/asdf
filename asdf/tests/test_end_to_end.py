@@ -76,9 +76,7 @@ def _e2e_test_inner(case):
     "case", TEST_CASES, ids=[c['name'] for c in TEST_CASES]
 )
 def test_e2e_public(case):
-    case['name'] = f'{case["name"]}_public'
-    _prep_public_e2e_test()
-    _e2e_test_inner(case)
+    _e2e_test_inner(_prep_public_e2e_test(case))
 
 
 @pytest.mark.private
@@ -86,6 +84,4 @@ def test_e2e_public(case):
     "case", TEST_CASES, ids=[c['name'] for c in TEST_CASES]
 )
 def test_e2e_private(case):
-    case['name'] = f'{case["name"]}_private'
-    _prep_private_e2e_test()
-    _e2e_test_inner(case)
+    _e2e_test_inner(_prep_private_e2e_test(case))

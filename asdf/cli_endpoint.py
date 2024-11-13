@@ -5,6 +5,9 @@ from typing import Literal, Optional
 
 from asdf.console import ASDF_CONSOLE, ASDFLOG, ASDF_RPH, aprint
 
+_PATCHBLOCK = False
+"""don't skip asdf_settings patching. intended for testing only."""
+
 
 def asdf_initiate(
     path: str,
@@ -171,6 +174,8 @@ def perform_path_dump(dump_paths, is_multiple, observation):
 
 
 def set_up_settings_module(config):
+    if _PATCHBLOCK is True:
+        return
     from importlib import import_module
 
     if config is not None:
