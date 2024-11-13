@@ -4,7 +4,7 @@ PROD_PATH = REF_INPUT_DIR / "products"
 ROI_PATH = REF_INPUT_DIR / "rois"
 
 # tests for a bunch of different user responses on the same inputs
-USER_INPUT_PRODUCT_PATH = PROD_PATH / "1180/iof"
+USER_INPUT_PRODUCT_PATH = PROD_PATH / "0886/iof"
 USER_INPUT_ROI_FILE = ROI_PATH / "zcam03921.sel"
 USER_INPUT_TEST_RESPONSES = {
     # answer 1 to everything
@@ -81,7 +81,7 @@ TEST_CASES = [
         'responses': v,
         'path': USER_INPUT_PRODUCT_PATH,
         'roi_path': USER_INPUT_ROI_FILE,
-        'seriously_no_images': True
+        'seriously_no_images': True,
     }
     for k, v in USER_INPUT_TEST_RESPONSES.items()
 ]

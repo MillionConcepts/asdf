@@ -1,11 +1,14 @@
 from contextlib import redirect_stdout
 import datetime as dt
 from io import StringIO
+from importlib import import_module, reload
 import json
 from pathlib import Path
 import shutil
+import sys
 from warnings import catch_warnings
 
+from asdf._patcher import monkeypatch_literals
 from marslab.tests.utilz.div0 import divide_by_zero
 import pytest
 
@@ -24,10 +27,7 @@ def stamp():
     return dt.datetime.now().astimezone(dt.UTC).isoformat()[:-9]
 
 
-@pytest.mark.parametrize(
-    "case", TEST_CASES, ids=[c['name'] for c in TEST_CASES]
-)
-def test_e2e(case):
+def _e2e_test_inner(case):
     issues, stdout_buffer = (), StringIO()
     err_json_file = E2E_FAILURE_DIR / f"{case['name']}.json"
     err_json_file.unlink(missing_ok=True)
@@ -69,5 +69,42 @@ def test_e2e(case):
                 stdout_buffer.seek(0)
                 with console_dump_file.open("w") as stream:
                     stream.write(stdout_buffer.read())
-        if (TEST_OUTPUT_DIR / case['name']).exists():
-            shutil.rmtree(TEST_OUTPUT_DIR / case['name'])
+        # if (TEST_OUTPUT_DIR / case['name']).exists():
+        #     shutil.rmtree(TEST_OUTPUT_DIR / case['name'])
+
+
+@pytest.mark.public
+@pytest.mark.parametrize(
+    "case", TEST_CASES, ids=[c['name'] for c in TEST_CASES]
+)
+def test_e2e_public(case):
+    import asdf_settings.metadata
+    # noinspection PyUnresolvedReferences
+    import asdf
+
+    case['name'] = f'{case["name"]}_public'
+    monkeypatch_literals(
+        asdf_settings.metadata,
+        import_module(".dummy_metadata", package="asdf.tests")
+    )
+
+    _e2e_test_inner(case)
+
+
+@pytest.mark.private
+@pytest.mark.parametrize(
+    "case", TEST_CASES, ids=[c['name'] for c in TEST_CASES]
+)
+def test_e2e_private(case):
+    import asdf_settings.metadata
+    reload(asdf_settings.metadata)
+    try:
+        import asdf_settings.user_metadata
+
+        monkeypatch_literals(
+            asdf_settings.user_metadata, asdf_settings.metadata
+        )
+    except ImportError:
+        pass
+
+    _e2e_test_inner(case)
