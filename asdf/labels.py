@@ -10,7 +10,7 @@ from dustgoggles.scrape import (
     cached_label_loader, make_scraper, scrape_subframe
 )
 
-from asdf_settings.metadata import IOF_METADATA_FIELDS
+from asdf_settings.meta import IOF_METADATA_FIELDS
 
 
 def keygetter(mapping, keys):

@@ -164,6 +164,7 @@ logs/
 /asdf/tests/data/ref*
 /asdf/tests/data/*.gz
 /asdf/tests/data/*.tar
+/asdf/tests/data/*.zip
 /asdf/tests/temp/*
 
 # scratch space etc.

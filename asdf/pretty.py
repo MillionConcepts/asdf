@@ -17,10 +17,7 @@ from rich.text import Text
 from dustgoggles.pivot import extract_constants
 
 from asdf.console import aprint, ASDF_CONSOLE
-from asdf_settings.metadata import (
-    ROI_METADATA_FIELD_PROMPTS,
-    ROI_METADATA_FIELD_CHOICES,
-)
+from asdf_settings import meta
 from marslab.compat.mertools import MERSPECT_M20_COLOR_MAPPINGS
 from asdf.parse import parse_zcam_fn
 
@@ -177,17 +174,17 @@ def dispatched_metadata_prompt(
     sideload_options interrupts flow to modify available options based on
     other questions (MEMBERs of a FORMATION, for instance)
     """
-    if field.upper() in ROI_METADATA_FIELD_PROMPTS.keys():
+    if field.upper() in meta.ROI_METADATA_FIELD_PROMPTS.keys():
         text = format_metadata_prompt(
-            ROI_METADATA_FIELD_PROMPTS[field.upper()], field, title
+            meta.ROI_METADATA_FIELD_PROMPTS[field.upper()], field, title
         )
     else:
         text = generic_metadata_prompt_text(field, title)
     if sideload_options is not None:
         return metadata_choice_prompt(text, sideload_options)
-    if field.upper() in ROI_METADATA_FIELD_CHOICES.keys():
+    if field.upper() in meta.ROI_METADATA_FIELD_CHOICES.keys():
         return metadata_choice_prompt(
-            text, ROI_METADATA_FIELD_CHOICES[field.upper()]
+            text, meta.ROI_METADATA_FIELD_CHOICES[field.upper()]
         )
     return metadata_open_prompt(text)
 

@@ -28,8 +28,7 @@ import numpy as np
 import pandas as pd
 
 from asdf.console import ASDF_CONSOLE, aprint
-from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
-from asdf_settings import rapidlooks, sources
+from asdf_settings import meta, rapidlooks, sources
 
 
 if TYPE_CHECKING:
@@ -397,7 +396,7 @@ def count_rois_on_pixmap(
     """
     all_counts = NestingDict()
     flag_counts = {}
-    for flag_value, flag_name in zip([1, 2, 3, 4, 5], PIXEL_FLAG_NAMES):
+    for flag_value, flag_name in [1, 2, 3, 4, 5], metadata.PIXEL_FLAG_NAMES:
         # don't bother counting absent flags
         if flag_value not in bayer_masked_flag_array:
             flag_counts[flag_name] = {
@@ -447,13 +446,15 @@ def drop_excess_stats(compact: pd.DataFrame) -> pd.DataFrame:
     filts = list(DERIVED_CAM_DICT["ZCAM"]["filters"])
     for column in compact.columns:
         if column.startswith("LEFT") or column.startswith("RIGHT"):
-            if not any(f"_{s}" in column for s in COMPACT_MARSLAB_STATS):
+            if not any(
+                f"_{s}" in column for s in metadata.COMPACT_MARSLAB_STATS
+            ):
                 compact = compact.drop(column, axis=1)
         if "_" not in column:
             continue
         if (
             column.split("_")[0] in filts
-            and column.split("_")[1] not in COMPACT_MARSLAB_STATS
+            and column.split("_")[1] not in metadata.COMPACT_MARSLAB_STATS
         ):
             compact = compact.drop(column, axis=1)
     return compact

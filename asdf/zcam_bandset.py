@@ -43,9 +43,7 @@ from asdf.parse import parse_pointing, make_pointing_name, parse_zcam_fn
 from asdf.physics import add_derived_illumination_geometry
 from asdf.labels import bulk_scrape_asdf_metadata
 from asdf.rc_parser import find_rc_file, read_rc_file
-from asdf_settings.metadata import (
-    PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE, COMPACT_ZCAM_MARSLAB_FIELDS
-)
+import asdf_settings.meta as meta
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
 from marslab.compat.xcam import (

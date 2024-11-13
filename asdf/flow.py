@@ -18,7 +18,6 @@ from dustgoggles.func import catch_interaction
 import matplotlib.figure
 
 from asdf.mosaic import make_mosaic_map, just_render
-from asdf_settings.process import THREADS
 from marslab.compat.mertools import merspect_to_marslab
 from marslab.imgops.imgutils import mapfilter
 import matplotlib as mpl
@@ -47,7 +46,7 @@ from asdf.format import (
 from asdf.network import upload_asdf_analysis, upload_mosaic
 from asdf.pretty import name_prompt
 from asdf.zcam_bandset import ZcamBandSet
-from asdf_settings import process, metadata as metadata_settings, rapidlooks
+from asdf_settings import process, meta, rapidlooks
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS
 
 if TYPE_CHECKING:
@@ -198,7 +197,8 @@ def _process_mosaic(
     mosaic = ZMosaicBandSet(
         tuple(mosaic_paths.values()),
         threads={
-            'save': THREADS['mosaic_save'], 'look': THREADS['mosaic_look']
+            'save': process.THREADS['mosaic_save'],
+            'look': process.THREADS['mosaic_look']
         }
     )
     mosaic.format_metadata()

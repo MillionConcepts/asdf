@@ -24,8 +24,7 @@ from asdf.asdf_utils import cast_to_reference
 from asdf.console import aprint, ASDFLOG
 from asdf.parse import parse_pointing
 from asdf.zcam_bandset import polish_metadata
-from asdf_settings.process import THREADS
-from asdf_settings.rapidlooks import CROP_SETTINGS, TITLE_FONT
+from asdf_settings import process, rapidlooks
 from marslab.bandset import BandSet
 from marslab.compat.xcam import DERIVED_CAM_DICT
 from marslab.imgops.imgutils import crop, normalize_range, eightbit
@@ -71,7 +70,9 @@ def bounce_to_tiff(mosaic, scratch_path=".temp/mosaic"):
     for bandset, band in product(mosaic, bands):
         bandset.load([band])
         bandset.bulk_debayer([band])
-        cropped = crop(bandset.get_band(band), CROP_SETTINGS["crop"])
+        cropped = crop(
+            bandset.get_band(band), rapidlooks.CROP_SETTINGS["crop"]
+        )
         tiff_path = Path(scratch_path, f"{band}_{bandset.name}.tiff")
         # note: hugin crashes if the input extension is "tif", but insists
         # on writing it as "tiff".
@@ -272,7 +273,9 @@ def make_single_band_mosaics(eye, band_info, loc_info, bandsets, **pto_kwargs):
         bandset.load([ref_band])
         bandset.bulk_debayer([ref_band])
         reference_image = normalize_range(
-            crop(bandset.get_band(ref_band), CROP_SETTINGS["crop"]), (0, 1), 5
+            crop(bandset.get_band(ref_band), rapidlooks.CROP_SETTINGS["crop"]),
+            (0, 1),
+            5
         )
         tiff_path = Path(
             Path(ref_slice['path'].iloc[0]).parent,
@@ -369,7 +372,7 @@ def create_intermediate_mosaics(pto_files, tif_files):
     for band, pto_file in pto_files.items():
         stdout = execute_hugin_stitch(
             pto_file,
-            threads=THREADS['mosaic_gen'],
+            threads=process.THREADS['mosaic_gen'],
             prefix=Path(pto_file.parent, band)
         )
         intermediate_tif_file = re.search(r'saving (.*?.tif)', stdout).group(1)
@@ -556,7 +559,9 @@ def make_mosaic_map(eye, mosaic):
     for name, center in zip(locs['BAND'], centers):
         rsm = name.split("_")[0]
         ax.text(
-            *reversed(center), f"{rsm}{eye}", fontproperties=TITLE_FONT
+            *reversed(center),
+            f"{rsm}{eye}",
+            fontproperties=rapidlooks.TITLE_FONT
         )
     return fig
 

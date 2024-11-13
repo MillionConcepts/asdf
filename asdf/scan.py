@@ -8,7 +8,17 @@ from functools import reduce
 from operator import mul
 from pathlib import Path
 import re
-from typing import Union, Sequence, Optional, Literal, Callable, Collection, MutableMapping, MutableSequence, Any
+from typing import (
+    Union,
+    Sequence,
+    Optional,
+    Literal,
+    Callable,
+    Collection,
+    MutableMapping,
+    MutableSequence,
+    Any
+)
 from urllib.error import URLError
 
 from cytoolz.dicttoolz import valfilter

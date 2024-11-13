@@ -36,29 +36,15 @@ from asdf.console import ASDF_CONSOLE, aprint, ASDF_PROGRESS, ASDF_RPH, ASDFLOG
 from asdf.format import folder_names, cached_md5sum
 from asdf.pretty import NumberedChoicePrompt, metadata_open_prompt
 from asdf.zcam_bandset import ZcamBandSet
-from asdf_settings.process import THREADS
-from asdf_settings.sources import (
-    PUBLIC_WAYPOINTS_URL,
-    AWS_REGION,
-    AWS_IAM_SECRETS_FILE,
-    BACKUP_BUCKET,
-    OBFUSCATE_THUMBNAIL_NAMES,
-    GOOGLE_CLIENT_SECRETS_FILE,
-    GOOGLE_DRIVE_ROOT,
-    DEBUG_GOOGLE_DRIVE_ROOT,
-    DEBUG_GOOGLE_SHEET_ID,
-    DEBUG_GOOGLE_SHARED_DRIVE_ID,
-    GOOGLE_SHARED_DRIVE_ID,
-    DEBUG_METADATA_BACKUP_FOLDER_ID,
-    GOOGLE_SHEET_ID,
-    METADATA_BACKUP_FOLDER_ID
-)
+from asdf_settings import process, sources
 from marslab.bandset import BandSet
 
 
 def get_public_m20_waypoints() -> Waypoints:
     """Fetches a list of waypoints from the M20 public waypoint server."""
-    waypoint_server_response = urlopen(PUBLIC_WAYPOINTS_URL, timeout=15)
+    waypoint_server_response = urlopen(
+        sources.PUBLIC_WAYPOINTS_URL, timeout=15
+    )
     return json.loads(waypoint_server_response.read())["features"]
 
 
@@ -156,8 +142,8 @@ def upload_s3(
 
 
 def make_asdf_s3_client():
-    aws_config = botocore.config.Config(region_name=AWS_REGION)
-    secrets = pd.read_csv(AWS_IAM_SECRETS_FILE).iloc[0]
+    aws_config = botocore.config.Config(region_name=sources.AWS_REGION)
+    secrets = pd.read_csv(sources.AWS_IAM_SECRETS_FILE).iloc[0]
     return boto3.client(
         "s3",
         aws_access_key_id=secrets["Access key ID"],
@@ -168,7 +154,7 @@ def make_asdf_s3_client():
 
 def bind_asdf_bucket() -> Callable[[Any, Any, bool], None]:
     client = make_asdf_s3_client()
-    bucket = BACKUP_BUCKET
+    bucket = sources.BACKUP_BUCKET
 
     def upload_to_default_bucket(obj, key, pass_string=False):
         return upload_s3(bucket, obj, key, client, pass_string)
@@ -217,10 +203,10 @@ def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
         return {}
     aprint("... uploading thumbnails ...")
     upload = bind_asdf_bucket()
-    bucket_url = f"https://{BACKUP_BUCKET}.s3.amazonaws.com/"
+    bucket_url = f"https://{sources.BACKUP_BUCKET}.s3.amazonaws.com/"
     links = {}
     for name, image_buffer in thumbnails.items():
-        if OBFUSCATE_THUMBNAIL_NAMES is True:
+        if sources.OBFUSCATE_THUMBNAIL_NAMES is True:
             key = "thumb/" + debug_prefix + obfuscated_name()
         else:
             key = "thumb/" + name + "_thumb_" + pointing_name
@@ -238,12 +224,13 @@ def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
 
 def make_asdf_drivebot(debug=False):
     creds = ServiceAccountCredentials.from_json_keyfile_name(
-        GOOGLE_CLIENT_SECRETS_FILE, ["https://www.googleapis.com/auth/drive"]
+        sources.GOOGLE_CLIENT_SECRETS_FILE,
+        ["https://www.googleapis.com/auth/drive"]
     )
     if debug is True:
-        drive_id = DEBUG_GOOGLE_SHARED_DRIVE_ID
+        drive_id = sources.DEBUG_GOOGLE_SHARED_DRIVE_ID
     else:
-        drive_id = GOOGLE_SHARED_DRIVE_ID
+        drive_id = sources.GOOGLE_SHARED_DRIVE_ID
     return DriveBot(creds, shared_drive_id=drive_id)
 
 
@@ -261,9 +248,9 @@ def upload_bandset_to_gdrive(
 ):
     # id of root folder
     if debug is True:
-        root = DEBUG_GOOGLE_DRIVE_ROOT
+        root = sources.DEBUG_GOOGLE_DRIVE_ROOT
     else:
-        root = GOOGLE_DRIVE_ROOT
+        root = sources.GOOGLE_DRIVE_ROOT
     drivebot = make_asdf_drivebot(debug)
     # ASDFLOG.info("checking folder structure")
     sol_folder_name, obs_folder_name = folder_names(bandset, is_mosaic)
@@ -343,16 +330,18 @@ def upload_files_to_gdrive(folders, ok_files, debug):
                 targets.append({'path': file, 'folder_id': folders[folder]})
             except StopIteration:
                 ASDFLOG.info(f"{file} has unknown type, not uploading")
-        if THREADS.get("upload") is not None:
+        if process.THREADS.get("upload") is not None:
             from concurrent.futures import ThreadPoolExecutor
 
-            pool = ThreadPoolExecutor(THREADS['upload'])
+            pool = ThreadPoolExecutor(process.THREADS['upload'])
             log_cache = []
             results = {
                 i: pool.submit(
                     _upload_filelist, tuple(chunk), debug, log_cache, True
                 )
-                for i, chunk in enumerate(divide(THREADS['upload'], targets))
+                for i, chunk in enumerate(
+                    divide(process.THREADS['upload'], targets)
+                )
             }
             while not all(p.done() for p in results.values()):
                 while len(log_cache) > 0:
@@ -365,7 +354,7 @@ def upload_files_to_gdrive(folders, ok_files, debug):
         else:
             _upload_filelist(targets, debug, None, False)
         ASDF_PROGRESS.remove_task(ASDF_RPH.task_id)
-    if THREADS.get('upload') is not None:
+    if process.THREADS.get('upload') is not None:
         for p in results.values():
             if p.exception() is not None:
                 raise p.exception()
@@ -593,7 +582,7 @@ def handle_google_sheet(
 ):
     try:
         upload_and_link_thumbnails(mosaic, s3_debug_prefix, thumbnails)
-        sheetbot = gspread.service_account(GOOGLE_CLIENT_SECRETS_FILE)
+        sheetbot = gspread.service_account(sources.GOOGLE_CLIENT_SECRETS_FILE)
         update_google_sheet(
             mosaic, sheet_backup_folder_id, sheet_id, sheetbot
         )
@@ -612,11 +601,11 @@ def handle_google_sheet(
 
 def remote_ids(debug):
     if debug is True:
-        sheet_id = DEBUG_GOOGLE_SHEET_ID
-        sheet_backup_folder_id = DEBUG_METADATA_BACKUP_FOLDER_ID
+        sheet_id = sources.DEBUG_GOOGLE_SHEET_ID
+        sheet_backup_folder_id = sources.DEBUG_METADATA_BACKUP_FOLDER_ID
         s3_debug_prefix = "debug/"
     else:
-        sheet_id = GOOGLE_SHEET_ID
-        sheet_backup_folder_id = METADATA_BACKUP_FOLDER_ID
+        sheet_id = sources.GOOGLE_SHEET_ID
+        sheet_backup_folder_id = sources.METADATA_BACKUP_FOLDER_ID
         s3_debug_prefix = ""
     return s3_debug_prefix, sheet_backup_folder_id, sheet_id

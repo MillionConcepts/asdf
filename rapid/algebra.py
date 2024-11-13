@@ -8,7 +8,6 @@ from marslab.imgops.look import Look
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 import matplotlib as mpl
-import matplotlib.colors as mcolors
 import matplotlib.figure
 import numpy as np
 import sympy as sp

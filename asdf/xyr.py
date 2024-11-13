@@ -24,8 +24,8 @@ from scipy.interpolate import griddata
 from scipy.spatial import QhullError
 
 from asdf.console import aprint, ASDFLOG
-from asdf_settings.process import THREADS
-from asdf_settings.rapidlooks import FONT_PATH
+from asdf_settings import process
+from asdf_settings import rapidlooks
 from marslab.geom import cart2sph, sph2cart, transform_angle
 from marslab.imgops.imgutils import normalize_range
 from marslab.imgops.pltutils import despine, remove_ticks, dpi_from_image
@@ -328,7 +328,10 @@ def map_spatial_products(
 ):
     aprint(f"checking {len(xyrs)} candidate XYR files")
     # TODO: maybepool
-    pool = None if THREADS['look'] is None else Pool(THREADS['look'])
+    if process.THREADS['look'] is None:
+        pool = None
+    else:
+         pool = Pool(process.THREADS['look'])
     if pool is None:
         nav_evals, mapped = check_xyrs(xyrs, iof_datas, cutoffs)
     else:
@@ -336,7 +339,7 @@ def map_spatial_products(
         args = (
             {k: Path(v.filename) for k, v in iof_datas.items()}, dict(cutoffs)
         )
-        for chunk in divide(THREADS['look'], xyrs):
+        for chunk in divide(process.THREADS['look'], xyrs):
             results.append(pool.apply_async(check_xyrs, (chunk, *args)))
         pool.close()
         pool.join()
@@ -375,7 +378,7 @@ def map_spatial_products(
 
 
 BAR_FONT = mplf.FontProperties(
-    fname=Path(FONT_PATH, "FiraMono-Medium.ttf"),
+    fname=Path(rapidlooks.FONT_PATH, "FiraMono-Medium.ttf"),
     size=12,
 )
 

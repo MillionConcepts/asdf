@@ -78,7 +78,7 @@ def _e2e_test_inner(case):
     "case", TEST_CASES, ids=[c['name'] for c in TEST_CASES]
 )
 def test_e2e_public(case):
-    import asdf_settings.metadata
+    import asdf_settings.meta
     # noinspection PyUnresolvedReferences
     import asdf
 
@@ -96,9 +96,12 @@ def test_e2e_public(case):
     "case", TEST_CASES, ids=[c['name'] for c in TEST_CASES]
 )
 def test_e2e_private(case):
-    import asdf_settings.metadata
+    import asdf_settings.meta
     reload(asdf_settings.metadata)
+
+    case['name'] = f'{case["name"]}_private'
     try:
+        # noinspection PyUnresolvedReferences
         import asdf_settings.user_metadata
 
         monkeypatch_literals(

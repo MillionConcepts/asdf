@@ -68,18 +68,7 @@ from asdf.scan import (
     find_matching_observations,
     METAMAP_TYPES,
 )
-from asdf_settings.metadata import (
-    ROI_METADATA_FIELDS,
-    FEATURE_EXCLUSIVE_ROI_FIELDS,
-    EMPTY_METADATA_FIELDS,
-    PIXEL_FLAG_NAMES,
-    ROI_METADATA_FIELD_CHOICES,
-    LEGACY_METADATA_FIELDS,
-    LEGACY_SUBTYPE_FIELDS,
-    CONDITIONAL_FIELDS,
-    FEATURE_SUBTYPES
-)
-from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
+from asdf_settings import meta, sources
 import pretty_plot as pplot
 
 if TYPE_CHECKING:
@@ -243,14 +232,14 @@ def is_feature_mismatch(metadata: dict[str, str], field: str) -> bool:
     MEMBER for an ROI with FEATURE 'soil')
     """
     if field not in list(
-        chain.from_iterable(FEATURE_EXCLUSIVE_ROI_FIELDS.values())
+        chain.from_iterable(meta.FEATURE_EXCLUSIVE_ROI_FIELDS.values())
     ):
         return False
     if metadata.get("FEATURE") is None:
         return True
-    if FEATURE_EXCLUSIVE_ROI_FIELDS.get(metadata["FEATURE"]) is None:
+    if meta.FEATURE_EXCLUSIVE_ROI_FIELDS.get(meta["FEATURE"]) is None:
         return True
-    return field not in FEATURE_EXCLUSIVE_ROI_FIELDS[metadata["FEATURE"]]
+    return field not in meta.FEATURE_EXCLUSIVE_ROI_FIELDS[meta["FEATURE"]]
 
 
 def ask_user_about_roi(
@@ -290,7 +279,7 @@ def _fix_order(order: dict[str, int]) -> bool:
     FEATURE), then returns False. If it finds no fields out of order, returns
     True, meaning the sort is done.
     """
-    for k, v in CONDITIONAL_FIELDS.items():
+    for k, v in meta.CONDITIONAL_FIELDS.items():
         if order[k] < order[v]:
             order[v] = min(order.values()) - 1
             return False
@@ -303,7 +292,7 @@ def _sort_fields() -> list[str]:
     about them in the right order (e.g., we must ask about FEATURE before
     FEATURE_SUBTYPE). Returns a list of sorted fields.
     """
-    order = {f: i for i, f in enumerate(ROI_METADATA_FIELDS)}
+    order = {f: i for i, f in enumerate(meta.ROI_METADATA_FIELDS)}
     while _fix_order(order) is False:
         continue
     fields = []
@@ -326,7 +315,9 @@ def _checkskip(
     user should be prompted about the field.
     """
     if field in (
-        LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS + EMPTY_METADATA_FIELDS
+        meta.LEGACY_METADATA_FIELDS
+        + meta.LEGACY_SUBTYPE_FIELDS
+        + meta.EMPTY_METADATA_FIELDS
     ):
         return "skip"
     if is_feature_mismatch(roi_metadata, field):
@@ -346,7 +337,7 @@ def _check_field_options(
     if field == "MEMBER":
         if "FORMATION" not in roi_metadata.keys():
             return None, True
-        options = ROI_METADATA_FIELD_CHOICES["MEMBER"].get(
+        options = meta.ROI_METADATA_FIELD_CHOICES["MEMBER"].get(
             roi_metadata["FORMATION"]
         )
         if options is None:
@@ -360,7 +351,7 @@ def _check_field_options(
         # also note that FEATURE_SUBTYPE should never get to
         # this function at all if the previously-specified FEATURE does not
         # have subtypes; it should have been filtered by _checkskip()
-        return FEATURE_SUBTYPES[roi_metadata['FEATURE']], False
+        return meta.FEATURE_SUBTYPES[roi_metadata['FEATURE']], False
     return None, False
 
 
@@ -699,14 +690,14 @@ def collect_dispersed_metadata(
     dataframe of metadata about an observation. At present this is mostly only
     for geospatial data from the waypoints server.
     """
-    if USE_PUBLIC_WAYPOINTS:
+    if sources.USE_PUBLIC_WAYPOINTS is True:
         if not silent:
             aprint(
                 "... scraping localization information from public "
                 "waypoints file ..."
             )
         metadata = add_public_waypoints_to_metadata(metadata)
-    if FIND_EFFECTIVE_TAUS:
+    if sources.FIND_EFFECTIVE_TAUS is True:
         metadata = add_effective_taus(metadata)
     return metadata
 
@@ -844,15 +835,19 @@ def fdsa_insert(
     loaded from a compact marslab file into a dataframe of counted ROIs.
     """
     fields_skipped = []
-    for field in ROI_METADATA_FIELDS:
+    for field in meta.ROI_METADATA_FIELDS:
         if field not in prototype.columns:
-            if field in LEGACY_METADATA_FIELDS + LEGACY_SUBTYPE_FIELDS:
+            if field in (
+                meta.LEGACY_METADATA_FIELDS + meta.LEGACY_SUBTYPE_FIELDS
+            ):
                 # who cares!
                 continue
             fields_skipped.append(field)
             marslab_data[field] = ""
             continue
-    usable_fields = [f for f in prototype.columns if f in ROI_METADATA_FIELDS]
+    usable_fields = [
+        f for f in prototype.columns if f in meta.ROI_METADATA_FIELDS
+    ]
     for color in prototype["COLOR"].unique():
         proto_slice = prototype.loc[prototype["COLOR"] == color]
         if len(proto_slice) > 1:
@@ -875,13 +870,13 @@ def fdsa_insert(
             if proto_value == "-":
                 continue
             use_message = f" {field} "
-            if field in LEGACY_METADATA_FIELDS:
+            if field in meta.LEGACY_METADATA_FIELDS:
                 use_message += "(retained legacy field) "
             fields_used.append_text(
                 Text(use_message, style="default bold")
             ).append_text(Text(str(proto_value), style="bold hot_pink"))
             # TODO: can cut this shortly
-            if field in LEGACY_SUBTYPE_FIELDS:
+            if field in meta.LEGACY_SUBTYPE_FIELDS:
                 if isinstance(proto_value, str):
                     target = "FEATURE_SUBTYPE"
                 else:
@@ -910,7 +905,7 @@ def complain_about_pixmap_counts(quality_df: pd.DataFrame):
     """Print information about bad/hot/etc. pixels to console."""
     for _, counts in quality_df.iterrows():
         color = counts["COLOR"]
-        for flag in PIXEL_FLAG_NAMES:
+        for flag in meta.PIXEL_FLAG_NAMES:
             flag_counts = counts[
                 [
                     ix
