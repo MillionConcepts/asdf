@@ -180,7 +180,7 @@ def set_up_settings_module(config):
     import asdf_settings
     from asdf._patcher import monkeypatch_literals
 
-    for n in ("metadata", "sources"):
+    for n in ("meta", "sources"):
         try:
             umod, mod = [
                 import_module(f"asdf_settings.{p}{n}") for p in ("user_", "")

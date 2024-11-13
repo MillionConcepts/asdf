@@ -97,15 +97,15 @@ def test_e2e_public(case):
 )
 def test_e2e_private(case):
     import asdf_settings.meta
-    reload(asdf_settings.metadata)
+    reload(asdf_settings.meta)
 
     case['name'] = f'{case["name"]}_private'
     try:
         # noinspection PyUnresolvedReferences
-        import asdf_settings.user_metadata
+        import asdf_settings.user_meta
 
         monkeypatch_literals(
-            asdf_settings.user_metadata, asdf_settings.metadata
+            asdf_settings.user_meta, asdf_settings.meta
         )
     except ImportError:
         pass
