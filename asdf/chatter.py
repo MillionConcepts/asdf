@@ -237,9 +237,9 @@ def is_feature_mismatch(metadata: dict[str, str], field: str) -> bool:
         return False
     if metadata.get("FEATURE") is None:
         return True
-    if meta.FEATURE_EXCLUSIVE_ROI_FIELDS.get(meta["FEATURE"]) is None:
+    if meta.FEATURE_EXCLUSIVE_ROI_FIELDS.get(metadata["FEATURE"]) is None:
         return True
-    return field not in meta.FEATURE_EXCLUSIVE_ROI_FIELDS[meta["FEATURE"]]
+    return field not in meta.FEATURE_EXCLUSIVE_ROI_FIELDS[metadata["FEATURE"]]
 
 
 def ask_user_about_roi(

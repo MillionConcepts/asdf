@@ -496,7 +496,7 @@ class ZcamBandSet(BandSet):
         # set variable-by-image values equal to chronologically first value
         # in compact version
         for field, value in summary.items():
-            if field in COMPACT_ZCAM_MARSLAB_FIELDS:
+            if field in meta.COMPACT_ZCAM_MARSLAB_FIELDS:
                 compact[field] = value
         creation_time = dt.datetime.utcnow().isoformat()
         summary["FILE_TIMESTAMP"] = creation_time
@@ -527,7 +527,7 @@ class ZcamBandSet(BandSet):
             ix.replace(first_filt, "").strip("_") for ix in rc_summary.index
         ]
         for field, value in rc_summary.items():
-            if field in COMPACT_ZCAM_MARSLAB_FIELDS:
+            if field in meta.COMPACT_ZCAM_MARSLAB_FIELDS:
                 self.rc_compact[field] = value
         self.rc_compact["SOL"] = self.summary["SOL"]
         self.rc_compact["FEATURE"] = "caltarget"
@@ -671,8 +671,8 @@ class ZcamBandSet(BandSet):
                 continue
             posmap = pixmap.copy()
             pix_y, pix_x = np.where(posmap == flag)
-            style = PIXEL_FLAG_STYLE[flag - 1]
-            label = PIXEL_FLAG_NAMES[flag - 1]
+            style = meta.PIXEL_FLAG_STYLE[flag - 1]
+            label = meta.PIXEL_FLAG_NAMES[flag - 1]
             ax.scatter(pix_x, pix_y, *style, label=label)
         remove_ticks(ax)
         despine(ax)

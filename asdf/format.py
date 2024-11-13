@@ -396,7 +396,7 @@ def count_rois_on_pixmap(
     """
     all_counts = NestingDict()
     flag_counts = {}
-    for flag_value, flag_name in [1, 2, 3, 4, 5], meta.PIXEL_FLAG_NAMES:
+    for flag_value, flag_name in zip([1, 2, 3, 4, 5], meta.PIXEL_FLAG_NAMES):
         # don't bother counting absent flags
         if flag_value not in bayer_masked_flag_array:
             flag_counts[flag_name] = {
