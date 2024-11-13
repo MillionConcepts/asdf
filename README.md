@@ -4,7 +4,7 @@
 
 `asdf` is actively supporting data analysis and / or operations for Mastcam-Z (Mars 2020), Mastcam (MSL), and ChemCam (MSL) instruments.
 
-We are sharing the `asdf` code because we believe in open and reproducible science. The contents of this library are provided under a permissive BSD 3-Clause License, which places very few restrictions on what you can do with it.
+`asdf` has been created by Million Concepts (M. St. Clair, C. Million, S. Brown, and S. Curtis) under the direction of Prof. M. Rice (Western Washington University). We are sharing the `asdf` code because we believe in open and reproducible science. The contents of this library are provided under a permissive BSD 3-Clause License, which places very few restrictions on what you can do with it.
 
 ### Installation
 
@@ -17,7 +17,7 @@ conda activate asdf
 pip install .
 ```
 
-`asdf` will probably work on Windows and Mac OSX.
+`asdf` will probably work on Windows and Mac OSX. Some automated tests may fail do to inconsequential system-to-system variations in image production particulars, but manual inspection of images should immediately reveal whether those features are in fact working as intended.
 * **Windows install note.** If installing on Windows, we recommend using Windows Subsystem for Linux (WSL).
 * **OSX install note.** If on Mac OSX, you will need to comment out the `hugin` package from the `environment.yml` before generating a `conda` environment. This is becuase there is not currently a compatible `hugin` package for Mac OSX available on `conda`. This means that the mosaicking functions will not be available for your install; the rest of the features of the software will still perform as designed.
 
