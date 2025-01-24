@@ -817,6 +817,7 @@ def pretty_plot_bandset(
         Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
     )
     from pretty_plot.convert import scale_eyes
+    from pretty_plot.pplot_utils import pretty_plot
 
     # TODO: what was this?
     # target_name = ""
@@ -830,7 +831,7 @@ def pretty_plot_bandset(
             plot_data.drop(columns=[band, band + "_STD"], inplace=True)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        pplot.pplot_utils.pretty_plot(
+        pretty_plot(
             plot_data,
             solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
             plot_fn=plot_fn,
