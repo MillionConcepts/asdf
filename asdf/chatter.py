@@ -69,7 +69,6 @@ from asdf.scan import (
     METAMAP_TYPES,
 )
 from asdf_settings import meta, sources
-import pretty_plot as pplot
 
 if TYPE_CHECKING:
     # noinspection PyProtectedMember
@@ -808,6 +807,7 @@ def pretty_plot_bandset(
         Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
     )
     from pretty_plot.convert import scale_eyes
+    from pretty_plot.pplot_utils import pretty_plot
 
     # TODO: this scaling behavior should occut in pretty-plot, not here.
     plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
@@ -816,7 +816,7 @@ def pretty_plot_bandset(
             plot_data.drop(columns=[band, band + "_STD"], inplace=True)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        pplot.pplot_utils.pretty_plot(
+        pretty_plot(
             plot_data,
             solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
             plot_fn=plot_fn,
