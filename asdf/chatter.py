@@ -816,7 +816,6 @@ def pretty_plot_bandset(
     plot_fn = str(
         Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
     )
-    from pretty_plot.convert import scale_eyes
     from pretty_plot.pplot_utils import pretty_plot
 
     # TODO: what was this?
@@ -824,19 +823,15 @@ def pretty_plot_bandset(
     # if bandset.compact["NAME"].iloc[0]:
     #     target_name = bandset.compact["NAME"].iloc[0]
 
-    # TODO: this scaling behavior should occut in pretty-plot, not here.
-    plot_data = scale_eyes(bandset.compact.copy(), method="scale_to_avg")
+    plot_data = bandset.compact.copy()
     for band in DERIVED_CAM_DICT["ZCAM"]["filters"].keys():
         if plot_data[band].isna().any():
             plot_data.drop(columns=[band, band + "_STD"], inplace=True)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        pretty_plot(
-            plot_data,
-            solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
-            plot_fn=plot_fn,
-            underplot=None,
-        )
+    pretty_plot(
+        plot_data,
+        solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
+        plot_fn=plot_fn,
+    )
     aprint("wrote " + Path(plot_fn).name)
     bandset.local_files.append(plot_fn)
 
