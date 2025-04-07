@@ -170,3 +170,6 @@ logs/
 
 # test logs / comparison products
 /asdf/tests/e2e_failure_dumps
+
+# MacOS specific
+*DS_Store

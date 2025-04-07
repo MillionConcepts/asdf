@@ -107,7 +107,7 @@ FEATURE_SUBTYPES = {
 
 # restrictions, if any, on value choices for these fields.
 ROI_METADATA_FIELD_CHOICES = {
-    "FEATURE": ["rock", "soil", "pebble", "hardware"],
+    "FEATURE": ["rock", "soil", "pebble", "hardware", "landscape"],
     "FLOAT": ["float", "in-place", "unclear"],
     "FORMATION": [
         "Maaz", "Seitah", "delta", "margin unit", "Neretva Vallis", "Crater Rim"
