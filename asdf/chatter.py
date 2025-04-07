@@ -80,7 +80,6 @@ from asdf_settings.metadata import (
     FEATURE_SUBTYPES
 )
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS, FIND_EFFECTIVE_TAUS
-import pretty_plot as pplot
 
 if TYPE_CHECKING:
     # noinspection PyProtectedMember
@@ -813,10 +812,11 @@ def pretty_plot_bandset(
     which plots it and saves it to disk as a PNG file.
     """
     aprint(Rule(" pretty-plotting data "))
-    plot_fn = str(
-        Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}.png")
+    plot_fn_stem = str(
+        Path(outpath, f"pretty_plot_{bandset.name + bandset.suffix}")
     )
     from pretty_plot.pplot_utils import pretty_plot
+    from asdf_settings.pretty_plots import PRETTY_PLOT_DEFINITIONS
 
     # TODO: what was this?
     # target_name = ""
@@ -827,14 +827,28 @@ def pretty_plot_bandset(
     for band in DERIVED_CAM_DICT["ZCAM"]["filters"].keys():
         if plot_data[band].isna().any():
             plot_data.drop(columns=[band, band + "_STD"], inplace=True)
-    pretty_plot(
-        plot_data,
-        solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
-        plot_fn=plot_fn,
-    )
-    aprint("wrote " + Path(plot_fn).name)
-    bandset.local_files.append(plot_fn)
-
+    plot_fns, kwargs = [], []
+    for ppdef in PRETTY_PLOT_DEFINITIONS:
+        plot_fns.append(
+            f"{plot_fn_stem}.png"
+            if "suffix" not in ppdef.keys()
+            else f"{plot_fn_stem}-{ppdef['suffix']}.png"
+        )
+        kwargs.append(ppdef.get("kwargs", {}))
+    if len(plot_fns) != len(set(plot_fns)):
+        ASDFLOG.error(
+            "Duplicate pretty-plot definition names. Stopping plot generation."
+        )
+        return
+    for fn, kw in zip(plot_fns, kwargs):
+        pretty_plot(
+            plot_data,
+            solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
+            plot_fn=fn,
+            **kw
+        )
+        aprint("wrote " + Path(fn).name)
+        bandset.local_files.append(fn)
 
 # TODO: improve structure
 def fdsa_insert(

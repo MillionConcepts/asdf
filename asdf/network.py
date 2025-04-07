@@ -25,7 +25,7 @@ from botocore.exceptions import ClientError
 from cytoolz import merge
 from dustgoggles.pivot import itemize_numpy
 from googleapiclient.errors import Error as GoogleError
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 import pandas as pd
 from silencio.gdrive3 import DriveBot
 from urllib3.connection import BaseSSLError
@@ -237,9 +237,7 @@ def upload_thumbnails(thumbnails, pointing_name, debug_prefix):
 
 
 def make_asdf_drivebot(debug=False):
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        GOOGLE_CLIENT_SECRETS_FILE, ["https://www.googleapis.com/auth/drive"]
-    )
+    creds = Credentials.from_service_account_file(GOOGLE_CLIENT_SECRETS_FILE)
     if debug is True:
         drive_id = DEBUG_GOOGLE_SHARED_DRIVE_ID
     else:
