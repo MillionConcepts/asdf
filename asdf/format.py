@@ -30,7 +30,7 @@ import pandas as pd
 from asdf.console import ASDF_CONSOLE, aprint
 from asdf_settings.metadata import PIXEL_FLAG_NAMES, COMPACT_MARSLAB_STATS
 from asdf_settings import rapidlooks, sources
-
+from pretty_plot.pplot_utils import obsgeom_string
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -106,6 +106,15 @@ def make_bandset_annotation(metadata: pd.DataFrame) -> str:
     annotation += f"sol {line['SOL']}, seq_id {line['SEQ_ID'][4:]}"
     if 'RSM' in line.index:
         annotation += f", rsm {line['RSM']}"
+    if all(
+        f"{x}_ANGLE" in line.index for x in ("INCIDENCE", "EMISSION", "PHASE")
+    ):
+        obsgeom = {
+            "incidence": line["INCIDENCE_ANGLE"],
+            "emission": line["EMISSION_ANGLE"],
+            "phase": line["PHASE_ANGLE"]
+        }
+        annotation += f" {obsgeom_string(obsgeom)}"
     return annotation
 
 

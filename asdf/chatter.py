@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 import re
 from typing import (
-    Any, Callable, Optional, Literal, Mapping, TYPE_CHECKING, Union, Collection
+    Any, Callable, Optional, Literal, Mapping, TYPE_CHECKING, Union, Collection, TypedDict
 )
 import warnings
 
@@ -92,7 +92,6 @@ if TYPE_CHECKING:
 # TODO: rewrite strings / rich printing in this module with better or at least
 #  more consistent markup
 
-
 def get_scan_results(
     explicit_path: Optional[Union[str, Path]],
     keep_broadband: bool,
@@ -118,6 +117,7 @@ def get_scan_results(
             results, problems, hidden, _ = cluster_observations(
                 products, target_file, keep_broadband, keep_caltarget
             )
+        # TODO: what is going on here?
         except Exception:
             raise
         except (ValueError, FileNotFoundError, PermissionError) as err:
@@ -840,11 +840,17 @@ def pretty_plot_bandset(
             "Duplicate pretty-plot definition names. Stopping plot generation."
         )
         return
+    obsgeom = {
+        "incidence": bandset.compact["INCIDENCE_ANGLE"].iloc[0],
+        "emission": bandset.compact["EMISSION_ANGLE"].iloc[0],
+        "phase": bandset.compact["PHASE_ANGLE"].iloc[0]
+    }
     for fn, kw in zip(plot_fns, kwargs):
         pretty_plot(
             plot_data,
             solar_elevation=bandset.compact["SOLAR_ELEVATION"].iloc[0],
             plot_fn=fn,
+            observation_geometry=obsgeom,
             **kw
         )
         aprint("wrote " + Path(fn).name)
