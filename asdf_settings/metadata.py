@@ -101,7 +101,7 @@ FEATURE_SUBTYPES = {
         "coating (not dust)",
         "clast/inclusion",
         "tailings",
-        "wheel scuffed surface",
+        "broken/scuffed surface",
     )
 }
 
