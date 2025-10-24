@@ -93,6 +93,12 @@ NATURAL_DEFAULTS = {
     "plotter": {"function": simple_figure},
 }
 
+# default settings for stereo anaglyph looks
+ANAGLYPH_DEFAULTS = {
+    "look": "stereo anaglyph",
+    "plotter": {"function": simple_figure},
+}
+
 # crop dimensions for rapidlooks. a setting of (25, 25, 11, 11)
 # effectively crops off the physically-masked "frame" around the detector.
 CROP_SETTINGS = {
@@ -174,7 +180,31 @@ RGB_BANDMAP_THRESHOLD = [
         "send": False,
     },
 ]
-
+# ANAGLYPH_DEFAULTS are added to these
+ANAGLYPH = (
+    {
+        "name": "enhanced color anaglyph",
+        "params": {
+            "anaglyph_type": "color",
+            "filter": {"function": normalize_range, 
+                       "params": {"stretch": (1.25, 1)}},
+            "red": {"bands": ("L0R", "R0R")},
+            "green": {"bands": ("L0G", "R0G")},
+            "blue": {"bands": ("L0B", "R0B")},
+        },
+    },
+    {
+        "name": "grayscale anaglyph",
+        "params": {
+            "anaglyph_type": "mono",
+            "filter": {"function": normalize_range, 
+                       "params": {"stretch": (1.25, 1)}},
+            "red": {"bands": ("L0R", "R0R")},
+            "green": {"bands": ("L0G", "R0G")},
+            "blue": {"bands": ("L0B", "R0B")},
+        },
+    },
+)
 
 # TODO: put this somewhere else
 def maybeclip(image, centiles=(1, 99)):
@@ -251,7 +281,8 @@ RGB_BANDMAP = [mafic_map, mmap_unmasked]
 
 # this notifies the look assembler to consider the categories above
 # and associate them with their defaults.
-CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP"]
+CATEGORIES = ["BANDMAP", "ENHANCED", "NATURAL", "STRETCHY", "RGB_BANDMAP", 
+              "ANAGLYPH"]
 ############################################################################
 #                 procedurally-generated rapidlooks
 #############################################################################
