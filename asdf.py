@@ -22,12 +22,12 @@ ARG_ABBREVIATIONS = {
     "mer": "merspect",
     "v": "recursive",
     "pd": "pathdump",
-    "ir": "image_regex",
-    "sp": "skip_pixmaps",
-    "se": "skip_errmaps",
+    "ir": "image-regex",
+    "sp": "skip-pixmaps",
+    "se": "skip-errmaps",
     "sn": "seriously-no-images",
-    "rm": "reuse_mosaic",
-    "ki": "keep_intermediate",
+    "rm": "reuse-mosaic",
+    "ki": "keep-intermediate",
     "xyz": "spatial"
 }
 
@@ -57,7 +57,7 @@ def rearrange_args(
             argrep = f"--{abbreviations[arg.strip('-')]}"
         else:
             argrep = arg
-        maparg = argrep.strip('-')
+        maparg = argrep.strip('-').replace('_', '-')
         if maparg not in params.keys():
             raise TypeError(f"Argument {arg} not understood.")
         if (params[maparg].annotation == bool) or (position + 1 == len(args)):

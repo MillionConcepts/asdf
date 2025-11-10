@@ -993,6 +993,6 @@ def check_mosaic_paths(
                 "mosaic files not available. Please run again without "
                 "this flag or provide the files. Bailing out."
             )
-        return
+            return
     # noinspection PyTypeChecker
     return mosaic_paths
