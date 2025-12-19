@@ -316,6 +316,14 @@ def offer_observation_choice(number_of_observations):
     )
 
 
+def confirm_additional_rois():
+    return Confirm.ask(
+        "Would you like to manually enter the metadata now?",
+        default="Y",
+        console=ASDF_CONSOLE,
+    )
+
+
 def confirm_fdsa_metadata():
     return Confirm.ask(
         Text(

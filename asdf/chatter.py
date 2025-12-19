@@ -53,6 +53,7 @@ from asdf.pretty import (
     tw,
     confirm_fdsa_metadata,
     confirm_fdsa_data, confirm_fdsa_warnings,
+    confirm_additional_rois
 )
 from asdf.scan import (
     scan_zcam_files,
@@ -922,6 +923,49 @@ def fdsa_insert(
             f"field(s) in this marslab file, "
             f"probably from an earlier asdf version\n"
         )
+
+    return marslab_data
+
+
+def reuse_roi_user_inputs(
+    marslab_data: pd.DataFrame, 
+    prototype: pd.DataFrame, 
+    ci: Callable[[Callable, Any, ...], str]
+) -> pd.DataFrame:
+    
+    marslab_data = fdsa_insert(marslab_data, prototype)
+
+    if len(marslab_data) < len(prototype):
+        aprint(
+            "The ROI file contains fewer ROIs than the Marslab file. "
+            "This probably means an ROI has been removed."
+        )
+        # TODO add the ci() wrapper here for non-interactive mode
+        if confirm_fdsa_warnings() is not True:
+            aprint("[red]exiting")
+            return None
+    elif len(marslab_data) > len(prototype):
+        new_regions = marslab_data[
+            ~marslab_data['COLOR'].isin(prototype['COLOR'])
+        ]
+        aprint(f"Found {len(new_regions)} ROI(s) not in the Marslab file.")
+        # TODO add the ci() wrapper here for non-interactive mode
+        if confirm_additional_rois() is not True:
+            aprint(f"[dark_orange]skipping metadata for {len(new_regions)} "
+                   "ROI(s)")
+            return marslab_data
+        for region in new_regions["COLOR"]:
+            ci(
+                aprint,
+                Text("Please enter information about the ")
+                .append_text(colorize_merspect_roi_name(region))
+                .append_text(Text(" ROI.")),
+            )
+            user_provided_metadata = ask_user_about_roi(region, ci, {})
+            for field, value in user_provided_metadata.items():
+                if field not in marslab_data.columns:
+                    marslab_data[field] = pd.Series(dtype=object)
+                marslab_data.loc[marslab_data["COLOR"] == region, field] = value
 
     return marslab_data
 

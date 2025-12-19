@@ -36,6 +36,7 @@ def asdf_initiate(
     rsm: Optional[tuple[int]] = None,
     spatial: bool = False,
     regenerate_spatial: bool = False,
+    roi_metadata_path: Optional[str] = None,
 ):
     """
     processes and archives everything
@@ -84,6 +85,7 @@ def asdf_initiate(
     :param regenerate_spatial: if matching spatial FITS files exist in the output
         path, regenerate them from scratch them rather than reusing them?
         (relevant only when making spatial products)
+    :param roi_metadata_path: path to a Marslab .csv file with user input per-ROI metadata that will be reused during this run of a previously processed observation
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
@@ -143,7 +145,8 @@ def asdf_initiate(
         reuse_mosaic,
         keep_intermediate,
         spatial,
-        regenerate_spatial
+        regenerate_spatial,
+        roi_metadata_path,
     )
     from asdf.flow import asdf_body
 

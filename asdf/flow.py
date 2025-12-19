@@ -31,6 +31,7 @@ from asdf.chatter import (
     check_mosaic_paths,
     complain_about_pixmap_counts,
     fdsa_insert,
+    reuse_roi_user_inputs,
     handle_map_checks,
     input_roi_metadata,
     pretty_plot_bandset,
@@ -316,6 +317,7 @@ def asdf_body(
     keep_intermediate: bool = False,
     spatial: bool = False,
     regenerate_spatial: bool = False,
+    roi_metadata_path: Optional[str] = None,
     recreate_from: Optional[str] = None,
 ) -> None:
     """
@@ -346,6 +348,14 @@ def asdf_body(
         aprint(
             f"[italic hot_pink]... fdsa: loaded prototype marslab file "
             f"{recreate_from} ..."
+        )
+    elif roi_metadata_path:
+        prototype = pd.read_csv(roi_metadata_path)
+        #TODO: pick a different color? so it's not so close to the output we'd 
+        # otherwise only expect during an fdsa
+        aprint(
+            f"[italic hot_pink]... loaded marslab file with ROI metadata "
+            f"{roi_metadata_path} ..."
         )
     else:
         prototype = pd.DataFrame()
@@ -470,7 +480,10 @@ def asdf_body(
         marslab_data = (
             marslab_data.sort_values(by='COLOR').reset_index(drop=True)
         )
-        if not recreate_from:
+        if roi_metadata_path:
+            aprint("... populating ROI metadata from Marslab file ...")
+            marslab_data = reuse_roi_user_inputs(marslab_data, prototype, ci)
+        elif not recreate_from:
             # prompt users for info on each ROI
             marslab_data = input_roi_metadata(marslab_data, ci)
         else:
