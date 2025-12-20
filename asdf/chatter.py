@@ -927,7 +927,7 @@ def fdsa_insert(
     return marslab_data
 
 
-def reuse_roi_user_inputs(
+def reuse_roi_metadata(
     marslab_data: pd.DataFrame, 
     prototype: pd.DataFrame, 
     ci: Callable[[Callable, Any, ...], str]

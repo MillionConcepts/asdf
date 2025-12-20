@@ -31,9 +31,9 @@ from asdf.chatter import (
     check_mosaic_paths,
     complain_about_pixmap_counts,
     fdsa_insert,
-    reuse_roi_user_inputs,
     handle_map_checks,
     input_roi_metadata,
+    reuse_roi_metadata,
     pretty_plot_bandset,
     save_looks,
 )
@@ -46,7 +46,7 @@ from asdf.format import (
 
 )
 from asdf.network import upload_asdf_analysis, upload_mosaic
-from asdf.pretty import name_prompt
+from asdf.pretty import name_prompt, confirm_fdsa_warnings
 from asdf.zcam_bandset import ZcamBandSet
 from asdf_settings import process, metadata as metadata_settings, rapidlooks
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS
@@ -399,6 +399,38 @@ def asdf_body(
     else:
         bandset.metadata["NAME"] = ci(name_prompt)
 
+    if roi_metadata_path:
+        # check user inputs for name/sol/seqid match the marslab file
+        if (
+            (bandset.metadata["SOL"][0] != prototype["SOL"][0]) 
+            or (bandset.metadata["SEQ_ID"][0]!=prototype["SEQ_ID"][0].upper()) 
+            or (bandset.metadata["NAME"][0] != prototype["NAME"][0])
+        ):
+            aprint("[light_coral]The name, sol, and/or seq_id in the Marslab "
+                   "file do not match your inputs. This could mean the Marslab "
+                   "file does not match the observation.")
+        if bandset.metadata["SOL"][0] != prototype["SOL"][0]:
+            aprint(
+                f'[bold green]sol[/bold green]: \"'
+                f'{bandset.metadata["SOL"][0]}\" (user input) vs \"'
+                f'{prototype["SOL"][0]}\" (Marslab file)'
+            )
+        if bandset.metadata["SEQ_ID"][0] != prototype["SEQ_ID"][0].upper():
+            aprint(
+                f'[bold dark_turquoise]seq_id[/bold dark_turquoise]: \"'
+                f'{bandset.metadata["SEQ_ID"][0]}\" (user input) vs \"'
+                f'{prototype["SEQ_ID"][0]}\" (Marslab file)'
+            )
+        if bandset.metadata["NAME"][0] != prototype["NAME"][0]:
+            aprint(
+                f'[bold orchid1]name[/bold orchid1]: \"'
+                f'{bandset.metadata["NAME"][0]}\" (user input) vs \"'
+                f'{prototype["NAME"][0]}\" (Marslab file)'
+            )
+        if confirm_fdsa_warnings() is not True:
+            aprint("[red]exiting")
+            return None
+
     # where are we locally writing files? by default, directories separated
     # by user, sol, name + rsm.
     outpath = make_asdf_outpath(bandset, output)
@@ -482,7 +514,7 @@ def asdf_body(
         )
         if roi_metadata_path:
             aprint("... populating ROI metadata from Marslab file ...")
-            marslab_data = reuse_roi_user_inputs(marslab_data, prototype, ci)
+            marslab_data = reuse_roi_metadata(marslab_data, prototype, ci)
         elif not recreate_from:
             # prompt users for info on each ROI
             marslab_data = input_roi_metadata(marslab_data, ci)
