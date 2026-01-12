@@ -940,17 +940,17 @@ def reuse_roi_metadata(
             "The ROI file contains fewer ROIs than the Marslab file. "
             "This probably means an ROI has been removed."
         )
-        # TODO add the ci() wrapper here for non-interactive mode
+        # TODO: could add the ci() wrapper here, but we probably don't want to 
+        # jump past a missing ROI without double checking with the user
         if confirm_fdsa_warnings() is not True:
-            aprint("[red]exiting")
+            aprint("[red]halting in response to user request")
             return None
     elif len(marslab_data) > len(prototype):
         new_regions = marslab_data[
             ~marslab_data['COLOR'].isin(prototype['COLOR'])
         ]
         aprint(f"Found {len(new_regions)} ROI(s) not in the Marslab file.")
-        # TODO add the ci() wrapper here for non-interactive mode
-        if confirm_additional_rois() is not True:
+        if ci(confirm_additional_rois) is False:
             aprint(f"[dark_orange]skipping metadata for {len(new_regions)} "
                    "ROI(s)")
             return marslab_data
@@ -966,8 +966,51 @@ def reuse_roi_metadata(
                 if field not in marslab_data.columns:
                     marslab_data[field] = pd.Series(dtype=object)
                 marslab_data.loc[marslab_data["COLOR"] == region, field] = value
-
     return marslab_data
+
+
+def ask_about_metadata_mismatch(
+        bandset: ZcamBandSet, 
+        prototype: pd.DataFrame, 
+        ci: Callable[[Callable, Any, ...], str]
+):
+    aprint("\n")
+    aprint(
+        "[light_coral]The name, sol, and/or seq_id in the loaded marslab file "
+        "do not match the user inputs. If the mismatch is not intentional "
+        "(e.g. to fix a typo in the observation name), this could mean the "
+        "ROIs in the marslab file are for a different observation."
+    )
+    if bandset.metadata["NAME"][0] != prototype["NAME"][0]:
+        aprint(
+            f'[bold orchid1]name[/bold orchid1]: \t\"'
+            f'{bandset.metadata["NAME"][0]}\" (user input) vs \"'
+            f'{prototype["NAME"][0]}\" (marslab file)'
+        )
+    if bandset.metadata["SOL"][0] != prototype["SOL"][0]:
+        aprint(
+            f'[bold green]sol[/bold green]: \t'
+            f'{bandset.metadata["SOL"][0]} (user input) vs '
+            f'{prototype["SOL"][0]} (marslab file)'
+        )
+    if bandset.metadata["SEQ_ID"][0] != prototype["SEQ_ID"][0].upper():
+        aprint(
+            f'[bold dark_turquoise]seq_id[/bold dark_turquoise]: '
+            f'{bandset.metadata["SEQ_ID"][0]} (user input) vs '
+            f'{prototype["SEQ_ID"][0]} (marslab file)'
+        )
+    aprint("\n")
+    aprint(
+        "The user input(s) above will be used to populate a new marslab file "
+        "created during this run of asdf."
+    )
+    # TODO: could add the ci() wrapper here, but it's probably best to always 
+    # double check with the user if it looks like the Marslab file doesn't 
+    # match the observation
+    if confirm_fdsa_warnings() is not True:
+        aprint("[red]halting in response to user request")
+        raise InterruptedError
+    return None
 
 
 # TODO: improve structure

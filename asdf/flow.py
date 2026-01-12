@@ -36,6 +36,7 @@ from asdf.chatter import (
     reuse_roi_metadata,
     pretty_plot_bandset,
     save_looks,
+    ask_about_metadata_mismatch,
 )
 from asdf.console import ASDF_CONSOLE, ASDF_PROGRESS, ASDF_RPH, aprint, ASDFLOG
 from asdf.format import (
@@ -46,7 +47,7 @@ from asdf.format import (
 
 )
 from asdf.network import upload_asdf_analysis, upload_mosaic
-from asdf.pretty import name_prompt, confirm_fdsa_warnings
+from asdf.pretty import name_prompt
 from asdf.zcam_bandset import ZcamBandSet
 from asdf_settings import process, metadata as metadata_settings, rapidlooks
 from asdf_settings.sources import USE_PUBLIC_WAYPOINTS
@@ -351,10 +352,8 @@ def asdf_body(
         )
     elif roi_metadata_path:
         prototype = pd.read_csv(roi_metadata_path)
-        #TODO: pick a different color? so it's not so close to the output we'd 
-        # otherwise only expect during an fdsa
         aprint(
-            f"[italic hot_pink]... loaded marslab file with ROI metadata "
+            f"... loaded marslab file with ROI metadata "
             f"{roi_metadata_path} ..."
         )
     else:
@@ -400,37 +399,17 @@ def asdf_body(
         bandset.metadata["NAME"] = ci(name_prompt)
 
     if roi_metadata_path:
-        # check user inputs for name/sol/seqid match the marslab file
+        # check if the name/sol/seq_id match the marslab file
         if (
             (bandset.metadata["SOL"][0] != prototype["SOL"][0]) 
             or (bandset.metadata["SEQ_ID"][0]!=prototype["SEQ_ID"][0].upper()) 
             or (bandset.metadata["NAME"][0] != prototype["NAME"][0])
         ):
-            aprint("[light_coral]The name, sol, and/or seq_id in the Marslab "
-                   "file do not match your inputs. This could mean the Marslab "
-                   "file does not match the observation.")
-        if bandset.metadata["SOL"][0] != prototype["SOL"][0]:
-            aprint(
-                f'[bold green]sol[/bold green]: \"'
-                f'{bandset.metadata["SOL"][0]}\" (user input) vs \"'
-                f'{prototype["SOL"][0]}\" (Marslab file)'
-            )
-        if bandset.metadata["SEQ_ID"][0] != prototype["SEQ_ID"][0].upper():
-            aprint(
-                f'[bold dark_turquoise]seq_id[/bold dark_turquoise]: \"'
-                f'{bandset.metadata["SEQ_ID"][0]}\" (user input) vs \"'
-                f'{prototype["SEQ_ID"][0]}\" (Marslab file)'
-            )
-        if bandset.metadata["NAME"][0] != prototype["NAME"][0]:
-            aprint(
-                f'[bold orchid1]name[/bold orchid1]: \"'
-                f'{bandset.metadata["NAME"][0]}\" (user input) vs \"'
-                f'{prototype["NAME"][0]}\" (Marslab file)'
-            )
-        if confirm_fdsa_warnings() is not True:
-            aprint("[red]exiting")
-            return None
-
+            try: 
+                ask_about_metadata_mismatch(bandset, prototype, ci)
+            except InterruptedError:
+                return # quit at user request due to mismatches
+    
     # where are we locally writing files? by default, directories separated
     # by user, sol, name + rsm.
     outpath = make_asdf_outpath(bandset, output)
