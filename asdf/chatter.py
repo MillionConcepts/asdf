@@ -932,9 +932,26 @@ def reuse_roi_metadata(
     prototype: pd.DataFrame, 
     ci: Callable[[Callable, Any, ...], str]
 ) -> pd.DataFrame:
-    
-    marslab_data = fdsa_insert(marslab_data, prototype)
-
+    # This first section is based on fdsa_insert(), but skips the checks for 
+    # legacy metadata fields and missing/extra ROIs. It also handles empty 
+    # columns differently.
+    usable_fields = [f for f in prototype.columns if f in ROI_METADATA_FIELDS]
+    for color in prototype["COLOR"]:
+        proto_slice = prototype.loc[prototype["COLOR"] == color]
+        for field in usable_fields:
+            proto_value = proto_slice[field].iloc[0]
+            if proto_value == "-":
+                proto_value = ""
+            if field not in marslab_data.columns:
+                marslab_data[field] = pd.Series(dtype=object)
+            marslab_data.loc[
+                marslab_data["COLOR"] == color, field
+            ] = proto_value
+        aprint(Text("Reused ").append_text(
+            colorize_merspect_roi_name(color)
+            ).append_text(Text(" metadata", style="default")))
+    # Confirm the user wants to continue if the new ROI file has fewer ROIs 
+    # than the marslab file
     if len(marslab_data) < len(prototype):
         aprint(
             "The ROI file contains fewer ROIs than the Marslab file. "
@@ -945,6 +962,8 @@ def reuse_roi_metadata(
         if confirm_fdsa_warnings() is not True:
             aprint("[red]halting in response to user request")
             return None
+    # If the new ROI file has more ROIs than the marslab file, ask the user if 
+    # they want to input the metadata manually now
     elif len(marslab_data) > len(prototype):
         new_regions = marslab_data[
             ~marslab_data['COLOR'].isin(prototype['COLOR'])
@@ -954,6 +973,7 @@ def reuse_roi_metadata(
             aprint(f"[dark_orange]skipping metadata for {len(new_regions)} "
                    "ROI(s)")
             return marslab_data
+        # This section is based on input_roi_metadata()
         for region in new_regions["COLOR"]:
             ci(
                 aprint,
