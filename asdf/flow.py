@@ -407,7 +407,7 @@ def asdf_body(
         ):
             try: 
                 ask_about_metadata_mismatch(bandset, prototype, ci)
-            except InterruptedError:
+            except KeyboardInterrupt:
                 return # quit at user request due to mismatches
     
     # where are we locally writing files? by default, directories separated

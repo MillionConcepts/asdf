@@ -957,9 +957,7 @@ def reuse_roi_metadata(
             "The ROI file contains fewer ROIs than the Marslab file. "
             "This probably means an ROI has been removed."
         )
-        # TODO: could add the ci() wrapper here, but we probably don't want to 
-        # jump past a missing ROI without double checking with the user
-        if confirm_fdsa_warnings() is not True:
+        if ci(confirm_fdsa_warnings) is False:
             aprint("[red]halting in response to user request")
             return None
     # If the new ROI file has more ROIs than the marslab file, ask the user if 
@@ -1024,12 +1022,9 @@ def ask_about_metadata_mismatch(
         "The user input(s) above will be used to populate a new marslab file "
         "created during this run of asdf."
     )
-    # TODO: could add the ci() wrapper here, but it's probably best to always 
-    # double check with the user if it looks like the Marslab file doesn't 
-    # match the observation
-    if confirm_fdsa_warnings() is not True:
+    if ci(confirm_fdsa_warnings) is False:
         aprint("[red]halting in response to user request")
-        raise InterruptedError
+        raise KeyboardInterrupt
     return None
 
 
