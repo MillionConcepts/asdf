@@ -14,7 +14,7 @@ tools for multispectral data analysis, which is in tactical use for Mastcam-Z
 multispectral operations and has also been extensively applied to MSL Mastcam
 data.
 
-Given a set of Mastcam-Z IOF (radiance factor) image files, asdf automatically:
+Given a set of Mastcam-Z IOF (incidence-over-flux) image files, asdf automatically:
 
 - generates browse products: parameter maps, decorrelation stretch (DCS) images,
   and "true" and enhanced color composites
@@ -25,8 +25,7 @@ Given a set of Mastcam-Z IOF (radiance factor) image files, asdf automatically:
   descriptors based on Mastcam-Z Multispectral Working Group (MSWG)
   classifications
 
-asdf records analyses in archive-ready formats consistent with Planetary Data
-System v4 policies. A secondary mode (`fdsa`) can regenerate previous analyses
+asdf records analyses in archive-ready formats. A secondary mode (`fdsa`) can regenerate previous analyses
 with modified parameters, supporting calibration updates, refined ROI
 selections, and quality assurance checks.
 
