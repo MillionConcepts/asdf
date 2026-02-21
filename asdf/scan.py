@@ -82,7 +82,13 @@ def skim_products(
                 continue
             skim_results.append(skim_result)
             keep_paths.append(product)
-        except (FileNotFoundError, TypeError, KeyError, SyntaxError) as _error:
+        except (
+            FileNotFoundError,
+            TypeError,
+            KeyError,
+            SyntaxError,
+            AttributeError
+        ):
             bad_files.append(product)
     if len(rsm_rejects) > 0:
         ASDFLOG.info(
