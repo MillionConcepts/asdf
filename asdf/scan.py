@@ -17,7 +17,6 @@ from cytoolz.itertoolz import partition
 from dustgoggles.pivot import split_on, pdstr
 from dustgoggles.scrape import cached_ls, cached_exists
 from dustgoggles.structures import listify
-from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
 from more_itertools import all_equal
@@ -25,6 +24,7 @@ from more_itertools import all_equal
 from asdf._types import Waypoints
 from asdf.asdf_utils import dir_fs
 from asdf.console import ASDFLOG
+from asdf.fileutils import FileRoot
 from asdf.labels import cached_aux_skimmer
 from asdf.network import get_public_m20_waypoints
 from asdf.parse import (
@@ -129,8 +129,8 @@ def ls_zcam(
     Should work on IOFs, RADs, pixmaps, IOEs, EDRs, and rcfiles.
     """
     if recursive is True:
-        scan_fs = OSFS(str(root_dir))
-        files = [scan_fs.getsyspath(file) for file in scan_fs.walk.files()]
+        scan_fs = FileRoot(root_dir)
+        files = [scan_fs.getsyspath(file) for file in scan_fs.walk()]
     else:
         files = [file for file in Path(root_dir).iterdir()]
     ASDFLOG.info(f"... {len(files)} files found in search path ...")
@@ -449,7 +449,7 @@ def validate_rc_consistency(
     """
     parsed_rc_fns = group["RC_FILE"].map(parse_zcam_fn)
     rc_ok, rc_warning = True, None
-    for key in ("SITE", "DRIVE", "SEQ_ID", "VERSION"):
+    for key in ("SITE", "DRIVE", "SEQ_ID"):
         if not all_equal([fn[key] for fn in parsed_rc_fns]):
             rc_warning, rc_ok = (
                 f"warning: could not process some or all pointings of "
@@ -851,17 +851,15 @@ def fetch_analysis_files(
     appear to be either.
     """
     analysis_fs = dir_fs(path)
-    syspath = dir_fs(path).getsyspath
-    marslab_files = []
-    roi_files = []
-    other_files = []
-    for file in analysis_fs.walk.files():
+    marslab_files, roi_files, other_files = [], [], []
+    for file in analysis_fs.walk():
         if looks_like_marslab(file):
-            marslab_files.append(syspath(file))
+            target = marslab_files
         elif looks_like_roi(file):
-            roi_files.append(syspath(file))
+            target = roi_files
         else:
-            other_files.append(syspath(file))
+            target = other_files
+        target.append(str(analysis_fs.getsyspath(file)))
     return marslab_files, roi_files, other_files
 
 

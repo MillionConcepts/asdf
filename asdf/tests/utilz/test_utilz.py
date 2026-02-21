@@ -21,7 +21,6 @@ from unittest.mock import patch
 from astropy.io import fits
 from cytoolz import valfilter
 from dustgoggles.func import constant, disjoint, intersection, gmap
-from fs.osfs import OSFS
 import numpy as np
 import pandas as pd
 import pdr
@@ -31,6 +30,7 @@ import shutil
 
 import asdf.chatter
 import asdf.cli_endpoint
+from asdf.fileutils import FileRoot
 import asdf.flow
 import asdf.pretty
 from asdf.tests.utilz.settings import MARSLAB_VARCOLS, SPACE_VARKEYS, NAVEVAL_VARCOLS, ALWAYS_SKIP_FILES
@@ -56,8 +56,8 @@ def _insert_nulls_inplace(
 
 
 def tree(root_path):
-    tree_fs = OSFS(str(root_path))
-    return list(map(lambda f: f.strip('/'), tree_fs.walk.files()))
+    tree_fs = FileRoot(root_path)
+    return list(map(lambda f: str(f).strip('/'), tree_fs.walk()))
 
 
 def record_mismatches(results, absent, novel):

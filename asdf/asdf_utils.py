@@ -11,11 +11,11 @@ from pathlib import Path
 from typing import Union, Optional, TYPE_CHECKING
 import re
 
-import pandas as pd
 from cytoolz import keyfilter
-from fs.osfs import OSFS
+import pandas as pd
 
 from asdf.console import aprint
+from asdf.fileutils import FileRoot
 
 if TYPE_CHECKING:
     from astropy.io.fits.hdu import ImageHDU, HDUList
@@ -133,15 +133,15 @@ def null_marslab_data_section() -> pd.DataFrame:
     return pd.DataFrame({"COLOR": "-", "INSTRUMENT": "ZCAM"}, index=[0])
 
 
-def dir_fs(path: Union[str, Path]) -> OSFS:
+def dir_fs(path: Union[str, Path]) -> FileRoot:
     """
-    Produces a pyfilesystem OSFS object rooted at `path` if `path` is a
+    Produces a FileRoot object based at `path` if `path` is a
     directory, and `path`'s containing directory if it is not.
     """
     path = Path(path)
     if not path.is_dir:
         path = path.parent
-    return OSFS(str(path))
+    return FileRoot(path)
 
 
 # TODO: fully deprecate
