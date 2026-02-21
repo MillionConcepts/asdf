@@ -9,7 +9,7 @@ multispectral analysis workflows with Mastcam-Z.
 
 asdf automates last-mile reduction of Mastcam-Z (ZCAM) multispectral image data
 from the Mars 2020 Perseverance rover. It is part of the
-[marslab](https://github.com/MillionConcepts/marslab) suite of interoperable
+[marslab](https://github.com/MillionConcepts/marslab-reference) suite of interoperable
 tools for multispectral data analysis, which is in tactical use for Mastcam-Z
 multispectral operations and has also been extensively applied to MSL Mastcam
 data.
