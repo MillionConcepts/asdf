@@ -58,8 +58,7 @@ def skim_products(
     if field_filters is not None:
         for field, value in field_filters.items():
             target_values = listify(value)
-            np_field = products[field].to_numpy(copy=True)
-            if np_field.dtype.char in np.typecodes["AllInteger"]:
+            if products[field].dtype.kind in ('i', 'u'):
                 target_values = [int(value) for value in target_values]
             filtered_products = products.loc[
                 products[field].isin(target_values)
