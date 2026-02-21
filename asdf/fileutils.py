@@ -15,7 +15,7 @@ class FileRoot:
     def getsyspath(self, file: Path | str) -> Path:
         return self.root / file
 
-    def walk(self) -> Generator[Path]:
+    def walk(self) -> Generator[Path, None, None]:
         walker, files = os.walk(self.root), []
         folder, _, files = next(walker)
         folder = Path(folder)
