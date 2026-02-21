@@ -106,7 +106,8 @@ def skim_products(
             )
         else:
             ASDFLOG.warning(
-                "... suppressing corrupt file list due to length ..."
+                "... suppressing corrupt/unsupported file list due to "
+                "length ..."
             )
     return pd.concat(
         [
