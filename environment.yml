@@ -8,7 +8,6 @@ dependencies:
   - boto3
   - dustgoggles
   - fire
-  - fs
   - git
   - google-api-python-client
   - gspread
