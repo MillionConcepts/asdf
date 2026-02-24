@@ -110,7 +110,8 @@ ROI_METADATA_FIELD_CHOICES = {
     "FEATURE": ["rock", "soil", "pebble", "hardware", "landscape"],
     "FLOAT": ["float", "in-place", "unclear"],
     "FORMATION": [
-        "Maaz", "Seitah", "delta", "margin unit", "Neretva Vallis", "Crater Rim"
+        "Maaz", "Seitah", "delta", "margin unit", "Neretva Vallis", 
+        "Crater Rim", "Lac de Charmes",
     ],
     "MEMBER": {
         "Maaz": ["Chal", "Nataani", "Rochette", "Artuby", "Roubion"],
