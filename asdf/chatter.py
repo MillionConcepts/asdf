@@ -932,11 +932,24 @@ def reuse_roi_metadata(
     prototype: pd.DataFrame, 
     ci: Callable[[Callable, Any, ...], str]
 ) -> pd.DataFrame:
+    # ROI colors common between the new ROI file (marslab_data) and old 
+    # marslab CSV (prototype)
+    reused_regions = marslab_data[
+            marslab_data['COLOR'].isin(prototype['COLOR'])
+        ]
+    # ROI colors not in the old marslab CSV
+    new_regions = marslab_data[
+            ~marslab_data['COLOR'].isin(prototype['COLOR'])
+        ]
+    # ROI colors not in the new ROI file
+    removed_regions = prototype[
+            ~prototype['COLOR'].isin(marslab_data['COLOR'])
+        ]
     # This first section is based on fdsa_insert(), but skips the checks for 
     # legacy metadata fields and missing/extra ROIs. It also handles empty 
     # columns differently.
     usable_fields = [f for f in prototype.columns if f in ROI_METADATA_FIELDS]
-    for color in prototype["COLOR"]:
+    for color in reused_regions["COLOR"]:
         proto_slice = prototype.loc[prototype["COLOR"] == color]
         for field in usable_fields:
             proto_value = proto_slice[field].iloc[0]
@@ -947,25 +960,24 @@ def reuse_roi_metadata(
             marslab_data.loc[
                 marslab_data["COLOR"] == color, field
             ] = proto_value
-        aprint(Text("Reused ").append_text(
-            colorize_merspect_roi_name(color)
-            ).append_text(Text(" metadata", style="default")))
-    # Confirm the user wants to continue if the new ROI file has fewer ROIs 
-    # than the marslab file
-    if len(marslab_data) < len(prototype):
         aprint(
-            "The ROI file contains fewer ROIs than the Marslab file. "
-            "This probably means an ROI has been removed."
+            Text("Reused ")+colorize_merspect_roi_name(color)+Text(" metadata")
         )
-        if ci(confirm_fdsa_warnings) is False:
-            aprint("[red]halting in response to user request")
-            return None
-    # If the new ROI file has more ROIs than the marslab file, ask the user if 
+    # Skip colors from the marslab CSV that are not in the new ROI file
+    if len(removed_regions) > 0:
+        colors_skipped = Text("")
+        for color in removed_regions["COLOR"]:
+            colors_skipped.append_text(
+                colorize_merspect_roi_name(color)
+            ).append_text(Text(" "))
+        aprint(
+            Text(f"Skipping {len(removed_regions)} ROI(s) found in the "
+            "Marslab file but not included in the new ROI file: ") + 
+            colors_skipped
+        )
+    # If the new ROI file has ROIs not in the marslab CSV, ask the user if 
     # they want to input the metadata manually now
-    elif len(marslab_data) > len(prototype):
-        new_regions = marslab_data[
-            ~marslab_data['COLOR'].isin(prototype['COLOR'])
-        ]
+    if len(new_regions) > 0:
         aprint(f"Found {len(new_regions)} ROI(s) not in the Marslab file.")
         if ci(confirm_additional_rois) is False:
             aprint(f"[dark_orange]skipping metadata for {len(new_regions)} "
