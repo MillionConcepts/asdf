@@ -412,6 +412,7 @@ def input_roi_metadata(
             Text(f"Is the value of FORMATION the same for all rock ROIs?"),
             ("Yes", "No"),
         )
+        options, _ = _check_field_options('FORMATION', constants)
         if formation_query == "Yes":
             constants['FORMATION'] = dispatched_metadata_prompt(
                 'FORMATION', sideload_options=options
