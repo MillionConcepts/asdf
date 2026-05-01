@@ -272,6 +272,15 @@ def ask_user_about_roi(
     for field in fields:
         # ignore legacy fields, constants, etc.
         if _checkskip(field, roi_metadata) != "ok":
+            if(
+                _checkskip(field, roi_metadata) == 'mismatch' 
+                and field in roi_metadata.keys()
+            ):
+                # Removes a user input constant if the field is a mismatch with 
+                # the FEATURE type. Intended for cleaning up the FORMATION 
+                # field of soils, pebbles, etc when a constant FORMATION was 
+                # given for rocks.
+                roi_metadata.pop(field)
             continue
         options, is_invalid = _check_field_options(field, roi_metadata)
         if is_invalid is True:
@@ -389,6 +398,23 @@ def input_roi_metadata(
         if constant_query == "Yes":
             constants[field] = dispatched_metadata_prompt(
                 field, sideload_options=options
+            )
+    # FORMATION is almost always the same for all rock ROIs within an 
+    # observation. If FEATURE is not set to a constant value during the  
+    # prompts above, the ROIs are usually a mix of rock and other feature 
+    # types. Per user request, this next check prompts the user for a constant 
+    # FORMATION value in cases where FEATURE is not also constant. A check in 
+    # ask_user_about_roi() cleans up the FORMATION field for ROIs where 
+    # FORMATION doesn't apply (soils, pebbles, etc).
+    if 'FORMATION' not in constants and 'FEATURE' not in constants:
+        formation_query = ci(
+            metadata_choice_prompt,
+            Text(f"Is the value of FORMATION the same for all rock ROIs?"),
+            ("Yes", "No"),
+        )
+        if formation_query == "Yes":
+            constants['FORMATION'] = dispatched_metadata_prompt(
+                'FORMATION', sideload_options=options
             )
     # TODO: this might be confusing if all fields are constant for all ROIs,
     #  but this is probably a rare case.
