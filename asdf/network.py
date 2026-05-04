@@ -111,7 +111,7 @@ def post_google_sheet(
     return spreadsheet.worksheets()[worksheet_ix].update(
         [dataframe.columns.values.tolist()]
         + dataframe.fillna("-")
-        .applymap(stringify_unspreadsheetly_values)
+        .map(stringify_unspreadsheetly_values)
         .values.tolist(),
         value_input_option="USER_ENTERED",
     )
@@ -480,7 +480,7 @@ def update_google_sheet(bandset, folder_id, sheet_id, sheetbot):
             style="bold dark_orange",
         )
         new_sheet = (
-            pd.DataFrame(bandset.summary).T.applymap(itemize_numpy).fillna("-")
+            pd.DataFrame(bandset.summary).T.map(itemize_numpy).fillna("-")
         )
         post_google_sheet(new_sheet, sheet_id, sheetbot)
     else:
