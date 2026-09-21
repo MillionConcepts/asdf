@@ -37,7 +37,7 @@ def dashwrite(
         cols[col] = (
             item
             .astype(str)
-            .str.replace("nan|NaN|None|none|(^$)", "-", regex=True)
+            .str.replace("^(nan|NaN|None|none)$", "-", regex=True)
         )
     df = pd.DataFrame(cols)
     target = target if isinstance(target, str) else io.BytesIO()
