@@ -44,7 +44,10 @@ from asdf.physics import add_derived_illumination_geometry
 from asdf.labels import bulk_scrape_asdf_metadata
 from asdf.rc_parser import find_rc_file, read_rc_file
 from asdf_settings.metadata import (
-    PIXEL_FLAG_NAMES, PIXEL_FLAG_STYLE, COMPACT_ZCAM_MARSLAB_FIELDS
+    PIXEL_FLAG_NAMES,
+    PIXEL_FLAG_STYLE,
+    COMPACT_ZCAM_MARSLAB_FIELDS,
+    ROI_IMPORT_METADATA_FIELDS
 )
 from asdf_settings.rapidlooks import LEGEND_FONT
 from marslab.compat.mertools import add_merspect_colors_to_edgemaps
@@ -698,6 +701,24 @@ class ZcamBandSet(BandSet):
         self.looks[f"pixmap context image {name}"] = context
         if verbose:
             aprint(f"generated context pixmap {name}")
+
+    def populate_metadata_from_rois(self, marslab_data: pd.DataFrame):
+        if self.rois is None:
+            raise ValueError("No ROI data loaded.")
+        marslab_data[list(ROI_IMPORT_METADATA_FIELDS)] = None
+        roigroups = groupby(lambda r: r.header['NAME'].strip(), self.rois)
+        for color, hdus in roigroups.items():
+            for field in ROI_IMPORT_METADATA_FIELDS:
+                values = {h.header.get(field) for h in hdus}
+                if len(values) > 1:
+                    raise ValueError(
+                        f"Mismatched per-eye metadata values for {field} on "
+                        f"{color} in input ROI data"
+                    )
+                marslab_data.loc[
+                    marslab_data['COLOR'] == color, field
+                ] = tuple(values)[0]
+        return marslab_data
 
     @staticmethod
     def flatten_pixmaps(pixmaps: dict[str, np.ndarray]) -> np.ndarray:

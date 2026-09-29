@@ -37,6 +37,7 @@ def asdf_initiate(
     spatial: bool = False,
     regenerate_spatial: bool = False,
     roi_metadata_path: Optional[str] = None,
+    propagate_roi_metadata: bool = False
 ):
     """
     processes and archives everything
@@ -86,6 +87,7 @@ def asdf_initiate(
         path, regenerate them from scratch them rather than reusing them?
         (relevant only when making spatial products)
     :param roi_metadata_path: path to a Marslab .csv file with user input per-ROI metadata that will be reused during this run of a previously processed observation
+    :param propagate_roi_metadata: (also -pr): if True, attempt to propagate metadata from input ROI file
     """
     # do expensive imports, set up logs, prepend custom settings directory to
     # path if one was passed
@@ -147,6 +149,8 @@ def asdf_initiate(
         spatial,
         regenerate_spatial,
         roi_metadata_path,
+        False,
+        propagate_roi_metadata
     )
     from asdf.flow import asdf_body
 

@@ -28,7 +28,8 @@ ARG_ABBREVIATIONS = {
     "sn": "seriously-no-images",
     "rm": "reuse-mosaic",
     "ki": "keep-intermediate",
-    "xyz": "spatial"
+    "xyz": "spatial",
+    "pr": "propagate-roi-metadata"
 }
 
 

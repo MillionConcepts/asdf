@@ -62,6 +62,14 @@ ROI_METADATA_FIELDS = (
     *LEGACY_SUBTYPE_FIELDS
 )
 
+# metadata we will import from input ROIs
+ROI_IMPORT_METADATA_FIELDS = (
+    "FEATURE",
+    *exclusive_fields,
+    "DISTANCE",
+    "DESCRIPTION"
+)
+
 # special prompt text for these
 # {title} is replaced with the title of the ROI, currently always its color
 # {field} is replaced with the field name

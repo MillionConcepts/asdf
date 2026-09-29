@@ -320,6 +320,7 @@ def asdf_body(
     regenerate_spatial: bool = False,
     roi_metadata_path: Optional[str] = None,
     recreate_from: Optional[str] = None,
+    propagate_roi_metadata: bool = False
 ) -> None:
     """
     Body component of the asdf application. Can be invoked one or more times
@@ -494,6 +495,9 @@ def asdf_body(
         if roi_metadata_path:
             aprint("... populating ROI metadata from Marslab file ...")
             marslab_data = reuse_roi_metadata(marslab_data, prototype, ci)
+        elif propagate_roi_metadata:
+            aprint("... populating ROI metadata from ROI file ...")
+            marslab_data = bandset.populate_metadata_from_rois(marslab_data)
         elif not recreate_from:
             # prompt users for info on each ROI
             marslab_data = input_roi_metadata(marslab_data, ci)
@@ -503,7 +507,6 @@ def asdf_body(
                 " prototype ..."
             )
             marslab_data = fdsa_insert(marslab_data, prototype)
-
     if spatial is True:
         aprint(Rule(" processing spatial input products "))
         can_make_spatial = True
