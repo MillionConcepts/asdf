@@ -110,6 +110,7 @@ FEATURE_SUBTYPES = {
         "clast/inclusion",
         "tailings",
         "broken/scuffed surface",
+        "abrasion average",
     )
 }
 
